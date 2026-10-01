@@ -1,0 +1,4 @@
+id,type,name,main,trigger,base_weight,goal_kind,goal_count,time_limit,reward,troops,situation,mission,execution
+T-M1,占领,主线-占领节点,1,节点非我方控制,100,capture_zone,1,0,40,突击2+火力支援1+反装甲1+小队长,当前节点不在我方控制下,夺取该节点并保持30秒,外围压制 → 通道封路 → 点内清剿
+T-S4,侦察标记,侦察并标记敌方阵地,0,有未标记区域,15,place_marks,2,120,10,侦察兵1+掩护1,我方对当面敌情掌握不足,完成至少2次报点标记,用报点轮盘标出敌人与阵地位置
+T-S1,歼灭,歼灭穿插小队,0,场上有敌方步兵,20,kill_enemies,1,120,15,突击2+火力支援1,敌方小队在我方侧翼活动,击倒至少1名敌人,沿主攻方向推进并清除接触到的敌人

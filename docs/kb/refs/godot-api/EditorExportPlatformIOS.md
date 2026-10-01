@@ -1,0 +1,503 @@
+# EditorExportPlatformIOS
+
+> **Godot 4.7.1** · tag `4.7.1-stable` · commit `a13da4fe`
+> 继承链：`EditorExportPlatformIOS` → `EditorExportPlatformAppleEmbedded` → `EditorExportPlatform` → `RefCounted` → `Object`
+> 附加属性：api_type=editor
+> 自动生成，勿手改。文件：`refs/godot-api/EditorExportPlatformIOS.md`
+
+**摘要**：Exporter for iOS.
+
+## 属性
+
+- **`application/additional_plist_content`** `String`
+  - 其它属性：getter= · setter=
+- **`application/app_store_team_id`** `String`
+  - 其它属性：getter= · setter=
+- **`application/bundle_identifier`** `String`
+  - 其它属性：getter= · setter=
+- **`application/code_sign_identity_debug`** `String`
+  - 其它属性：getter= · setter=
+- **`application/code_sign_identity_release`** `String`
+  - 其它属性：getter= · setter=
+- **`application/delete_old_export_files_unconditionally`** `bool`
+  - 其它属性：getter= · setter=
+- **`application/export_method_debug`** `int`
+  - 其它属性：getter= · setter=
+- **`application/export_method_release`** `int`
+  - 其它属性：getter= · setter=
+- **`application/export_project_only`** `bool`
+  - 其它属性：getter= · setter=
+- **`application/icon_interpolation`** `int`
+  - 其它属性：getter= · setter=
+- **`application/min_ios_version`** `String`
+  - 其它属性：getter= · setter=
+- **`application/provisioning_profile_specifier_debug`** `String`
+  - 其它属性：getter= · setter=
+- **`application/provisioning_profile_specifier_release`** `String`
+  - 其它属性：getter= · setter=
+- **`application/provisioning_profile_uuid_debug`** `String`
+  - 其它属性：getter= · setter=
+- **`application/provisioning_profile_uuid_release`** `String`
+  - 其它属性：getter= · setter=
+- **`application/short_version`** `String`
+  - 其它属性：getter= · setter=
+- **`application/signature`** `String`
+  - 其它属性：getter= · setter=
+- **`application/targeted_device_family`** `int`
+  - 其它属性：getter= · setter=
+- **`application/version`** `String`
+  - 其它属性：getter= · setter=
+- **`architectures/arm64`** `bool`
+  - 其它属性：getter= · setter=
+- **`capabilities/access_wifi`** `bool`
+  - 其它属性：getter= · setter=
+- **`capabilities/additional`** `PackedStringArray`
+  - 其它属性：getter= · setter=
+- **`capabilities/performance_a12`** `bool`
+  - 其它属性：getter= · setter=
+- **`capabilities/performance_gaming_tier`** `bool`
+  - 其它属性：getter= · setter=
+- **`custom_template/debug`** `String`
+  - 其它属性：getter= · setter=
+- **`custom_template/release`** `String`
+  - 其它属性：getter= · setter=
+- **`entitlements/additional`** `String`
+  - 其它属性：getter= · setter=
+- **`entitlements/game_center`** `bool`
+  - 其它属性：getter= · setter=
+- **`entitlements/increased_memory_limit`** `bool`
+  - 其它属性：getter= · setter=
+- **`entitlements/push_notifications`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/app_store_1024x1024`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/app_store_1024x1024_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/app_store_1024x1024_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/icon_1024x1024`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/icon_1024x1024_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/icon_1024x1024_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_128x128`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_128x128_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_128x128_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_136x136`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_136x136_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_136x136_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_192x192`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_192x192_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ios_192x192_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ipad_152x152`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ipad_152x152_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ipad_152x152_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ipad_167x167`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ipad_167x167_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/ipad_167x167_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/iphone_120x120`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/iphone_120x120_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/iphone_120x120_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/iphone_180x180`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/iphone_180x180_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/iphone_180x180_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_40x40`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_40x40_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_40x40_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_60x60`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_60x60_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_60x60_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_76x76`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_76x76_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_76x76_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_114x114`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_114x114_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/notification_114x114_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/settings_58x58`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/settings_58x58_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/settings_58x58_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/settings_87x87`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/settings_87x87_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/settings_87x87_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/spotlight_80x80`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/spotlight_80x80_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/spotlight_80x80_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/spotlight_120x120`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/spotlight_120x120_dark`** `String`
+  - 其它属性：getter= · setter=
+- **`icons/spotlight_120x120_tinted`** `String`
+  - 其它属性：getter= · setter=
+- **`modules/camera`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/active_keyboard_access_reasons`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/camera_usage_description`** `String`
+  - 其它属性：getter= · setter=
+- **`privacy/camera_usage_description_localized`** `Dictionary`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/advertising_data/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/advertising_data/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/advertising_data/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/advertising_data/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/audio_data/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/audio_data/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/audio_data/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/audio_data/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/browsing_history/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/browsing_history/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/browsing_history/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/browsing_history/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/coarse_location/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/coarse_location/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/coarse_location/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/coarse_location/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/contacts/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/contacts/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/contacts/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/contacts/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/crash_data/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/crash_data/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/crash_data/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/crash_data/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/credit_info/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/credit_info/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/credit_info/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/credit_info/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/customer_support/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/customer_support/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/customer_support/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/customer_support/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/device_id/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/device_id/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/device_id/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/device_id/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/email_address/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/email_address/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/email_address/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/email_address/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/emails_or_text_messages/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/emails_or_text_messages/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/emails_or_text_messages/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/emails_or_text_messages/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/environment_scanning/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/environment_scanning/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/environment_scanning/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/environment_scanning/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/fitness/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/fitness/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/fitness/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/fitness/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/gameplay_content/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/gameplay_content/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/gameplay_content/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/gameplay_content/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/hands/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/hands/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/hands/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/hands/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/head/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/head/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/head/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/head/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/health/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/health/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/health/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/health/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/name/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/name/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/name/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/name/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_contact_info/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_contact_info/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_contact_info/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_contact_info/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_data_types/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_data_types/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_data_types/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_data_types/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_diagnostic_data/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_diagnostic_data/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_diagnostic_data/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_diagnostic_data/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_financial_info/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_financial_info/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_financial_info/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_financial_info/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_usage_data/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_usage_data/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_usage_data/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_usage_data/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_user_content/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_user_content/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_user_content/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/other_user_content/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/payment_info/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/payment_info/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/payment_info/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/payment_info/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/performance_data/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/performance_data/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/performance_data/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/performance_data/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/phone_number/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/phone_number/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/phone_number/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/phone_number/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/photos_or_videos/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/photos_or_videos/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/photos_or_videos/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/photos_or_videos/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/physical_address/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/physical_address/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/physical_address/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/physical_address/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/precise_location/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/precise_location/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/precise_location/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/precise_location/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/product_interaction/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/product_interaction/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/product_interaction/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/product_interaction/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/purchase_history/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/purchase_history/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/purchase_history/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/purchase_history/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/search_history/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/search_history/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/search_history/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/search_history/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/sensitive_info/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/sensitive_info/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/sensitive_info/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/sensitive_info/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/user_id/collected`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/user_id/collection_purposes`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/user_id/linked_to_user`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/collected_data/user_id/used_for_tracking`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/disk_space_access_reasons`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/file_timestamp_access_reasons`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/microphone_usage_description`** `String`
+  - 其它属性：getter= · setter=
+- **`privacy/microphone_usage_description_localized`** `Dictionary`
+  - 其它属性：getter= · setter=
+- **`privacy/photolibrary_usage_description`** `String`
+  - 其它属性：getter= · setter=
+- **`privacy/photolibrary_usage_description_localized`** `Dictionary`
+  - 其它属性：getter= · setter=
+- **`privacy/system_boot_time_access_reasons`** `int`
+  - 其它属性：getter= · setter=
+- **`privacy/tracking_domains`** `PackedStringArray`
+  - 其它属性：getter= · setter=
+- **`privacy/tracking_enabled`** `bool`
+  - 其它属性：getter= · setter=
+- **`privacy/user_defaults_access_reasons`** `int`
+  - 其它属性：getter= · setter=
+- **`shader_baker/enabled`** `bool`
+  - 其它属性：getter= · setter=
+- **`storyboard/custom_bg_color`** `Color`
+  - 其它属性：getter= · setter=
+- **`storyboard/custom_image@2x`** `String`
+  - 其它属性：getter= · setter=
+- **`storyboard/custom_image@3x`** `String`
+  - 其它属性：getter= · setter=
+- **`storyboard/image_scale_mode`** `int`
+  - 其它属性：getter= · setter=
+- **`storyboard/use_custom_bg_color`** `bool`
+  - 其它属性：getter= · setter=
+- **`user_data/accessible_from_files_app`** `bool`
+  - 其它属性：getter= · setter=
+- **`user_data/accessible_from_itunes_sharing`** `bool`
+  - 其它属性：getter= · setter=
+
+## 教程链接
+
+- [Exporting for iOS](None)
+- [iOS plugins documentation index](None)
+

@@ -1,0 +1,430 @@
+# EditorExportPlatformAndroid
+
+> **Godot 4.7.1** · tag `4.7.1-stable` · commit `a13da4fe`
+> 继承链：`EditorExportPlatformAndroid` → `EditorExportPlatform` → `RefCounted` → `Object`
+> 附加属性：api_type=editor
+> 自动生成，勿手改。文件：`refs/godot-api/EditorExportPlatformAndroid.md`
+
+**摘要**：Exporter for Android.
+
+## 属性
+
+- **`architectures/arm64-v8a`** `bool`
+  - 其它属性：getter= · setter=
+- **`architectures/armeabi-v7a`** `bool`
+  - 其它属性：getter= · setter=
+- **`architectures/x86`** `bool`
+  - 其它属性：getter= · setter=
+- **`architectures/x86_64`** `bool`
+  - 其它属性：getter= · setter=
+- **`command_line/extra_args`** `String`
+  - 其它属性：getter= · setter=
+- **`custom_template/debug`** `String`
+  - 其它属性：getter= · setter=
+- **`custom_template/release`** `String`
+  - 其它属性：getter= · setter=
+- **`gesture/swipe_to_dismiss`** `bool`
+  - 其它属性：getter= · setter=
+- **`gradle_build/android_source_template`** `String`
+  - 其它属性：getter= · setter=
+- **`gradle_build/compress_native_libraries`** `bool`
+  - 其它属性：getter= · setter=
+- **`gradle_build/custom_theme_attributes`** `Dictionary`
+  - 其它属性：getter= · setter=
+- **`gradle_build/export_format`** `int`
+  - 其它属性：getter= · setter=
+- **`gradle_build/gradle_build_directory`** `String`
+  - 其它属性：getter= · setter=
+- **`gradle_build/min_sdk`** `String`
+  - 其它属性：getter= · setter=
+- **`gradle_build/target_sdk`** `String`
+  - 其它属性：getter= · setter=
+- **`gradle_build/use_gradle_build`** `bool`
+  - 其它属性：getter= · setter=
+- **`graphics/opengl_debug`** `bool`
+  - 其它属性：getter= · setter=
+- **`keystore/debug`** `String`
+  - 其它属性：getter= · setter=
+- **`keystore/debug_password`** `String`
+  - 其它属性：getter= · setter=
+- **`keystore/debug_user`** `String`
+  - 其它属性：getter= · setter=
+- **`keystore/release`** `String`
+  - 其它属性：getter= · setter=
+- **`keystore/release_password`** `String`
+  - 其它属性：getter= · setter=
+- **`keystore/release_user`** `String`
+  - 其它属性：getter= · setter=
+- **`launcher_icons/adaptive_background_432x432`** `String`
+  - 其它属性：getter= · setter=
+- **`launcher_icons/adaptive_foreground_432x432`** `String`
+  - 其它属性：getter= · setter=
+- **`launcher_icons/adaptive_monochrome_432x432`** `String`
+  - 其它属性：getter= · setter=
+- **`launcher_icons/main_192x192`** `String`
+  - 其它属性：getter= · setter=
+- **`package/app_category`** `int`
+  - 其它属性：getter= · setter=
+- **`package/exclude_from_recents`** `bool`
+  - 其它属性：getter= · setter=
+- **`package/name`** `String`
+  - 其它属性：getter= · setter=
+- **`package/retain_data_on_uninstall`** `bool`
+  - 其它属性：getter= · setter=
+- **`package/show_as_launcher_app`** `bool`
+  - 其它属性：getter= · setter=
+- **`package/show_in_android_tv`** `bool`
+  - 其它属性：getter= · setter=
+- **`package/show_in_app_library`** `bool`
+  - 其它属性：getter= · setter=
+- **`package/signed`** `bool`
+  - 其它属性：getter= · setter=
+- **`package/unique_name`** `String`
+  - 其它属性：getter= · setter=
+- **`permissions/access_checkin_properties`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/access_coarse_location`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/access_fine_location`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/access_location_extra_commands`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/access_media_location`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/access_mock_location`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/access_network_state`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/access_surface_flinger`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/access_wifi_state`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/account_manager`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/add_voicemail`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/authenticate_accounts`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/battery_stats`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_accessibility_service`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_appwidget`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_device_admin`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_input_method`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_nfc_service`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_notification_listener_service`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_print_service`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_remoteviews`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_text_service`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_vpn_service`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bind_wallpaper`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bluetooth`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bluetooth_admin`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/bluetooth_privileged`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/brick`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/broadcast_package_removed`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/broadcast_sms`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/broadcast_sticky`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/broadcast_wap_push`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/call_phone`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/call_privileged`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/camera`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/capture_audio_output`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/capture_secure_video_output`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/capture_video_output`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/change_component_enabled_state`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/change_configuration`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/change_network_state`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/change_wifi_multicast_state`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/change_wifi_state`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/clear_app_cache`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/clear_app_user_data`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/control_location_updates`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/custom_permissions`** `PackedStringArray`
+  - 其它属性：getter= · setter=
+- **`permissions/delete_cache_files`** `bool`
+  - 其它属性：deprecated= · getter= · setter=
+- **`permissions/delete_packages`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/device_power`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/diagnostic`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/disable_keyguard`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/dump`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/expand_status_bar`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/factory_test`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/flashlight`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/force_back`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/get_accounts`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/get_package_size`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/get_tasks`** `bool`
+  - 其它属性：deprecated=Deprecated in API level 21. · getter= · setter=
+- **`permissions/get_top_activity_info`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/global_search`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/hardware_test`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/inject_events`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/install_location_provider`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/install_packages`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/install_shortcut`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/internal_system_window`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/internet`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/kill_background_processes`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/location_hardware`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/manage_accounts`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/manage_app_tokens`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/manage_documents`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/manage_external_storage`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/manage_media`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/master_clear`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/media_content_control`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/modify_audio_settings`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/modify_phone_state`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/mount_format_filesystems`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/mount_unmount_filesystems`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/nfc`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/persistent_activity`** `bool`
+  - 其它属性：deprecated=Deprecated in API level 15. · getter= · setter=
+- **`permissions/post_notifications`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/process_outgoing_calls`** `bool`
+  - 其它属性：deprecated=Deprecated in API level 29. · getter= · setter=
+- **`permissions/read_calendar`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_call_log`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_contacts`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_external_storage`** `bool`
+  - 其它属性：deprecated=Deprecated in API level 33. · getter= · setter=
+- **`permissions/read_frame_buffer`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_history_bookmarks`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_input_state`** `bool`
+  - 其它属性：deprecated=Deprecated in API level 16. · getter= · setter=
+- **`permissions/read_logs`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_media_audio`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_media_images`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_media_video`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_media_visual_user_selected`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_phone_state`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_profile`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_sms`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_social_stream`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_sync_settings`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_sync_stats`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/read_user_dictionary`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/reboot`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/receive_boot_completed`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/receive_mms`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/receive_sms`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/receive_wap_push`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/record_audio`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/reorder_tasks`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/restart_packages`** `bool`
+  - 其它属性：deprecated=Deprecated in API level 15. · getter= · setter=
+- **`permissions/send_respond_via_message`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/send_sms`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_activity_watcher`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_alarm`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_always_finish`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_animation_scale`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_debug_app`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_orientation`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_pointer_speed`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_preferred_applications`** `bool`
+  - 其它属性：deprecated=Deprecated in API level 15. · getter= · setter=
+- **`permissions/set_process_limit`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_time`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_time_zone`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_wallpaper`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/set_wallpaper_hints`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/signal_persistent_processes`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/status_bar`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/subscribed_feeds_read`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/subscribed_feeds_write`** `bool`
+  - 其它属性：deprecated= · getter= · setter=
+- **`permissions/system_alert_window`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/transmit_ir`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/uninstall_shortcut`** `bool`
+  - 其它属性：deprecated= · getter= · setter=
+- **`permissions/update_device_stats`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/use_credentials`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/use_sip`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/vibrate`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/wake_lock`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_apn_settings`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_calendar`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_call_log`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_contacts`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_external_storage`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_gservices`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_history_bookmarks`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_profile`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_secure_settings`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_settings`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_sms`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_social_stream`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_sync_settings`** `bool`
+  - 其它属性：getter= · setter=
+- **`permissions/write_user_dictionary`** `bool`
+  - 其它属性：getter= · setter=
+- **`screen/background_color`** `Color`
+  - 其它属性：getter= · setter=
+- **`screen/edge_to_edge`** `bool`
+  - 其它属性：getter= · setter=
+- **`screen/immersive_mode`** `bool`
+  - 其它属性：getter= · setter=
+- **`screen/support_large`** `bool`
+  - 其它属性：getter= · setter=
+- **`screen/support_normal`** `bool`
+  - 其它属性：getter= · setter=
+- **`screen/support_small`** `bool`
+  - 其它属性：getter= · setter=
+- **`screen/support_xlarge`** `bool`
+  - 其它属性：getter= · setter=
+- **`shader_baker/enabled`** `bool`
+  - 其它属性：getter= · setter=
+- **`splash_screen/background_color`** `Color`
+  - 其它属性：getter= · setter=
+- **`splash_screen/branding_image`** `String`
+  - 其它属性：getter= · setter=
+- **`splash_screen/disable_godot_boot_splash`** `bool`
+  - 其它属性：getter= · setter=
+- **`splash_screen/icon`** `String`
+  - 其它属性：getter= · setter=
+- **`user_data_backup/allow`** `bool`
+  - 其它属性：getter= · setter=
+- **`version/code`** `int`
+  - 其它属性：getter= · setter=
+- **`version/name`** `String`
+  - 其它属性：getter= · setter=
+- **`xr_features/xr_mode`** `int`
+  - 其它属性：getter= · setter=
+
+## 教程链接
+
+- [Exporting for Android](None)
+- [Gradle builds for Android](None)
+- [Android plugins documentation index](None)
+

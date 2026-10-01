@@ -1,0 +1,185 @@
+class_name SightSystem
+extends RefCounted
+
+## 通视检测（docx 4.7 三级递进）——决定敌人是否显示，不是隐身而是没通视
+##   ① 框检测：目标不在屏幕框内，一律不显示
+##   ② 地形连线检测：1 m 网格 DDA 逐格，地面比视线高 SIGHT_MARGIN(0.3 m) 以上判遮挡
+##   ③ 掩体连线检测：点-多边形 / Occluder 层（第一版未接入，接口留在 occluder_blocks）
+## 视线起点取被控单位中心（docx 4.7 / 12.2 补充）
+## 数学内核：高度差 ÷ 水平距离 = 坡度（tanθ）——与仰视极限、障碍物阻挡共用
+
+var grid: HeightGrid = null
+
+
+func _init(height_grid: HeightGrid = null) -> void:
+	grid = height_grid
+
+
+func set_grid(height_grid: HeightGrid) -> void:
+	grid = height_grid
+
+
+## ① 框检测（docx 4.7 第①级）：屏幕框外无论有没有通视都不显示
+func in_screen_box(target_screen: Vector2, viewport_size: Vector2,
+		margin: float = GameConfig.SCREEN_BOX_MARGIN) -> bool:
+	var box := Rect2(-Vector2(margin, margin), viewport_size + Vector2(margin, margin) * 2.0)
+	return box.has_point(target_screen)
+
+
+## ① 框检测（世界坐标版，敌人显隐直接用这个，省一次坐标换算）
+## camera_center 就是准心（准心 = 屏幕中心 = 相机中心）
+func in_world_view(target_world: Vector2, camera_center: Vector2, zoom: float,
+		viewport_size: Vector2 = Vector2(GameConfig.VIEWPORT_WIDTH, GameConfig.VIEWPORT_HEIGHT),
+		margin_px: float = 0.0) -> bool:
+	var pixels_per_meter := maxf(zoom, 0.001)
+	var half := viewport_size * 0.5 / pixels_per_meter
+	var margin := margin_px / pixels_per_meter
+	var box := Rect2(camera_center - half - Vector2(margin, margin),
+			half * 2.0 + Vector2(margin, margin) * 2.0)
+	return box.has_point(target_world)
+
+
+## ② 地形连线检测：返回第一个挡住的格；没挡住返回 blocked = false
+## origin_height / target_height 都是绝对高度（米），一般 = 地面高 + 眼高
+## margin_per_meter：容差随距离放宽的斜率（m 容差 / m 距离）。
+##   现为 GameConfig.CROSSHAIR_SIGHT_MARGIN_PER_METER = 0 —— 即文档 12.2 的严格口径；
+##   之前为缓解「准心老是被挡住」临时放过 0.02，2026-09-28 按用户要求收回。
+##   敌人探测等调用方不传本参数，行为不受影响。
+func terrain_first_blocker(origin: Vector2, origin_height: float,
+		target: Vector2, target_height: float,
+		margin_per_meter: float = 0.0) -> Dictionary:
+	var result := {"blocked": false, "cell": Vector2i.ZERO, "height": 0.0}
+	if grid == null:
+		return result
+
+	var cells := grid.cells_on_segment(origin, target)
+	if cells.is_empty():
+		return result
+	# 跳过起点格：玩家站的那一格不该挡住自己（SIGHT_MARGIN 之外的兜底）
+	cells.remove_at(0)
+
+	var delta := target - origin
+	var length_squared := delta.length_squared()
+	for cell in cells:
+		var t := 0.0
+		if length_squared > 0.0:
+			var to_center := grid.cell_to_world_center(cell) - origin
+			t = clampf(to_center.dot(delta) / length_squared, 0.0, 1.0)
+		# 视线在该处的高度：两端线性插值（与 docx 12.2 补充的逐格法口径一致）
+		var sight_height := lerpf(origin_height, target_height, t)
+		var ground_height := grid.height_at_cell(cell.x, cell.y)
+		# 容差 = 基础容差 + 该处离起点的距离 × 斜率（越远越宽容）
+		var margin := GameConfig.SIGHT_MARGIN + margin_per_meter * (t * delta.length())
+		if ground_height > sight_height + margin:
+			result["blocked"] = true
+			result["cell"] = cell
+			result["height"] = ground_height
+			return result
+	return result
+
+
+## ③ 掩体层（第一版未接入物理查询，保留接口避免后面挖坑）
+## 期望实现：Occluder 组节点提供 [H_low, H_top] 高度区间，
+## 用 intersect_ray 取 t，与地形结果取 t 小者（docx 4.7 第③级 / 12.2 补充职责收缩）
+## ③ 掩体层（docx 4.7 第③级）：遍历 "occluder" 组的掩体，
+## 视线穿过掩体、且交点处的视线高度没高出掩体顶（+COVER_SIGHT_SLACK）→ 判遮挡。
+## 掩体顶高 = 掩体所在处地面高 + 掩体自身高度。用鸭子类型调用，不依赖 Cover 的类名。
+func occluder_blocks(origin: Vector2, origin_height: float,
+		target: Vector2, target_height: float) -> bool:
+	var total := origin.distance_to(target)
+	if total <= 0.001:
+		return false
+	for node in _occluders():
+		var cover = node
+		if cover == null or not cover.has_method("segment_hit"):
+			continue
+		var hit: Vector2 = cover.segment_hit(origin, target)
+		if hit == Vector2.INF:
+			continue
+		var t := clampf(origin.distance_to(hit) / total, 0.0, 1.0)
+		var sight_height := lerpf(origin_height, target_height, t)
+		var ground := 0.0
+		if grid != null:
+			ground = grid.sample_bilinear(cover.global_position)
+		var cover_top: float = cover.top_height_at(ground)
+		if blocks_sight(sight_height, cover_top):
+			return true
+	return false
+
+
+## 高度规则（纯函数，便于测试）：视线高度没高出掩体顶（+容差）就判被挡
+## 这就是 C2「卧姿矮掩体」的核心判定：站着能看过沙袋，趴下就看不出去
+static func blocks_sight(sight_height: float, cover_top: float) -> bool:
+	return sight_height < cover_top + GameConfig.COVER_SIGHT_SLACK
+
+
+## 线段上第一个掩体：返回 {node, point}（没有掩体则 node 为 null、point 为 Vector2.INF）
+## 准心回退用 point，子弹截断要把 node 带回去扣血（可破坏掩体）
+func first_cover(from: Vector2, to: Vector2) -> Dictionary:
+	var nearest_node = null
+	var nearest_point := Vector2.INF
+	var nearest_distance := INF
+	for node in _occluders():
+		var cover = node
+		if cover == null or not cover.has_method("segment_hit"):
+			continue
+		var hit: Vector2 = cover.segment_hit(from, to)
+		if hit == Vector2.INF:
+			continue
+		var distance := from.distance_to(hit)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_point = hit
+			nearest_node = cover
+	return {"node": nearest_node, "point": nearest_point}
+
+
+## 线段上第一个掩体交点（准心回退用）；没有掩体则返回 Vector2.INF
+func first_cover_hit(from: Vector2, to: Vector2) -> Vector2:
+	var info := first_cover(from, to)
+	return info["point"]
+
+
+## "occluder" 组（掩体）——通过 main loop 取，省得每个调用方都传一遍列表
+func _occluders() -> Array:
+	var loop := Engine.get_main_loop() as SceneTree
+	if loop == null:
+		return []
+	return loop.get_nodes_in_group(GameConfig.OCCLUDER_GROUP)
+
+
+## ② 与 ③ 合并：地形层 + 掩体层
+## margin_per_meter 只作用于地形层（准心瞄准用，见 AimCameraController 的注释）
+func has_sight(origin: Vector2, origin_height: float,
+		target: Vector2, target_height: float, margin_per_meter: float = 0.0) -> bool:
+	if terrain_first_blocker(origin, origin_height, target, target_height,
+			margin_per_meter)["blocked"]:
+		return false
+	return not occluder_blocks(origin, origin_height, target, target_height)
+
+
+## 单位的视线绝对高度：带 sight_eye_height() 的单位（玩家）按姿态取值——
+## 卧姿 0.6 m（C2「矮掩体」），其余用默认眼高 1.6 m。
+## 所有「从玩家出发」的通视判定（敌人显隐、准心遮挡、探针）都必须走这里，口径才一致。
+func unit_sight_height(world_pos: Vector2, unit: Node) -> float:
+	var eye := GameConfig.SOLDIER_EYE_HEIGHT
+	if unit != null and unit.has_method("sight_eye_height"):
+		eye = unit.sight_eye_height()
+	if grid == null:
+		return eye
+	return grid.sample_bilinear(world_pos) + eye
+
+
+## 站在地面上的单位，视线起点高度 = 脚下地面高 + 眼高
+func eye_height_at(world_pos: Vector2,
+		eye_height: float = GameConfig.SOLDIER_EYE_HEIGHT) -> float:
+	if grid == null:
+		return eye_height
+	return grid.sample_bilinear(world_pos) + eye_height
+
+
+## 最高点（docx 12.6 图②）：供准心钳制与坡度校验复用
+func highest_on_segment(from_world: Vector2, to_world: Vector2) -> Dictionary:
+	if grid == null:
+		return {"cell": Vector2i.ZERO, "height": 0.0}
+	return grid.highest_cell_on_segment(from_world, to_world)

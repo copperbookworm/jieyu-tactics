@@ -1,0 +1,80 @@
+# PhysicsTestMotionResult2D
+
+> **Godot 4.7.1** · tag `4.7.1-stable` · commit `a13da4fe`
+> 继承链：`PhysicsTestMotionResult2D` → `RefCounted` → `Object`
+> 附加属性：api_type=core
+> 自动生成，勿手改。文件：`refs/godot-api/PhysicsTestMotionResult2D.md`
+
+**摘要**：Describes the motion and collision result from `PhysicsServer2D.body_test_motion`.
+
+## 描述
+
+Describes the motion and collision result from `PhysicsServer2D.body_test_motion`.
+
+## 方法
+
+### `get_collider() -> Object`
+- 限定：qualifiers=const
+
+Returns the colliding body's attached `Object`, if a collision occurred.
+
+### `get_collider_id() -> int`
+- 限定：qualifiers=const
+
+Returns the unique instance ID of the colliding body's attached `Object`, if a collision occurred. See `Object.get_instance_id`.
+
+### `get_collider_rid() -> RID`
+- 限定：qualifiers=const
+
+Returns the colliding body's `RID` used by the `PhysicsServer2D`, if a collision occurred.
+
+### `get_collider_shape() -> int`
+- 限定：qualifiers=const
+
+Returns the colliding body's shape index, if a collision occurred. See `CollisionObject2D`.
+
+### `get_collider_velocity() -> Vector2`
+- 限定：qualifiers=const
+
+Returns the colliding body's velocity, if a collision occurred.
+
+### `get_collision_depth() -> float`
+- 限定：qualifiers=const
+
+Returns the length of overlap along the collision normal, if a collision occurred.
+
+### `get_collision_local_shape() -> int`
+- 限定：qualifiers=const
+
+Returns the moving object's colliding shape, if a collision occurred.
+
+### `get_collision_normal() -> Vector2`
+- 限定：qualifiers=const
+
+Returns the colliding body's shape's normal at the point of collision, if a collision occurred.
+
+### `get_collision_point() -> Vector2`
+- 限定：qualifiers=const
+
+Returns the point of collision in global coordinates, if a collision occurred.
+
+### `get_collision_safe_fraction() -> float`
+- 限定：qualifiers=const
+
+Returns the maximum fraction of the motion that can occur without a collision, between `0` and `1`.
+
+### `get_collision_unsafe_fraction() -> float`
+- 限定：qualifiers=const
+
+Returns the minimum fraction of the motion needed to collide, if a collision occurred, between `0` and `1`.
+
+### `get_remainder() -> Vector2`
+- 限定：qualifiers=const
+
+Returns the moving object's remaining movement vector.
+
+### `get_travel() -> Vector2`
+- 限定：qualifiers=const
+
+Returns the moving object's travel before collision.
+

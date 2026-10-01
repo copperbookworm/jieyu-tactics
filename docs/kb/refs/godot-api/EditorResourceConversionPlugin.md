@@ -1,0 +1,48 @@
+# EditorResourceConversionPlugin
+
+> **Godot 4.7.1** · tag `4.7.1-stable` · commit `a13da4fe`
+> 继承链：`EditorResourceConversionPlugin` → `RefCounted` → `Object`
+> 附加属性：api_type=editor
+> 自动生成，勿手改。文件：`refs/godot-api/EditorResourceConversionPlugin.md`
+
+**摘要**：Plugin for adding custom converters from one resource format to another in the editor resource picker context menu; for example, converting a `StandardMaterial3D` to a `ShaderMaterial`.
+
+## 描述
+
+`EditorResourceConversionPlugin` is invoked when the context menu is brought up for a resource in the editor inspector. Relevant conversion plugins will appear as menu options to convert the given resource to a target type.
+		Below shows an example of a basic plugin that will convert an `ImageTexture` to a `PortableCompressedTexture2D`.
+		`codeblocks`
+		`gdscript`
+		extends EditorResourceConversionPlugin
+
+		func _handles(resource: Resource):
+			return resource is ImageTexture
+
+		func _converts_to():
+			return "PortableCompressedTexture2D"
+
+		func _convert(itex: Resource):
+			var ptex = PortableCompressedTexture2D.new()
+			ptex.create_from_image(itex.get_image(), PortableCompressedTexture2D.COMPRESSION_MODE_LOSSLESS)
+			return ptex
+		
+		
+		To use an `EditorResourceConversionPlugin`, register it using the `EditorPlugin.add_resource_conversion_plugin` method first.
+
+## 方法
+
+### `_convert(resource: Resource) -> Resource`
+- 限定：qualifiers=virtual const
+
+Takes an input `Resource` and converts it to the type given in `_converts_to`. The returned `Resource` is the result of the conversion, and the input `Resource` remains unchanged.
+
+### `_converts_to() -> String`
+- 限定：qualifiers=virtual const
+
+Returns the class name of the target type of `Resource` that this plugin converts source resources to.
+
+### `_handles(resource: Resource) -> bool`
+- 限定：qualifiers=virtual const
+
+Called to determine whether a particular `Resource` can be converted to the target resource type by this plugin.
+

@@ -1,0 +1,3 @@
+id,name,type,length_m,width_m,height_m,speed_kmh,crew,passengers,hp,main_weapon,main_range,ammo,armor_front_mm,armor_front_deg,armor_side_mm,armor_side_deg,armor_rear_mm,armor_top_mm,gun_damage,gun_penetration_mm,gun_interval
+ifv_a,步兵战车 IFV-A,步兵战车,7.2,3.2,2.5,75,3,7,800,30mm 机炮,1200,600,90,20,45,0,25,18,40,60,0.15
+mbt_t1,主战坦克 T1,主战坦克,7.6,3.7,2.35,76,3,0,2000,125mm 滑膛炮,1500,42,700,30,260,0,130,50,400,700,6.0

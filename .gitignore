@@ -1,0 +1,6 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# 本机自带工具目录（只有 4.5.0/parser_with_metadata.pickle，gdlint 命令不可用）
+gdtoolkit/

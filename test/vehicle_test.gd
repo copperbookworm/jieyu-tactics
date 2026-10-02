@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_ai_gate()
 	_test_enemy_vehicle_damage()
 	_test_occupant_carried()
+	_test_crew_bailout()
 	_test_fire_block_reason()
 	_test_wreck_refuses_boarding()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
@@ -52,6 +53,37 @@ func _test_occupant_carried() -> void:
 			int(player.global_position.distance_to(vehicle.global_position)), 5)
 	vehicle.free()
 	player.free()
+
+
+## 敌方坦克乘员与弃车逃生（候选 Q · 使用者 2026-10-02）
+func _test_crew_bailout() -> void:
+	var tank = VehicleScript.new()
+	tank.setup("mbt_t1", null)
+	var crew := Enemy.new()
+	tank.add_crew(crew)
+	_check_true("乘员：上车后藏起来", not crew.visible)
+	_check_true("乘员：在车里时脱离 enemy 组（不作为独立目标）", not crew.is_in_group("enemy"))
+	_check_true("乘员：在车里时自身 AI 关掉", not crew.ai_enabled)
+	tank.global_position = Vector2(50.0, 20.0)
+	tank._process(0.016)
+	_check("乘员：坐标跟着车走", crew.global_position, tank.global_position)
+	# 打到 25%（低于 30% 阈值）→ 弃车
+	tank.take_hit(tank.max_hp * 0.75, 99999.0, Vector2.RIGHT)
+	_check_true("弃车：结构值跌破阈值 → 乘员下车（crew 清空）", tank.crew.is_empty())
+	_check_true("弃车：乘员重新可见", crew.visible)
+	_check_true("弃车：乘员回到 enemy 组（可以被补刀）", crew.is_in_group("enemy"))
+	_check_true("弃车：乘员 AI 重新打开", crew.ai_enabled)
+	_check_true("弃车：车停火（没人操炮了）", not tank.ai_enabled)
+	_check_true("弃车：乘员落在车旁而不是车里",
+			crew.global_position.distance_to(tank.global_position) > 1.0)
+	# 结构值还高的车不会弃车
+	var fresh = VehicleScript.new()
+	fresh.setup("mbt_t1", null)
+	var crew2 := Enemy.new()
+	fresh.add_crew(crew2)
+	fresh.take_hit(100.0, 99999.0, Vector2.RIGHT)
+	_check("不弃车：结构值还高时乘员留在车里", fresh.crew.size(), 1)
+	tank.free(); crew.free(); fresh.free(); crew2.free()
 
 
 ## 敌人载具主炮的伤害出口：表值 × ENEMY_DAMAGE_SCALE × ENEMY_VEHICLE_DAMAGE_SCALE。

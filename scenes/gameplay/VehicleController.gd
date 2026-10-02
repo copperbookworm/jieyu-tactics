@@ -38,6 +38,13 @@ func setup(main_node, player, sight, vehicle_id: String) -> void:
 	main.add_child(enemy_vehicle)
 	enemy_vehicle.setup("mbt_t1", sight)
 	enemy_vehicle.set_target(player)
+	# 候选 Q（使用者 2026-10-02）：敌方坦克至少一名敌人士兵操控；结构值跌破阈值会下车逃生
+	var crew := Enemy.new()
+	crew.name = "EnemyTankCrew"
+	crew.global_position = enemy_vehicle.global_position
+	crew.setup(main.sight, player, main.camera, main.grid)
+	main.add_child(crew)
+	enemy_vehicle.add_crew(crew)   # 必须在 add_child 之后（乘员 _ready 里才入 enemy 组）
 	# 敌方载具开炮也要画曳光：玩家原先看不见炮弹从哪来，只看到血量突然掉一截
 	# （400 伤害一炮打在 100 血步兵身上＝HUD 显示 -300，会被误当成换座按钮的锅）
 	enemy_vehicle.weapon_fired.connect(main.spawn_tracer)

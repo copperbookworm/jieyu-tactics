@@ -108,6 +108,8 @@ func _process(delta: float) -> bool:
 				_check_vehicle_anim()
 				# 反坦克导弹：玩家的步战车能打爆敌方主战坦克（使用者 2026-10-01 拍板）
 				_check_atgm()
+				# 坦克乘员：必须在打爆之后**立刻**查（后面的检查会改这辆车的 AI/结构值）
+				_check_tank_crew()
 				# 真机反馈 2026-10-02：残骸可命中 / 发烟器跟车 / 烟里准心不锁死
 				_check_wreck_hittable()
 				_check_vehicle_smoke()
@@ -949,6 +951,26 @@ func _check_finish_off_pose() -> void:
 			_check_true("敌人：血打光是倒地（不是立刻死）", e.downed and e.alive)
 			e.take_damage(1.0)
 			_check_true("敌人：补刀才阵亡", not e.alive)
+
+
+# ────────────── 敌方坦克乘员 + 弃车逃生（候选 Q · 使用者 2026-10-02）──────────────
+
+func _check_tank_crew() -> void:
+	# 注意：集成脚本**不能**编译期引用 Enemy（它引用 EventBus，会连带整支脚本编译失败）。
+	# 所以这里不新建乘员，而是检查真场景里那个开局就配好的乘员（VehicleController.setup 建的）。
+	var tank = _main.vehicles.enemy_vehicle
+	var crew = _main.get_node_or_null("EnemyTankCrew")
+	_check_true("坦克乘员：敌方坦克配了敌人士兵（EnemyTankCrew 在场）", crew != null)
+	if crew == null:
+		return
+	# 前面 _check_atgm 用两发 ATGM 打爆过这辆车（结构值归零 ⇒ 低于弃车阈值）——那时乘员应该已经下车
+	_check_true("坦克乘员：ATGM 打爆坦克时乘员已经弃车逃生（车里的乘员清空）",
+			tank.crew.is_empty())
+	_check_true("坦克乘员：弃车后车停火（没人操炮）", not tank.ai_enabled)
+	# 不断言 visible：敌人的 visible 由 4.7 通视系统管（玩家看不到时会自动隐藏），
+	# 那不是「弃车失败」的证据。这里只验「它重新成为一个独立的、可被补刀的敌人」。
+	_check_true("坦克乘员：弃车的人回到 enemy 组（可被补刀）", crew.is_in_group("enemy"))
+	_check_true("坦克乘员：弃车的人自己会走（AI 打开）", crew.ai_enabled)
 
 
 func _check_vehicle_smoke() -> void:

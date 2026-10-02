@@ -378,6 +378,8 @@ const RESPAWN_BUDGET_MULTIPLIER := 2   # 重生预算 = 进攻方人数 × 2
 ## m，重生点的「安全距离」参考值：候选点里挑离最近敌人最远的那个；
 ## 若最好的候选仍在这个距离内，只是提示玩家「落点附近有敌人」，不强改落点（见 MatchFlow.pick_respawn_point）
 const RESPAWN_SAFE_DISTANCE := 60.0
+## 敌方坦克乘员弃车阈值：结构值 ≤ 这个比例（相对 max_hp）就下车逃生，车随之停火
+const VEHICLE_CREW_BAILOUT_FRACTION := 0.30
 
 # ────────────── 评分（第一版只留两项，4.8）─────────────
 const SCORE_KILL := 1

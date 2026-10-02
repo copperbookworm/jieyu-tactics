@@ -28,6 +28,11 @@ var _sight: SightSystem = null
 var _player_ref = null               # AI 的目标
 var _turret_recoil := 0.0            # 0..1，开火时的后坐视觉量
 
+# —— 敌方坦克乘员（候选 Q · 使用者 2026-10-02：坦克要有敌人士兵操控，快损坏时下车逃生）——
+## 乘员是 Enemy（不是 PlayerUnit）：在车里时藏起来、脱离 enemy 组（不作为独立目标）、关掉自身 AI
+var crew: Array = []
+var _bailed := false
+
 # —— 弹种（武器位一键切弹种：主炮 / 反坦克导弹）——
 ## 玩家步战车装 ATGM 的理由（使用者 2026-10-01 拍板）：IFV 的 30mm 机炮穿深 60 mm，
 ## 对敌方主战坦克（正面等效 700 ÷ cos30° ≈ 808 mm）任何一面都打不穿，会变成「只有未击穿效果」，
@@ -109,6 +114,48 @@ func enter(player) -> void:
 ## 相机（跟玩家）、开发用黄箭头、载具发烟器读到的全是**过期坐标**，真机表现就是：
 ## 黄箭头停在上车点且指向不变 / 镜头不跟车 / 烟放在原地 / 准心被自己的烟钳死在原地。
 ## 物理上乘员就坐在车里，坐标必须跟车。（Vehicle 没有碰撞体，不用担心和乘员互相卡住。）
+## 乘员登车（候选 Q）：藏起来 + 脱离 enemy 组（在车里不该被当成独立目标打）+ 关掉自身 AI
+func add_crew(unit) -> void:
+	if unit == null:
+		return
+	crew.append(unit)
+	unit.visible = false
+	if unit.has_method("set_ai_enabled"):
+		unit.set_ai_enabled(false)
+	if unit.has_method("remove_from_group"):
+		unit.remove_from_group("enemy")
+
+
+## 弃车逃生（结构值跌破 GameConfig.VEHICLE_CREW_BAILOUT_FRACTION 时由 _maybe_bail_out 调用）：
+## 乘员落到车旁、重新可见可打（回到 enemy 组）、AI 打开；车没人操炮 ⇒ 停火。
+func _bail_out() -> void:
+	_bailed = true
+	ai_enabled = false
+	for unit in crew:
+		if unit == null or not is_instance_valid(unit):
+			continue
+		unit.global_position = global_position + hull_facing.rotated(PI * 0.5) * 6.0
+		unit.visible = true
+		if unit.has_method("add_to_group"):
+			unit.add_to_group("enemy")
+		if unit.has_method("set_ai_enabled"):
+			unit.set_ai_enabled(true)
+	crew.clear()
+
+
+func _maybe_bail_out() -> void:
+	if _bailed or crew.is_empty() or max_hp <= 0.0:
+		return
+	if hp / max_hp <= GameConfig.VEHICLE_CREW_BAILOUT_FRACTION:
+		_bail_out()
+
+
+func _carry_crew() -> void:
+	for unit in crew:
+		if unit != null and is_instance_valid(unit):
+			unit.global_position = global_position
+
+
 func _carry_occupants() -> void:
 	for occupant in [driver, operator]:
 		if occupant != null and is_instance_valid(occupant):
@@ -265,6 +312,7 @@ func take_hit(raw_damage: float, penetration_mm: float,
 	if not penetrated:
 		damage *= GameConfig.VEHICLE_NON_PEN_DAMAGE_SCALE
 	hp = maxf(hp - damage, 0.0)
+	_maybe_bail_out()   # 候选 Q：快报废 → 乘员弃车逃生
 	var wrecked_now := hp <= 0.0
 	if wrecked_now:
 		destroyed = true
@@ -455,6 +503,7 @@ func _process(delta: float) -> void:
 	_sync_layers()          # 12.7.2：图层跟着车体 / 炮塔
 	_update_track(delta)    # 12.7.2：履带相位（按实际位移推进）
 	_carry_occupants()      # 2026-10-02 真机修：乘员坐标跟车（见函数注释）
+	_carry_crew()           # 候选 Q：敌方坦克乘员也跟着车
 	queue_redraw()
 
 

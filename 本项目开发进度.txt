@@ -77,7 +77,7 @@
   重力/弹道高度（simulate）只保留给间瞄（高弹道越障）
 
 三、当前状态
-· 规模：104 个 .gd / 15383 行（2026-10-02 本机实测，LF 字节口径，不含 addons 与 .godot）；Main.gd **398 行**（候选 Q 净 0：新增 3 行建模块、删掉旧阵亡处理 3 行、收掉两句注释、双接修复再删 1 行接线；≤400 回到 **2 行**余量）
+· 规模：104 个 .gd / 15507 行（2026-10-02 本机实测，LF 字节口径，不含 addons 与 .godot）；Main.gd **398 行**（候选 Q 净 0：新增 3 行建模块、删掉旧阵亡处理 3 行、收掉两句注释、双接修复再删 1 行接线；≤400 回到 **2 行**余量）
   文件数从上一轮的 78 掉到 71 是**归档**造成的（候选 T ④ 移走 13 个零引用 .gd：11 个 1 行空骨架 + 2 个哥布林/史莱姆占位），
   同时新增 6 个（SmokeScreen / SmokeController / MapLayerSource / smoke_test / map_layer_test / probe_height_export）⇒ 78 − 13 + 6 = 71，账对得上
   Main 行数曲线（候选 N 的 ≤400 验收线）：968 → 391（拆分）→ 393 → 385 → 395（L3 后告急）
@@ -90,7 +90,7 @@
   原值其实是对的（Main.gd 968 与 read 工具一致），三节这一段的数字已按正确口径重写。
 · 测试：29 个 @tool EditorScript（terrain / ballistics / capture / cover / crosshair / handling /
   height_image / indirect / map_inspector / **map_layer** / mark / quest / role / **smoke** / suppression /
-tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **command** / **downed** / **terrain_zone** / **effects** / **audio** / **figure** / **vehicle_anim** / **atgm**），共 900 项断言，2026-10-02 复跑全绿（351 → 900：
+tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **command** / **downed** / **terrain_zone** / **effects** / **audio** / **figure** / **vehicle_anim** / **atgm**），共 913 项断言，2026-10-02 复跑全绿（351 → 913：
   载具开火链 11 项（vehicle_test 25 → 36）、启动自检 9 项（boot_check_test，新增脚本）
   候选 P 的 smoke_test 31 项 + 地图图层的 map_layer_test 26 项 + height_image 与 role_test 各补若干 +
   载具开火链的 11 项（vehicle_test 25 → 36，见第二十八版·补记）
@@ -1399,16 +1399,18 @@ tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **co
   被补刀（倒地后再吃一发）或流血到点（ENEMY_DOWNED_TIMEOUT 30 s，比玩家的 60 s 短）才阵亡。
 · 验收（本轮真跑）：单元 30 个脚本 **900 项全绿**（894 → 900：补刀 + 倒地姿势 6 项）／
   集成冒烟 **224 项全绿**（218 → 224：补刀前提（站着/倒地都交战、坦克照打）+ 倒地躺平 + 补刀即阵亡立刻复活）。
-· ⏳ 同批的第 4 条**还没做**（下一轮）：敌人坦克要有敌人士兵操控，且快损坏时下车逃生 —— 
-  需要：Vehicle 加乘员挂载（现在只支持 PlayerUnit 上下车，Enemy 没有 input_locked 会报错）、
-  结构值低于阈值时车门逃生（乘员转成地面 AI、车停火）。／集成冒烟 **218 项全绿**（213 → 218：倒地停火 4 项 + 落点候选点 1 项）。
+· ⑧ **坦克乘员 + 弃车逃生（同批第 4 条，已完成）**：
+  · Vehicle 加 crew 挂载：乘员是 Enemy（不是 PlayerUnit，所以没走 enter() 那条会写 input_locked 的路）——
+  登车后 visible=false + **脱离 enemy 组**（在车里不作为独立目标被打）+ 自身 AI 关闭（Enemy.ai_enabled）+ 坐标随车；
+  · 结构值 ≤ VEHICLE_CREW_BAILOUT_FRACTION(30%) 时 _bail_out()：乘员落到车旁、回到 enemy 组、AI 打开，车 ai_enabled=false 停火；
+  · VehicleController 给敌方坦克配一名 EnemyTankCrew。验收：单元 +13（vehicle_test，含「还高血不弃车」的反例）／集成 +5。／集成冒烟 **218 项全绿**（213 → 218：倒地停火 4 项 + 落点候选点 1 项）。
   超时判定、突然死亡判定、阶段流转（15 min → 加时 → 平局）、重生预算（扣 1 能复活 / 归零判负））／
-  集成冒烟 **224 项全绿**（战局流程 / 重生 / 倒地姿势 / 补刀接进真场景后原有检查未回归）／104 个 .gd / 15010 行 ／ Main.gd 399 行。
+  集成冒烟 **229 项全绿**（战局流程 / 重生 / 倒地姿势 / 补刀 / 坦克乘员接进真场景后原有检查未回归）／104 个 .gd / 15010 行 ／ Main.gd 399 行。
 · 待办（下一轮）：① 真机看一眼倒计时行与加时提示；② 候选 S（信誉分与治理）—— 它是「平局信誉分不变」的落点；
   ③ 5.4 攻防转换 / 4.4 剩余部分 / 载具相机三档（19 章 ②）。
 
 四、接下来（候选 A~N 已全部完成；✅ 候选 L（L1~L5）、✅ 候选 P（烟雾遮蔽）、✅ 候选 T 除 ⑥ 外的各条
-	亦已完成；单元测试 900 项全绿、集成冒烟 224 项全绿、导出包验收 失败 0 项（2026-10-02 本轮复跑）；
+	亦已完成；单元测试 913 项全绿、集成冒烟 229 项全绿、导出包验收 失败 0 项（2026-10-02 本轮复跑）；
 	docx 第二十章回流这笔账已在第二十七版还清，第二十八版把新做的三项回流了一遍；第二十九版把设计文档的去冲突与集中拍板做完（不动代码）；第三十版做了候选 O 第一轮（4.14 战斗播报 + 4.15 操作提示）
 	下一批建议：候选 M 已收官、ATGM 主链路与 5 项真机修复均已真机验收通过（2026-10-02）；下一批从
 	候选 R（数据表扩到文档规模）、候选 Q（胜负流程接入 5.7）或候选 S（信誉分与治理）里挑一个开工。

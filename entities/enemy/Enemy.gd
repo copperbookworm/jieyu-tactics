@@ -34,6 +34,8 @@ enum AIState { PATROL, COMBAT, BLIND_FIRE }
 @export var fire_damage: float = 20.0
 
 var alive := true
+## AI 开关（候选 Q）：被坦克乘员化时关掉，弃车后重新打开
+var ai_enabled := true
 ## 倒地（候选 Q / 使用者 2026-10-02）：血打光先倒地（躺平、不能动不能打），被补刀或流血到点才阵亡
 var downed := false
 var downed_time_left := 0.0
@@ -186,7 +188,17 @@ func _process(delta: float) -> void:
 
 
 ## AI：发现玩家（通视 + 距离内）→ 交战；只被烟挡住 → 朝最后已知位置盲射；否则巡逻
+## 乘员化 / 弃车时切换（在车里不该自己跑 AI，也不该自己开火）
+func set_ai_enabled(on: bool) -> void:
+	ai_enabled = on
+	if not on:
+		velocity = Vector2.ZERO
+
+
 func _update_ai(delta: float) -> void:
+	if not ai_enabled:
+		velocity = Vector2.ZERO
+		return
 	# 自己倒地：不能动也不能打，只走流血计时（到点阵亡）。补刀在 take_damage 里 ——
 	# 使用者 2026-10-02 拍板「倒地可被补刀（更硬核）」，所以这里不再阻止 AI 打倒地目标。
 	if downed:

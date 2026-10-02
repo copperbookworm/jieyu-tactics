@@ -4,12 +4,18 @@
 - 项目名 JIEYU1；主场景 `res://scenes/gameplay/Main.tscn`
 - 渲染 mobile + d3d12；分辨率 960x540，`canvas_items` 拉伸，纹理过滤 Nearest（`default_texture_filter=0`）
 - 物理：project.godot 里 3D 物理引擎设为 Jolt Physics（本项目是纯 2D，实际走 Godot 内置 2D 物理）
-- Autoload：`EventBus`、`_mcp_game_helper`（`addons/godot_ai/runtime/game_helper.gd`）
+- Autoload：`EventBus`、`Audio`（`*res://systems/audio/AudioSystem.gd`，单例名 `Audio`）、
+  `_mcp_game_helper`（`addons/godot_ai/runtime/game_helper.gd`）
 - 编辑器插件：`addons/godot_ai`（godot-ai v4.2.3）
 - 引擎：`E:\Godot_v4.7.1-stable_win64.exe\`（console 版跑脚本 / headless 自检）
 - 工作副本：`D:\Godot4.7_Proj\jieyu-1`
-- ⚠ **本机工作区没有 .git**：不能 revert / commit，改坏了回不去，一切改动只靠
-  `本项目开发进度.txt` 记录（建议尽早补一次基线提交）
+- ✅ **本机工作区有 git**（2026-10-02 核实，旧说明「没有 .git」已作废）：分支 `main`、
+  16 次提交（`fd8d622` → `ee6fb2a`）、有 `.gitignore`；**没有任何 remote（纯本地库）**
+  ⇒ 能 revert / commit，但**改坏了没有离线备份兜底**（重要节点建议 `git bundle` 或推远端留一份）。
+- **每轮收尾必须提交**（使用者要求）：`git add -A` → `git commit -F <消息文件>`
+  （用文件传消息，避免中文与引号在命令行被转义）。消息写清：做了什么 + 验收数字 + 文档同步。
+- ⚠ 提交前**必须两套测试全绿**，且校验要**同时看两个退出码 + 两行汇总**——历史教训：曾因只校验
+  集成那一行，把一个红的单元测试提交了（后用 `--amend` 折回）。
 
 ## 工作规则（按重要度排序）
 

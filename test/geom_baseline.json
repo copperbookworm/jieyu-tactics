@@ -9,14 +9,6 @@
       "rect_a": "(16,36 156x49)",
       "rect_b": "(16,60 300x96)"
     },
-    "CommandWheel|Role": {
-      "a": "/root/Main/HudBuilder/HUD/CommandWheel",
-      "b": "/root/Main/HudBuilder/HUD/Role",
-      "hit": "(280,186 72x33)",
-      "parent": "/root/Main/HudBuilder/HUD",
-      "rect_a": "(272,186 80x40)",
-      "rect_b": "(280,170 500x49)"
-    },
     "FocusButton|MarkHint": {
       "a": "/root/Main/HudBuilder/HUD/FocusButton",
       "b": "/root/Main/HudBuilder/HUD/MarkHint",

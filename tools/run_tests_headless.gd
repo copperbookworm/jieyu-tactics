@@ -13,6 +13,33 @@ extends SceneTree
 ## 提示：受限沙箱里 Godot 写不了 user:// 日志会崩（Failed to open 'user://logs/...'），
 ## 此时加 --log-file <工作区内可写路径> 即可。
 
+## 跑几何门禁子进程，解析它的「—— 通过 N 项 / 失败 M 项 ——」汇总行；拿不到就返回 {}
+func _run_geometry_gate() -> Dictionary:
+	var exe := OS.get_executable_path()
+	var project := ProjectSettings.globalize_path("res://")
+	var output: Array = []
+	var log_path := "user://geom_gate.log"
+	# 用 --log-file 而不是管道捕获：受限环境里 OS.execute 的 stdout 管道拿不到东西（实测「跳过」）。
+	OS.execute(exe, ["--headless", "--path", project, "--log-file",
+			ProjectSettings.globalize_path(log_path), "--script",
+			"res://tools/geom_assertions.gd"], output, false)
+	var text := ""
+	var f := FileAccess.open(log_path, FileAccess.READ)
+	if f != null:
+		text = f.get_as_text()
+		f.close()
+	for line in text.split("\n"):
+		if not line.begins_with("—— 通过 "):
+			continue
+		var digits := ""
+		for ch in line:
+			digits += ch if (ch >= "0" and ch <= "9") or ch == "/" else ""
+		var parts := digits.split("/")
+		if parts.size() >= 2:
+			return {"passed": int(parts[0]), "failed": int(parts[1])}
+	return {}
+
+
 func _initialize() -> void:
 	var wanted := OS.get_cmdline_user_args()
 	var names := _test_scripts()
@@ -42,6 +69,18 @@ func _initialize() -> void:
 		print("<<<<< %s 通过=%s 失败=%s" % [name, str(passed), str(failed)])
 		if failed == null or int(failed) != 0:
 			bad.append("%s（通过 %s / 失败 %s）" % [name, str(passed), str(failed)])
+	# 几何门禁（visual-regression 技能）：HUD 控件不出屏 / 同级不新增重叠 / 点按目标够大 / 层号合法。
+	# 为什么用子进程：geom_assertions.gd 与本源文件一样是 SceneTree 入口（自己 quit），
+	# 进程内没法把它当普通测试实例化 —— 所以另起一个 headless 进程跑，把它的汇总行并进来。
+	if wanted.is_empty():
+		var geom := _run_geometry_gate()
+		if geom.has("passed"):
+			names.append("geom_assertions.gd")
+			print("<<<<< geom_assertions.gd 通过=%d 失败=%d" % [int(geom["passed"]), int(geom["failed"])])
+			if int(geom["failed"]) != 0:
+				bad.append("geom_assertions.gd（通过 %d / 失败 %d）" % [int(geom["passed"]), int(geom["failed"])])
+		else:
+			print("<<<<< geom_assertions.gd 跳过（子进程没起来 / 输出里没有汇总行）")
 	print("\n#### 汇总：脚本 %d 个，未全绿 %d 个" % [names.size(), bad.size()])
 	for entry in bad:
 		print("#### 未全绿：%s" % entry)

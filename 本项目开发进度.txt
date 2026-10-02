@@ -77,7 +77,7 @@
   重力/弹道高度（simulate）只保留给间瞄（高弹道越障）
 
 三、当前状态
-· 规模：104 个 .gd / 15010 行（2026-10-02 本机实测，LF 字节口径，不含 addons 与 .godot）；Main.gd **398 行**（候选 Q 净 0：新增 3 行建模块、删掉旧阵亡处理 3 行、收掉两句注释、双接修复再删 1 行接线；≤400 回到 **2 行**余量）
+· 规模：104 个 .gd / 15111 行（2026-10-02 本机实测，LF 字节口径，不含 addons 与 .godot）；Main.gd **398 行**（候选 Q 净 0：新增 3 行建模块、删掉旧阵亡处理 3 行、收掉两句注释、双接修复再删 1 行接线；≤400 回到 **2 行**余量）
   文件数从上一轮的 78 掉到 71 是**归档**造成的（候选 T ④ 移走 13 个零引用 .gd：11 个 1 行空骨架 + 2 个哥布林/史莱姆占位），
   同时新增 6 个（SmokeScreen / SmokeController / MapLayerSource / smoke_test / map_layer_test / probe_height_export）⇒ 78 − 13 + 6 = 71，账对得上
   Main 行数曲线（候选 N 的 ≤400 验收线）：968 → 391（拆分）→ 393 → 385 → 395（L3 后告急）
@@ -90,7 +90,7 @@
   原值其实是对的（Main.gd 968 与 read 工具一致），三节这一段的数字已按正确口径重写。
 · 测试：29 个 @tool EditorScript（terrain / ballistics / capture / cover / crosshair / handling /
   height_image / indirect / map_inspector / **map_layer** / mark / quest / role / **smoke** / suppression /
-tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **command** / **downed** / **terrain_zone** / **effects** / **audio** / **figure** / **vehicle_anim** / **atgm**），共 872 项断言，2026-10-02 复跑全绿（351 → 872：
+tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **command** / **downed** / **terrain_zone** / **effects** / **audio** / **figure** / **vehicle_anim** / **atgm**），共 883 项断言，2026-10-02 复跑全绿（351 → 883：
   载具开火链 11 项（vehicle_test 25 → 36）、启动自检 9 项（boot_check_test，新增脚本）
   候选 P 的 smoke_test 31 项 + 地图图层的 map_layer_test 26 项 + height_image 与 role_test 各补若干 +
   载具开火链的 11 项（vehicle_test 25 → 36，见第二十八版·补记）
@@ -1374,14 +1374,21 @@ tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **co
 · ③ 未做：① 信誉分本体还没做（平局只是「不改信誉分」，没有计分系统）；② 攻防转换（5.4）没有战场层；
   ③ 兵棋段的「每多占 1 点 ＝ 初始重生预算 +8」、困难模式 15 分钟、装甲对抗载具等待 30 s 都还没接；
   ④ 平局目前复用失败标签显示「平局：…（信誉分不变）」，没有独立的平局画面。
-· 验收（本轮真跑）：单元 30 个脚本 **872 项全绿**（845 → 872：新增 match_flow_test 27 项 —— 时间文案、
+· ⑤ **重生机制补全（使用者 2026-10-02 指出「没有做好复活：血量与出生点都没重置」）**：
+  根因是我把 revive() 当成了重生 —— 它是**扶起**（只在倒地态有效、血量只补到 DOWNED_REVIVE_HP＝25、位置不动）；
+  玩家阵亡后（alive=false、downed=false）它第一行就 return ⇒ 我写的「重生」等于没做。
+  修法：新增 PlayerUnit.respawn(at＝INF) —— 满血（SOLDIER_HP，不是 25）＋ 回出生点（WorldSetup 记下的
+  respawn_point）＋ 状态清零（倒地 / 倒地计时 / 压制 / 受击闪白 / 聚焦 / 换弹 / 速度 / 输入锁 / 弹匣补满）＋ 可见；
+  MatchFlow 重生前先 exit_vehicle()（人在座位的账没销的话，Vehicle._carry_occupants() 会把坐标又拽回车体），
+  重生后把相机中心拉回出生点（否则镜头从倒地处慢慢飘过去）；revive() 语义不变，留给以后的小队救援。
+· 验收（本轮真跑）：单元 30 个脚本 **883 项全绿**（845 → 883：新增 match_flow_test 38 项（含 11 项重生断言） —— 时间文案、
   超时判定、突然死亡判定、阶段流转（15 min → 加时 → 平局）、重生预算（扣 1 能复活 / 归零判负））／
-  集成冒烟 **205 项全绿**（战局流程接进真场景后原有检查未回归）／104 个 .gd / 15010 行 ／ Main.gd 399 行。
+  集成冒烟 **213 项全绿**（战局流程 + 重生接进真场景后原有检查未回归）／104 个 .gd / 15010 行 ／ Main.gd 399 行。
 · 待办（下一轮）：① 真机看一眼倒计时行与加时提示；② 候选 S（信誉分与治理）—— 它是「平局信誉分不变」的落点；
   ③ 5.4 攻防转换 / 4.4 剩余部分 / 载具相机三档（19 章 ②）。
 
 四、接下来（候选 A~N 已全部完成；✅ 候选 L（L1~L5）、✅ 候选 P（烟雾遮蔽）、✅ 候选 T 除 ⑥ 外的各条
-	亦已完成；单元测试 872 项全绿、集成冒烟 205 项全绿、导出包验收 失败 0 项（2026-10-02 本轮复跑）；
+	亦已完成；单元测试 883 项全绿、集成冒烟 213 项全绿、导出包验收 失败 0 项（2026-10-02 本轮复跑）；
 	docx 第二十章回流这笔账已在第二十七版还清，第二十八版把新做的三项回流了一遍；第二十九版把设计文档的去冲突与集中拍板做完（不动代码）；第三十版做了候选 O 第一轮（4.14 战斗播报 + 4.15 操作提示）
 	下一批建议：候选 M 已收官、ATGM 主链路与 5 项真机修复均已真机验收通过（2026-10-02）；下一批从
 	候选 R（数据表扩到文档规模）、候选 Q（胜负流程接入 5.7）或候选 S（信誉分与治理）里挑一个开工。

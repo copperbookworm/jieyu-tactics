@@ -77,7 +77,7 @@
   重力/弹道高度（simulate）只保留给间瞄（高弹道越障）
 
 三、当前状态
-· 规模：104 个 .gd / 15010 行（2026-10-02 本机实测，LF 字节口径，不含 addons 与 .godot）；Main.gd **399 行**（候选 Q 净 +1：新增战局流程模块 3 行、删掉旧的阵亡处理 3 行、再收掉两句注释；≤400 只剩 **1 行**余量）
+· 规模：104 个 .gd / 15010 行（2026-10-02 本机实测，LF 字节口径，不含 addons 与 .godot）；Main.gd **398 行**（候选 Q 净 0：新增 3 行建模块、删掉旧阵亡处理 3 行、收掉两句注释、双接修复再删 1 行接线；≤400 回到 **2 行**余量）
   文件数从上一轮的 78 掉到 71 是**归档**造成的（候选 T ④ 移走 13 个零引用 .gd：11 个 1 行空骨架 + 2 个哥布林/史莱姆占位），
   同时新增 6 个（SmokeScreen / SmokeController / MapLayerSource / smoke_test / map_layer_test / probe_height_export）⇒ 78 − 13 + 6 = 71，账对得上
   Main 行数曲线（候选 N 的 ≤400 验收线）：968 → 391（拆分）→ 393 → 385 → 395（L3 后告急）
@@ -1362,8 +1362,14 @@ tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **co
     （对齐 docx 5.2：重生预算耗尽是攻防失败，不是任务系统的惩罚）
   · HUD：HudBuilder.set_match_status() 新增战局状态行「mm:ss ｜ 重生预算 n」，加时中 / 最后 1 分钟染告警色
 · ② 接线（刻意保持 Main ≤400）
-  · MatchFlow 自己 _process 自走 + 自己订阅 player_died；Main 只做「建它 + 把 player_died 转交给它」（净 +1 行）
-  · 删掉旧的 Main._on_player_died()（它原本一死就判负，会绕过重生预算）；Main 399 行，≤400 只剩 1 行余量
+  · MatchFlow 自己 _process 自走 + **自己订阅** player_died；Main 只负责建它（player_died 全程只接一次）
+  · 删掉旧的 Main._on_player_died()（它原本一死就判负，会绕过重生预算）；Main 最终 398 行（≤400 余 2 行）
+· ④ **过程留痕（使用者跑起来抓到的运行时错误）**：一开始「MatchFlow 自订阅 + Main 又转交一次」＝同一个 callable 接了两次，
+  Godot 直接报 Signal player_died is already connected to given callable（Main.gd:181 @ _wire_signals）。
+  修法：删掉 Main 那一行接线（顺便把 Main 收回 398 行），再把 MatchFlow.setup 里的订阅做成幂等（is_connected 判断）；
+  现在 player_died 的订阅方只剩 MatchFlow 与 CombatFeedPanel（不同 callable，正常）。
+  ⚠ 教训：**测试全绿 ≠ 运行时干净** —— 集成冒烟里其实打了这条 ERROR，但被我的 grep 过滤掉了（只匹配 SCRIPT ERROR）。
+  以后收尾的日志自检要一并搜 already connected / C++ / ERROR:，别只搜 SCRIPT ERROR。
   · **下一次再往 Main 加任何接线，必须先拆模块**（历史做法：先拆再加）
 · ③ 未做：① 信誉分本体还没做（平局只是「不改信誉分」，没有计分系统）；② 攻防转换（5.4）没有战场层；
   ③ 兵棋段的「每多占 1 点 ＝ 初始重生预算 +8」、困难模式 15 分钟、装甲对抗载具等待 30 s 都还没接；

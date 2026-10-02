@@ -178,7 +178,6 @@ func _wire_signals() -> void:
 	# 事件总线 / 玩家
 	EventBus.enemy_killed.connect(_on_enemy_killed)
 	EventBus.flag_state_changed.connect(_on_flag_state_changed)
-	EventBus.player_died.connect(match_flow.on_player_died)   # 候选 Q：先扣重生预算，够了就复活
 	player.ammo_changed.connect(_on_ammo_changed)
 	player.reload_started.connect(_on_reload_started)
 	player.reload_finished.connect(_on_reload_finished)

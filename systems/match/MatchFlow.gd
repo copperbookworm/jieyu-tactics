@@ -31,7 +31,10 @@ func setup(main_node, attacker_count: int = -1) -> void:
 	var count := attacker_count if attacker_count > 0 else _count_attackers()
 	budget = GameConfig.RESPAWN_BUDGET_MULTIPLIER * count
 	enemy_budget = GameConfig.RESPAWN_BUDGET_MULTIPLIER * count
-	if EventBus != null and EventBus.has_signal("player_died"):
+	# 幂等：Main 不再重复接这一条（重复接同一个 callable 会被 Godot 判为错误），
+	# 但 setup 万一被调两次（场景重载）也不能炸。
+	if EventBus != null and EventBus.has_signal("player_died") \
+			and not EventBus.player_died.is_connected(on_player_died):
 		EventBus.player_died.connect(on_player_died)
 	_sync_holds()
 	_refresh()

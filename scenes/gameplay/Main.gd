@@ -2,6 +2,7 @@ extends Node2D
 
 ## 间瞄链模块用 preload（刻意不写 class_name，避免「新类未进全局类缓存」那套问题）
 const IndirectControllerScript := preload("res://scenes/gameplay/IndirectController.gd")
+const MatchFlowScript := preload("res://systems/match/MatchFlow.gd")
 ## 2026-09-30 候选 N：按职责拆出的四个 Node 子模块（同样不写 class_name，统一 preload 引用）
 const WorldSetupScript := preload("res://scenes/gameplay/WorldSetup.gd")
 const VehicleControllerScript := preload("res://scenes/gameplay/VehicleController.gd")
@@ -69,6 +70,7 @@ var indirect_ctl = null     # IndirectController（候选 L4 前从 Main 拆出�
 
 var score := 0              # 战力分（HUD 由 HudBuilder 显示）
 var _victory := false
+var match_flow = null   # 战局流程（候选 Q）：计时 / 加时 / 平局 / 重生预算
 var _defeat := false
 
 
@@ -125,6 +127,9 @@ func _ready() -> void:
 	smoke_ctl = SmokeControllerScript.new()
 	smoke_ctl.name = "SmokeController"
 	add_child(smoke_ctl)
+	match_flow = MatchFlowScript.new()
+	add_child(match_flow)
+	match_flow.setup(self)
 	smoke_ctl.setup(self)
 	# HUD（含战术地图图层 / 小地图 / 任务卡片 / 报点轮盘）
 	hud = HudBuilderScript.new()
@@ -173,7 +178,7 @@ func _wire_signals() -> void:
 	# 事件总线 / 玩家
 	EventBus.enemy_killed.connect(_on_enemy_killed)
 	EventBus.flag_state_changed.connect(_on_flag_state_changed)
-	EventBus.player_died.connect(_on_player_died)
+	EventBus.player_died.connect(match_flow.on_player_died)   # 候选 Q：先扣重生预算，够了就复活
 	player.ammo_changed.connect(_on_ammo_changed)
 	player.reload_started.connect(_on_reload_started)
 	player.reload_finished.connect(_on_reload_finished)
@@ -356,10 +361,6 @@ func _on_victory() -> void:
 	_victory = true
 	EventBus.match_finished.emit("player")
 	hud.show_victory()
-
-
-func _on_player_died() -> void:
-	_on_defeat("阵亡")
 
 
 func _on_defeat(reason: String = "防线失守") -> void:

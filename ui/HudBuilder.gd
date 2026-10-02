@@ -34,6 +34,8 @@ var crosshair: Sprite2D = null
 var vignette: TextureRect = null
 var hint_label: Label = null
 var score_label: Label = null
+## 战局状态（剩余时间 / 加时 / 重生预算，候选 Q）
+var match_label: Label = null
 var capture_hud: Label = null
 var quest_card: QuestCard = null
 var mark_wheel: MarkWheel = null
@@ -123,6 +125,12 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	score_label.name = "Score"
 	score_label.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 4.0)
 	layer.add_child(score_label)
+
+	# 战局状态行（候选 Q，docx 5.7）：剩余时间 + 加时提示 + 重生预算
+	match_label = Label.new()
+	match_label.name = "MatchClock"
+	match_label.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 26.0)
+	layer.add_child(match_label)
 	update_score(main.score)
 
 	capture_hud = Label.new()
@@ -361,6 +369,15 @@ func mark_reloading() -> void:
 func update_score(score: int) -> void:
 	if score_label != null:
 		score_label.text = "战力分 %d" % score
+
+
+## 战局状态行（候选 Q）：urgent = 加时中 / 最后 1 分钟，染成告警色
+func set_match_status(text: String, urgent: bool = false) -> void:
+	if match_label == null:
+		return
+	match_label.text = text
+	match_label.add_theme_color_override("font_color",
+			Color("ff6b5a") if urgent else Color(0.85, 0.88, 0.85))
 
 
 func update_capture() -> void:

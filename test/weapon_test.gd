@@ -36,7 +36,8 @@ func _check_true(title: String, condition: bool) -> void:
 
 func _test_table_loaded() -> void:
 	var table := WeaponTableScript.load_table()
-	_check_true("武器表：至少 5 把枪（实际 %d 把）" % table.size(), table.size() >= 5)
+	# 候选 R（2026-10-02）：表已扩到官方全量 25 把
+	_check("武器表：25 把（官方全量）", table.size(), 25)
 	var qbz: Dictionary = WeaponTableScript.get_weapon("qbz191")
 	_check("武器表：QBZ-191 射速 750", WeaponTableScript.number(qbz, "rpm", 0.0), 750.0)
 	_check("武器表：QBZ-191 MOA 3", WeaponTableScript.number(qbz, "moa", 0.0), 3.0)

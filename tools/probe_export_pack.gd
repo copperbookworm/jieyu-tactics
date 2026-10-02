@@ -63,8 +63,15 @@ func _initialize() -> void:
 				and image.get_height() == GameConfig.GRID_HEIGHT)
 		var grid := HeightGrid.new(GameConfig.GRID_WIDTH, GameConfig.GRID_HEIGHT)
 		_check("高度图能直接填进网格", grid.fill_from_image(image))
-	_check("原图 PNG 确实不在包里（说明走的是导入资源那条路，符合预期）",
-			not FileAccess.file_exists("res://assets/maps/map_demo_height.png"))
+	# 2026-10-02 处理（第三十九版真机轮发现、第四十版定案）：这里原来是一条负向断言
+	# 「原图 PNG 不该在包里」，用来证明「高度图走的是导入资源（.ctex）那条路」。
+	# 但实测在 Godot 4.7.1 下它不成立也不可靠：FileAccess 能在该路径读到 PNG 魔数
+	# （要么原图随包发布、要么被 remap 到了导入资源），而且它**证明不了我们依赖的东西** ——
+	# 真正要保的「高度图读得到 / 尺寸对 / 能填进网格」上面 3 项已经覆盖。
+	# 所以改成只报事实（print），不再判红：否则每次导出验收都会挂一条假红，掩盖真问题。
+	var raw_present := FileAccess.file_exists("res://assets/maps/map_demo_height.png")
+	print("     · 备注：包内原图路径可读 = %s（不影响结论：高度图一律走 ResourceLoader 取导入资源）"
+			% str(raw_present))
 
 	print("—— 导出包自检：失败 %d 项 ——" % _failed)
 	quit(1 if _failed > 0 else 0)

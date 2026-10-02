@@ -100,7 +100,19 @@ func _make_vehicle():
 
 func _test_table() -> void:
 	var table := VehicleTableScript.load_table()
-	_check_true("载具表：至少 2 辆（实际 %d）" % table.size(), table.size() >= 2)
+	# 候选 R（2026-10-02）：表已扩到官方全量 18 辆，且已校准的两辆数值不能被扩表改动
+	# 名字加 _r 后缀：本函数上面已经有 ifv / tank 两个局部变量了（重复声明会编译失败）
+	var ifv_r := VehicleTableScript.get_vehicle("ifv_a")
+	var tank_r := VehicleTableScript.get_vehicle("mbt_t1")
+	_check("载具表：18 辆（官方全量）", table.size(), 18)
+	_check_true("扩表后 ifv_a 数值没动（800 结构 / 600 弹药 / 2 发导弹）",
+			VehicleTableScript.number(ifv_r, "hp", 0.0) == 800.0
+			and VehicleTableScript.number(ifv_r, "ammo", 0.0) == 600.0
+			and VehicleTableScript.number(ifv_r, "atgm_ammo", 0.0) == 2.0)
+	_check_true("扩表后 mbt_t1 数值没动（2000 结构 / 42 发 / 700 穿深）",
+			VehicleTableScript.number(tank_r, "hp", 0.0) == 2000.0
+			and VehicleTableScript.number(tank_r, "ammo", 0.0) == 42.0
+			and VehicleTableScript.number(tank_r, "gun_penetration_mm", 0.0) == 700.0)
 	var ifv: Dictionary = VehicleTableScript.get_vehicle("ifv_a")
 	_check("载具表：IFV 车长 7.2 m", VehicleTableScript.number(ifv, "length_m", 0.0), 7.2)
 	_check("载具表：IFV 侧甲 45 mm", VehicleTableScript.number(ifv, "armor_side_mm", 0.0), 45.0)

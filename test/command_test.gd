@@ -99,18 +99,21 @@ func _test_global_cooldown() -> void:
 	_check_true("全局冷却：公共冷却过后 B 可以发", book.send("support"))
 
 
-## 回归：指令键在左侧第三列，环形菜单若整圈展开会把项推到屏幕外 —— 只走左半圈并 clamp
+## 回归：指令键在左侧第三列（x=192），菜单必须**向右**半圈展开 —— 向左会盖住中间那列按钮
+## （使用者 2026-10-02 真机反馈），整圈展开又会被挤出屏幕，所以走右半圈 + clamp。
 func _test_wheel_items_stay_on_screen() -> void:
 	var button_pos := Vector2(GameConfig.COMMAND_BUTTON_X, GameConfig.COMMAND_BUTTON_Y)
 	var size := Vector2(GameConfig.COMMAND_BUTTON_WIDTH, GameConfig.COMMAND_BUTTON_HEIGHT)
 	var center := button_pos + size * 0.5
 	var count := CommandBookScript.count()
 	var all_inside := true
-	var all_on_left := true
+	var all_to_right := true
+	var clear_of_middle_column := true
 	for i in count:
 		var offset := MarkWheel.item_offset(i, count)
-		if offset.x > 0.0:
-			all_on_left = false
+		offset.x = absf(offset.x)          # 与 CommandWheel 的镜像保持一致
+		if offset.x < 0.0:
+			all_to_right = false
 		var item_center := center + offset
 		var rect := Rect2(item_center - Vector2(GameConfig.MARK_ITEM_WIDTH,
 				GameConfig.MARK_ITEM_HEIGHT) * 0.5,
@@ -120,4 +123,12 @@ func _test_wheel_items_stay_on_screen() -> void:
 				or rect.end.y > GameConfig.VIEWPORT_HEIGHT:
 			all_inside = false
 	_check_true("轮盘：6 个菜单项全部落在屏幕内", all_inside)
-	_check_true("轮盘：菜单只向左半圈展开（不越左边缘）", all_on_left)
+	# 菜单左缘不得压到中间那列按钮（指令键在 x=192，往左就是中间列）
+	for i in count:
+		var off := MarkWheel.item_offset(i, count)
+		off.x = absf(off.x)
+		var item_center := center + off
+		# 中间那列的右缘 = 104 + 80 = 184 = 指令键 x − 8（指令键在 x=192）
+		if item_center.x - GameConfig.MARK_ITEM_WIDTH * 0.5 < GameConfig.COMMAND_BUTTON_X - 8.0:
+			clear_of_middle_column = false
+	_check_true("轮盘：菜单向右展开（不再压住中间那列按钮）", clear_of_middle_column)

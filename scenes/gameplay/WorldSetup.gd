@@ -9,6 +9,8 @@ extends Node
 ## 刻意不写 class_name：引用方 preload（见 Cover.gd 头部说明）
 
 const CoverScript := preload("res://entities/cover/Cover.gd")
+## 玩家的队友（3 名强力版，候选 Q · 使用者 2026-10-02）
+const AllyScript := preload("res://entities/ally/Ally.gd")
 ## 敌方 FOB（候选 L2）：同样无 class_name，preload 引用
 const FobScript := preload("res://entities/fob/Fob.gd")
 ## 环境互动区（docx 4.17）：同样无 class_name，preload 引用
@@ -34,6 +36,9 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	_build_terrain_zones(main)   # 4.17：泥泞 / 雪地减速、草丛隐蔽（要在玩家之后、敌人之前）
 	_build_enemy_fob(main)
 	_spawn_enemies(main, enemy_count)
+	# ⏳ 队友生成**暂时关掉**（2026-10-02）：一开就在集成冒烟里看到 enemy 组 4 个（期望 2），
+	# 多出来的两个节点还没定位；Ally 单位本身已完成并通过 14 项单测，等定位后再打开这一行。
+	# _spawn_allies(main, GameConfig.ALLY_SQUAD_SIZE)
 
 
 ## 地形来源（工具链 A）：填了高度图就优先导入；导入失败或没填 → 退回噪声地形
@@ -117,6 +122,15 @@ func _build_camera(main) -> void:
 	main.camera_controller.name = "AimCameraController"
 	main.add_child(main.camera_controller)
 	main.camera_controller.setup(main.player, main.camera, main.sight)
+
+
+## 玩家的队友（3 名，强力版）：进 friendly 组 —— MatchFlow 的重生预算＝进攻方人数×2 会把他们算进去
+func _spawn_allies(main, count: int) -> void:
+	for i in count:
+		var ally := AllyScript.new()
+		ally.name = "Ally%d" % i
+		ally.setup(main, main.player, main.sight, main.grid, i)
+		main.add_child(ally)
 
 
 func _spawn_enemies(main, enemy_count: int) -> void:

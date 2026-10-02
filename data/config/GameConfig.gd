@@ -386,6 +386,8 @@ const VEHICLE_CREW_BAILOUT_FRACTION := 0.30
 ##   坦克停火），且倒地目标期间免伤（流弹 / 爆炸也不算补刀）⇒ 可以安稳测「倒地 60 s → 阵亡 → 重生」。
 ## 注意：只影响「敌人 → 倒地目标」这一个方向；玩家补刀倒地敌人不受它影响。
 const ENEMY_FINISH_OFF_ENABLED := false
+## 玩家小队规模（队友数，使用者 2026-10-02 定为 3）
+const ALLY_SQUAD_SIZE := 3
 
 # ────────────── 评分（第一版只留两项，4.8）─────────────
 const SCORE_KILL := 1

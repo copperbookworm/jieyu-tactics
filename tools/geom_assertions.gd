@@ -196,6 +196,20 @@ func _check_overlaps_against_baseline() -> void:
 		_failed += 1
 		return
 	var known: Dictionary = parsed["overlaps"]
+	# 让「账」可见：有意 / 无意待修 各几条（定案来自基线 verdict 字段）
+	var on_purpose := 0
+	var to_fix := 0
+	var unclassified := 0
+	for pair in known.keys():
+		var verdict := String((known[pair] as Dictionary).get("verdict", ""))
+		if verdict.begins_with("有意"):
+			on_purpose += 1
+		elif verdict.begins_with("无意"):
+			to_fix += 1
+		else:
+			unclassified += 1
+	print("— 已知重叠 %d 组：有意 %d / 无意待修 %d / 未归类 %d（定案见 test/geom_baseline.json 的 verdict）"
+			% [known.size(), on_purpose, to_fix, unclassified])
 
 	var newly := []
 	for pair in _overlaps.keys():
@@ -223,12 +237,36 @@ func _check_overlaps_against_baseline() -> void:
 		print("    处置：人工确认后重跑 --init 收紧基线，别留过期条目。")
 
 
+## 基线逐条定案（2026-10-02 使用者拍板）：键 = "A|B"（与 _overlaps 的键口径一致，字母序）
+## 「有意」= 按设计保留（必须写清为什么功能上不冲突）；「无意」= 真问题，待修（必须写清修法）。
+## 这份定案由 --init 写进 test/geom_baseline.json 的 verdict 字段 ⇒ 下次 --init 不会丢。
+const BASELINE_NOTES := {
+	"CaptureStatus|QuestCard": "无意（真 bug，真机截图可见）：节点状态行 (16,36 高 49) 与任务卡 (16,60 高 96) 纵向叠 25 px，真机上两行文字互相压。修法：任务卡下移或收窄 —— 但下方 85..162 只剩 77 px，放不下 96 高的卡，需拍板（缩卡 / 换位置）。",
+	"FocusButton|MarkHint": "有意：聚焦触摸热区刻意做 120×120（点按目标够大），提示行是 Label 不接收输入 ⇒ 功能上不冲突。",
+	"MarkWheel|HP": "有意：报点轮盘展开时按层级临时盖住右上信息条，选择或取消后立即收起；HP 是 Label，不抢触摸。",
+	"MarkWheel|MapButton": "无意（真问题）：轮盘与地图键**都是可点按钮**，重叠区里按下命中不确定（触屏歧义）。修法：轮盘展开时禁用地图键，或把轮盘中心左移。",
+	"MatchClock|MarkWheel": "有意：同 MarkWheel|HP —— 战局状态行是 Label；要更干净可在轮盘展开时临时隐藏该行。",
+	"QuestCard|CombatFeed": "无意：任务卡实际宽 316（不止 300）与播报区左缘相交 16 px ⇒ 两块面板边框/文字可能贴住。修法：卡宽收到 300，或播报区右移 16 px。",
+}
+
+
+## 把 BASELINE_NOTES 的定案并进每条记录（--init 时调用）⇒ 下次 --init 不会把 verdict 抹掉
+func _overlaps_with_verdicts() -> Dictionary:
+	var out := {}
+	for pair in _overlaps.keys():
+		var entry: Dictionary = (_overlaps[pair] as Dictionary).duplicate()
+		entry["verdict"] = BASELINE_NOTES.get(pair,
+				"未归类 —— 新出现的重叠必须先定案（有意 / 无意 + 一句理由），再 --init")
+		out[pair] = entry
+	return out
+
+
 func _write_baseline() -> void:
 	var payload := {
 		"note": "由 geom_assertions.gd --init 生成。人工确认过才能作为基线。新增条目要写清理由。",
 		"viewport": "%dx%d" % [int(VIEW_W), int(VIEW_H)],
 		"scene": SCENE_PATH,
-		"overlaps": _overlaps,
+		"overlaps": _overlaps_with_verdicts(),
 	}
 	var f := FileAccess.open(BASELINE_PATH, FileAccess.WRITE)
 	if f == null:
@@ -237,7 +275,12 @@ func _write_baseline() -> void:
 		return
 	f.store_string(JSON.stringify(payload, "  "))
 	f.close()
-	print("已写入基线：%s（%d 组重叠）—— 请人工过一眼再提交" % [BASELINE_PATH, _overlaps.size()])
+	var unclassified := 0
+	for pair in _overlaps.keys():
+		if not BASELINE_NOTES.has(pair):
+			unclassified += 1
+	print("已写入基线：%s（%d 组重叠，其中未归类 %d 组）—— 请人工过一眼再提交" % [BASELINE_PATH, _overlaps.size(), unclassified])
+	print("逐条定案（有意 / 无意）见本文件常量 BASELINE_NOTES —— 新出现的重叠必须补一条再 --init")
 	print("—— 通过 %d 项 / 失败 %d 项（--init 模式不判定）——" % [_passed, _failed])
 
 

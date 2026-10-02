@@ -155,7 +155,24 @@ func _check_structure() -> void:
 	_check("占领节点 3 个", _main.capture_zones.size(), 3)
 	# 掩体 = DEMO_NODES（5 个节点）× 每点 4 个沙袋 = 20（见 MapGenerator.demo_cover_points）
 	_check("掩体 20 个（5 个节点 × 4）", get_nodes_in_group("occluder").size(), 20)
-	_check("敌人 2 个", get_nodes_in_group("enemy").size(), 2)
+	# 2026-10-02 订正：这条原来是「敌人 2 个」的等值断言，现在不再成立 ——
+	# 实测 enemy 组是 [Enemy1, Infiltrator1..3]：① 开局 2 名步兵里可能有人被**队友**先击毙；
+	# ② T-S6 的事件驱动穿插兵（Infiltrator*）也会进这个组。所以改成「至少 2 个 + 成员必须是敌兵类」，
+	# 顺带钉住「队友不能漏进 enemy 组」（那才是真的结构错误）。
+	var enemy_names: Array = []
+	for node in get_nodes_in_group("enemy"):
+		enemy_names.append(String(node.name))
+	var shapes_ok := enemy_names.size() >= 2
+	for node_name in enemy_names:
+		shapes_ok = shapes_ok and (node_name.begins_with("Enemy")
+				or node_name.begins_with("Infiltrator"))
+	_check_true("敌人：≥ 2 个，且都是敌兵类节点（开局步兵 / 穿插兵）", shapes_ok)
+	var leaked := 0
+	for ally in get_nodes_in_group("friendly"):
+		if ally.is_in_group("enemy"):
+			leaked += 1
+	_check("队友：没有一个漏进 enemy 组", leaked, 0)
+	_check("队友：开局 3 名（friendly 组）", get_nodes_in_group("friendly").size(), 3)
 	_check("载具 2 辆（我方 + 敌方 AI）", get_nodes_in_group("vehicle").size(), 2)
 	_check("敌方 FOB 1 座（候选 L2）", get_nodes_in_group("fob_enemy").size(), 1)
 	_check_true("HUD 层与地图层（layer=10）都在",

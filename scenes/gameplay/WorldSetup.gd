@@ -36,9 +36,9 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	_build_terrain_zones(main)   # 4.17：泥泞 / 雪地减速、草丛隐蔽（要在玩家之后、敌人之前）
 	_build_enemy_fob(main)
 	_spawn_enemies(main, enemy_count)
-	# ⏳ 队友生成**暂时关掉**（2026-10-02）：一开就在集成冒烟里看到 enemy 组 4 个（期望 2），
-	# 多出来的两个节点还没定位；Ally 单位本身已完成并通过 14 项单测，等定位后再打开这一行。
-	# _spawn_allies(main, GameConfig.ALLY_SQUAD_SIZE)
+	# 队友（2026-10-02）：3 名强力队友进 friendly 组。集成冒烟已订正过「敌人 2 个」那条过期断言 ——
+	# 队友会先击毙开局步兵，事件驱动的穿插兵也会进 enemy 组，所以那条不再用等值。
+	_spawn_allies(main, GameConfig.ALLY_SQUAD_SIZE)
 
 
 ## 地形来源（工具链 A）：填了高度图就优先导入；导入失败或没填 → 退回噪声地形

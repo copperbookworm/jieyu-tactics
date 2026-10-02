@@ -31,6 +31,8 @@ var body_radius := 0.4
 var body_color := GameConfig.UNIT_COLOR_PLAYER
 var posture := 0              ## 0 站 / 1 蹲 / 2 卧（与 PlayerUnit.Posture 同值）
 var leg_phase := 0.0
+## 倒地：整个人躺平（不再按瞄准方向抬枪，枪掉在一边）
+var downed := false
 var lower: Node2D = null      ## Lower：下半身（rotation = 移动方向角）
 var upper: Node2D = null      ## Upper：上半身（rotation = 准星方向角）
 
@@ -51,6 +53,14 @@ func setup_figure(radius: float, color: Color) -> void:
 
 
 ## 姿态（0 站 / 1 蹲 / 2 卧）：只改身体形状，不改结构
+## 倒地 / 起身（使用者 2026-10-02：倒地还是站姿太不合理）
+func set_downed(value: bool) -> void:
+	if downed == value:
+		return
+	downed = value
+	queue_redraw()
+
+
 func set_posture(value: int) -> void:
 	var clamped := clampi(value, 0, 2)
 	if clamped == posture:
@@ -117,6 +127,21 @@ static func leg_offsets(phase: float) -> Vector2:
 	return Vector2(swing, -swing)
 
 
+## 倒地：整体转 90° 躺下（身体长轴与「面朝方向」垂直 ⇒ 一眼看出是躺着），四肢摊开、枪掉在身侧，
+## 颜色压暗一档与站姿区分。
+func _draw_downed() -> void:
+	var r := body_radius
+	var limb := body_color.darkened(0.45)
+	draw_set_transform(Vector2.ZERO, PI * 0.5, Vector2.ONE)
+	draw_colored_polygon(_ellipse_points(r * 1.45, r * 0.95, 20), body_color.darkened(0.25))
+	draw_line(Vector2(-r * 0.25, r * 0.55), Vector2(-r * 1.45, r * 1.35), limb, r * 0.26, true)
+	draw_line(Vector2(-r * 0.25, -r * 0.55), Vector2(-r * 1.45, -r * 1.35), limb, r * 0.26, true)
+	draw_line(Vector2(r * 0.45, r * 0.15), Vector2(r * 1.15, r * 0.95), limb, r * 0.22, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	draw_line(Vector2(r * 0.75, r * 1.05), Vector2(r * 2.15, r * 1.35),
+			Color(0.16, 0.16, 0.18, 0.9), r * 0.24, true)
+
+
 ## 椭圆采样点（along ＝ 沿 x 的半轴，across ＝ 沿 y 的半轴）
 static func _ellipse_points(along: float, across: float, segments: int) -> PackedVector2Array:
 	var points := PackedVector2Array()
@@ -127,6 +152,9 @@ static func _ellipse_points(along: float, across: float, segments: int) -> Packe
 
 
 func _draw() -> void:
+	if downed:
+		_draw_downed()
+		return
 	var r := body_radius * posture_scale()
 	var along := r * body_length_scale()
 	# ① 下半身：沿移动方向的身体 + 两条前后摆的腿

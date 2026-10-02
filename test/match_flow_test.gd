@@ -19,6 +19,7 @@ func _run() -> void:
 	_test_respawn_resets_player()
 	_test_pick_respawn_point()
 	_test_downed_player_ignores_damage()
+	_test_finish_off_and_pose()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
 		print("！！ 有 %d 项失败，往上翻看期望与实际" % _failed)
@@ -138,6 +139,30 @@ func _test_downed_player_ignores_damage() -> void:
 	p.take_damage(10.0)
 	_check("重生后挨打照常掉血（hp 90）", p.hp, 90.0)
 	p.free()
+
+
+## 补刀（使用者 2026-10-02 拍板：更硬核）+ 倒地必须是躺平姿势
+func _test_finish_off_and_pose() -> void:
+	var p := PlayerUnit.new()
+	p._build_visual()
+	_check_true("姿势：站着时不躺", not p._visual.downed)
+	p.hp = 0.0
+	p.down()
+	_check_true("姿势：倒地后角色图切到躺平", p._visual.downed)
+	_check_true("补刀：倒地的人还活着（等补刀或 60 s 流血）", p.alive)
+	p.take_damage(1.0)
+	_check_true("补刀：倒地后被打中一发 = 直接阵亡", not p.alive)
+	p.respawn()
+	_check_true("复活：姿势回到站立", not p._visual.downed)
+	p.free()
+	var e := Enemy.new()
+	e._build_visual()
+	e.take_damage(e.hp + 1.0)
+	_check_true("敌人：血打光是倒地（不是立刻阵亡）", e.downed and e.alive)
+	_check_true("敌人：倒地也躺平", e._visual.downed)
+	e.take_damage(1.0)
+	_check_true("敌人：被补刀才阵亡", not e.alive)
+	e.free()
 
 
 func _test_respawn_budget() -> void:

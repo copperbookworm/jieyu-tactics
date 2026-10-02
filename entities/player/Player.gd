@@ -507,8 +507,9 @@ func take_damage(amount: float) -> void:
 	if not alive:
 		return
 	if downed:
-		# 候选 Q（2026-10-02 使用者反馈「被敌人击倒之后仍会被攻击」）：倒地期间不再吃伤害。
-		# 敌人 AI 也会停止把倒地的玩家当目标，这里是兜底（流弹 / 爆炸也不该继续削血）。
+		# 补刀（2026-10-02 使用者拍板：要更硬核）：对倒地目标再打中一发 = 直接阵亡。
+		# die() 发 player_died → MatchFlow 扣一次重生预算 → 立刻重生；预算耗尽才判负。
+		die()
 		return
 	hp = maxf(hp - amount, 0.0)
 	# 12.7.4 受击反馈：闪白（本体画白圈）+ 广播给相机做轻微屏幕震动
@@ -531,6 +532,8 @@ func down() -> void:
 	velocity = Vector2.ZERO
 	is_moving = false
 	focusing = false
+	if _visual != null:
+		_visual.set_downed(true)   # 倒地就躺下（不再是站姿）
 	release_joystick()   # 丢掉还按在摇杆上的触点，倒地瞬间不会卡住
 	if EventBus != null and EventBus.has_signal("player_downed"):
 		EventBus.emit_signal("player_downed")
@@ -544,6 +547,8 @@ func revive() -> void:
 	downed = false
 	downed_time_left = 0.0
 	hp = maxf(hp, GameConfig.DOWNED_REVIVE_HP)
+	if _visual != null:
+		_visual.set_downed(false)
 
 
 ## 失去战斗能力（倒地或已阵亡）：敌人 AI 与重生流程都看这个，别再对它开火
@@ -571,6 +576,8 @@ func respawn(at: Vector2 = Vector2.INF) -> void:
 	input_locked = false
 	visible = true
 	ammo_in_mag = mag_size
+	if _visual != null:
+		_visual.set_downed(false)
 	if at != Vector2.INF:
 		global_position = at
 	elif respawn_point != Vector2.ZERO:

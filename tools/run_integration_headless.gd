@@ -113,6 +113,7 @@ func _process(delta: float) -> bool:
 				_check_vehicle_smoke()
 				_check_respawn()
 				_check_downed_not_targeted()
+				_check_finish_off_pose()
 				# 候选 O 第三轮：被击倒时的视角（会把玩家打死，必须是最后一项）
 				_check_downed()
 				print("—— 集成冒烟：通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
@@ -890,12 +891,12 @@ func _check_downed_not_targeted() -> void:
 	_main.player.global_position = enemy.global_position + Vector2(12.0, 0.0)   # 站到敌人眼前
 	enemy._update_ai(0.05)
 	var engaged: bool = int(enemy._state) == 1        # AIState.COMBAT
-	# 再倒地：应退回巡逻、并且不再开火
+	# 再倒地：**仍然**是交战态 —— 这是「倒地可被补刀」（使用者 2026-10-02 拍板）的前提
 	_main.player.hp = 0.0
 	_main.player.down()
 	enemy._update_ai(0.05)
-	_check("倒地停火：步兵敌人退回巡逻（不再交战）", int(enemy._state), 0)
-	_check_true("倒地停火：站着时会交战（说明这条判定真的有效）", engaged)
+	_check_true("补刀前提：站着时敌人交战", engaged)
+	_check("补刀前提：玩家倒地后敌人仍然交战（会来补刀）", int(enemy._state), 1)
 	# 敌方坦克：站着会开炮，倒地的玩家不再挨炮
 	var tank = _main.vehicles.enemy_vehicle
 	if tank != null:
@@ -915,9 +916,39 @@ func _check_downed_not_targeted() -> void:
 		_main.player.hp = 0.0
 		_main.player.down()
 		tank._ai_update(0.05)
-		_check("倒地停火：倒地的玩家不再挨坦克的炮", tank._ammo, ammo_before)
-		_check_true("倒地停火：站着时坦克会开炮（说明这条判定真的有效）", fired_when_alive)
+		_check_true("补刀前提：站着时坦克会开炮", fired_when_alive)
+		_check("补刀前提：玩家倒地后坦克照打（会来补刀）", tank._ammo < ammo_before, true)
 	_main.player.respawn()      # 收尾：让人站起来
+
+
+# ────────────── 补刀 + 倒地姿势（使用者 2026-10-02 拍板）──────────────
+
+func _check_finish_off_pose() -> void:
+	_restore_player()
+	var pos: Vector2 = _main.player.global_position   # _main 是鸭子类型，必须显式标类型
+	_main.player._visual.set_downed(false)
+	_main.player.hp = 0.0
+	_main.player.down()
+	_check_true("姿势：真场景里倒地也会躺平", _main.player._visual.downed)
+	# 补刀 → 阵亡 → MatchFlow 立刻扣预算重生
+	_main.match_flow.budget = 2
+	_main.match_flow.phase = 0                       # 复位到 PLAYING（前面的 4.16 检查可能已把战局结算掉）
+	_main.player.take_damage(1.0)
+	_check_true("补刀：被打中一发 → 阵亡 → 立刻复活（不用等 60 s）", _main.player.alive)
+	_check("补刀：直接扣掉一次重生预算", _main.match_flow.budget, 1)
+	_check_true("补刀：复活时满血 + 姿势站回 + 换了落点",
+			_main.player.hp == GameConfig.SOLDIER_HP
+			and not _main.player._visual.downed
+			and _main.player.global_position != pos)
+	# 敌人：血打光倒地 → 补刀阵亡
+	var enemies := get_nodes_in_group("enemy")
+	if enemies.size() > 0:
+		var e = enemies[0]
+		if e._visual != null:
+			e.take_damage(e.hp + 1.0)
+			_check_true("敌人：血打光是倒地（不是立刻死）", e.downed and e.alive)
+			e.take_damage(1.0)
+			_check_true("敌人：补刀才阵亡", not e.alive)
 
 
 func _check_vehicle_smoke() -> void:

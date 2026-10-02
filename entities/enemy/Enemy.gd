@@ -34,6 +34,9 @@ enum AIState { PATROL, COMBAT, BLIND_FIRE }
 @export var fire_damage: float = 20.0
 
 var alive := true
+## 倒地（候选 Q / 使用者 2026-10-02）：血打光先倒地（躺平、不能动不能打），被补刀或流血到点才阵亡
+var downed := false
+var downed_time_left := 0.0
 var suppression := 0.0  # 压制值 0..1（7.3 反向）：被玩家火力推高 → 还击打不准、不敢露头
 
 var _hold_fire_time := 0.0  # s，被压住时的犹豫计时（不敢露头）
@@ -100,17 +103,37 @@ func add_suppression(amount: float) -> void:
 func take_damage(amount: float) -> void:
 	if not alive:
 		return
+	if downed:
+		# 补刀（与玩家同一口径）：对倒地的敌人再打中一发 = 直接阵亡
+		die()
+		return
 	hp -= amount
 	# 12.7.4 受击闪白：命中反馈要看得见（闪白由 _draw 叠在身体上）
 	_hit_flash_left = GameConfig.HIT_FLASH_TIME
 	queue_redraw()
 	Sfx.play("impact")          # 10 章：命中音（在「真的扣了血」的地方放，脱靶不会响）
 	if hp <= 0.0:
-		die()
+		_go_down()
+
+
+## 血打光 → 倒地（不是立刻阵亡）：躺平、不能动不能打，等被补刀或流血到点
+func _go_down() -> void:
+	if downed or not alive:
+		return
+	downed = true
+	downed_time_left = GameConfig.ENEMY_DOWNED_TIMEOUT
+	velocity = Vector2.ZERO
+	if _visual != null:
+		_visual.set_downed(true)
+	queue_redraw()
 
 
 func die() -> void:
 	alive = false
+	downed = false
+	if _visual != null:
+		_visual.set_downed(true)   # 尸体保持躺平
+	queue_redraw()
 	# @tool 测试环境 autoload 信号可能未注册，防御式发信号（同 CaptureZone）。
 	if EventBus != null and EventBus.has_signal("enemy_killed"):
 		EventBus.emit_signal("enemy_killed", self)
@@ -164,12 +187,13 @@ func _process(delta: float) -> void:
 
 ## AI：发现玩家（通视 + 距离内）→ 交战；只被烟挡住 → 朝最后已知位置盲射；否则巡逻
 func _update_ai(delta: float) -> void:
-	# 候选 Q（2026-10-02 使用者反馈「被敌人击倒之后仍会被攻击」）：目标已倒地或阵亡就不再打，
-	# 退回巡逻（人还在场上晃，但不再朝倒地的玩家开火）。
-	if _player != null and _player.has_method("is_incapacitated") \
-			and _player.is_incapacitated():
-		_state = AIState.PATROL
-		_move_patrol()
+	# 自己倒地：不能动也不能打，只走流血计时（到点阵亡）。补刀在 take_damage 里 ——
+	# 使用者 2026-10-02 拍板「倒地可被补刀（更硬核）」，所以这里不再阻止 AI 打倒地目标。
+	if downed:
+		downed_time_left -= delta
+		velocity = Vector2.ZERO
+		if downed_time_left <= 0.0:
+			die()
 		return
 	if _player == null or _grid == null:
 		return

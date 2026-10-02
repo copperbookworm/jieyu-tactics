@@ -35,6 +35,8 @@ const Sfx := preload("res://systems/audio/Sfx.gd")
 
 var facing := Vector2.RIGHT
 var alive := true
+## 出生点（WorldSetup 放置玩家时写入；重生回这里）
+var respawn_point := Vector2.ZERO
 ## 4.16 被击倒：血量归零不立刻阵亡 —— 先进倒地态，默认 60 s 无人扶起才转阵亡
 var downed := false
 var downed_time_left := 0.0
@@ -538,6 +540,34 @@ func revive() -> void:
 	downed = false
 	downed_time_left = 0.0
 	hp = maxf(hp, GameConfig.DOWNED_REVIVE_HP)
+
+
+## 重生（候选 Q 的战局流程用）。与上面的 revive() 是**两件事**，别混：
+##   revive()  = 被队友扶起：只在倒地态有效，血量只补到 DOWNED_REVIVE_HP，位置不动；
+##   respawn() = 消耗一次重生预算后的重新进场：满血 + 回出生点 + 状态清零 + 补满弹匣。
+## 省略 at（INF）时用 respawn_point（WorldSetup 放置玩家时记下的出生点）。
+func respawn(at: Vector2 = Vector2.INF) -> void:
+	alive = true
+	downed = false
+	downed_time_left = 0.0
+	hp = GameConfig.SOLDIER_HP
+	suppression = 0.0
+	_hit_flash_left = 0.0
+	_flash_drawn = false
+	focusing = false
+	_reloading = false
+	_reload_time_left = 0.0
+	velocity = Vector2.ZERO
+	is_moving = false
+	input_locked = false
+	visible = true
+	ammo_in_mag = mag_size
+	if at != Vector2.INF:
+		global_position = at
+	elif respawn_point != Vector2.ZERO:
+		global_position = respawn_point
+	release_joystick()
+	queue_redraw()
 
 
 func die() -> void:

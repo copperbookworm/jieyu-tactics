@@ -102,6 +102,7 @@ func _build_player(main) -> void:
 	main.player = PlayerUnit.new()
 	main.player.name = "Player"
 	main.player.global_position = MapGenerator.demo_spawn_point()
+	main.player.respawn_point = main.player.global_position   # 候选 Q：重生回这个点
 	main.add_child(main.player)
 
 

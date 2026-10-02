@@ -111,6 +111,7 @@ func _process(delta: float) -> bool:
 				# 真机反馈 2026-10-02：残骸可命中 / 发烟器跟车 / 烟里准心不锁死
 				_check_wreck_hittable()
 				_check_vehicle_smoke()
+				_check_respawn()
 				# 候选 O 第三轮：被击倒时的视角（会把玩家打死，必须是最后一项）
 				_check_downed()
 				print("—— 集成冒烟：通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
@@ -842,6 +843,32 @@ func _check_wreck_hittable() -> void:
 
 
 ## 载具发烟器：烟幕要绑在车体上跟着走；人站在自己放的烟里时准心不能被钳死
+# ────────────── 重生（候选 Q）：阵亡 → 扣预算 → 满血 + 回出生点 ──────────────
+
+func _check_respawn() -> void:
+	var flow = _main.match_flow
+	_check_true("重生：战局流程已挂到 Main 上", flow != null)
+	if flow == null:
+		return
+	flow.budget = 2
+	flow.phase = 0                        # Phase.PLAYING
+	var spawn: Vector2 = _main.player.respawn_point
+	_check_true("重生：出生点已记录（不是零向量）", spawn != Vector2.ZERO)
+	_main.player.global_position = spawn + Vector2(120.0, 80.0)   # 死在离出生点 140 m 处
+	_main.player.suppression = 0.9
+	_main.player.hp = 0.0
+	_main.player.alive = true
+	_main.player.down()
+	_main.player.die()                    # 真的发 player_died → MatchFlow.on_player_died
+	_check("重生：预算扣 1", flow.budget, 1)
+	_check_true("重生：人复活了（不再停在阵亡态）", _main.player.alive)
+	_check("重生：血量补满", _main.player.hp, GameConfig.SOLDIER_HP)
+	_check("重生：回到出生点（不是死在原地）", _main.player.global_position, spawn)
+	_check("重生：压制清零", _main.player.suppression, 0.0)
+	_check_true("重生：不再是倒地态 + 输入解锁",
+			not _main.player.downed and not _main.player.input_locked)
+
+
 func _check_vehicle_smoke() -> void:
 	var ifv = _main.vehicles.vehicle
 	ifv.operator = _main.player            # 人在车里才会走发烟器那条路

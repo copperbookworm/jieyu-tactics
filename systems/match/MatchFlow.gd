@@ -118,12 +118,26 @@ func on_player_died() -> void:
 		return
 	budget -= 1
 	if budget > 0:
-		if main != null and main.player != null:
-			main.player.revive()
-		_hint("阵亡 —— 重生预算 -1（剩 %d）" % budget)
+		_respawn_player()
+		_hint("阵亡 —— 已重生（重生预算剩 %d）：满血 + 回出生点" % budget)
 		_refresh()
 		return
 	_finish("enemy", "重生预算耗尽")
+
+
+## 重生：先下车（人已阵亡却还挂在座位上的话，Vehicle._carry_occupants() 会把坐标又拽回车体），
+## 再满血回出生点，最后把相机中心拉回来（否则会从倒地处慢慢飘过去）。
+func _respawn_player() -> void:
+	if main == null:
+		return
+	if main.vehicles != null and main.vehicles.vehicle != null \
+			and main.vehicles.vehicle.is_occupied():
+		main.vehicles.vehicle.exit_vehicle()
+	if main.player == null:
+		return
+	main.player.respawn()
+	if main.camera_controller != null:
+		main.camera_controller.crosshair_world = main.player.global_position
 
 
 func _finish(who: String, why: String) -> void:

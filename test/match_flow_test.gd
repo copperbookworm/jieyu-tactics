@@ -16,6 +16,7 @@ func _run() -> void:
 	_test_sudden_death()
 	_test_clock_phases()
 	_test_respawn_budget()
+	_test_respawn_resets_player()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
 		print("！！ 有 %d 项失败，往上翻看期望与实际" % _failed)
@@ -72,6 +73,32 @@ func _test_clock_phases() -> void:
 	flow._process(10.0)
 	_check("结束后时间停在 0（不会再计时）", flow.time_left, 0.0)
 	flow.free()
+
+
+## 重生必须真的把人和状态重置（使用者 2026-10-02 真机指出：只调 revive() 时血量与出生点都没重置）
+func _test_respawn_resets_player() -> void:
+	var p := PlayerUnit.new()
+	p.respawn_point = Vector2(11.0, 22.0)
+	p.global_position = Vector2(99.0, 99.0)
+	p.suppression = 0.8
+	p.hp = 0.0
+	p.down()
+	p.die()                                  # 真的阵亡：alive = false、downed = false
+	_check_true("重生前：人是阵亡态", not p.alive)
+	p.revive()
+	_check_true("旧 revive() 救不活阵亡的人（它只管扶起倒地，是刻意分开的两个接口）", not p.alive)
+	p.respawn()
+	_check_true("重生：人活了", p.alive)
+	_check("重生：血量补满（不是扶起的 25）", p.hp, GameConfig.SOLDIER_HP)
+	_check("重生：回到出生点", p.global_position, Vector2(11.0, 22.0))
+	_check_true("重生：不再是倒地态", not p.downed)
+	_check("重生：倒地计时清零", p.downed_time_left, 0.0)
+	_check("重生：压制清零", p.suppression, 0.0)
+	_check("重生：弹匣补满", p.ammo_in_mag, p.mag_size)
+	_check_true("重生：可见 + 输入解锁", p.visible and not p.input_locked)
+	p.respawn(Vector2(3.0, 4.0))
+	_check("重生：显式落点覆盖出生点", p.global_position, Vector2(3.0, 4.0))
+	p.free()
 
 
 func _test_respawn_budget() -> void:

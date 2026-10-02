@@ -1,0 +1,63 @@
+{
+  "note": "由 geom_assertions.gd --init 生成。人工确认过才能作为基线。新增条目要写清理由。",
+  "overlaps": {
+    "CaptureStatus|QuestCard": {
+      "a": "/root/Main/HudBuilder/HUD/CaptureStatus",
+      "b": "/root/Main/HudBuilder/HUD/QuestCard",
+      "hit": "(16,60 156x25)",
+      "parent": "/root/Main/HudBuilder/HUD",
+      "rect_a": "(16,36 156x49)",
+      "rect_b": "(16,60 300x96)"
+    },
+    "CommandWheel|Role": {
+      "a": "/root/Main/HudBuilder/HUD/CommandWheel",
+      "b": "/root/Main/HudBuilder/HUD/Role",
+      "hit": "(280,186 72x33)",
+      "parent": "/root/Main/HudBuilder/HUD",
+      "rect_a": "(272,186 80x40)",
+      "rect_b": "(280,170 500x49)"
+    },
+    "FocusButton|MarkHint": {
+      "a": "/root/Main/HudBuilder/HUD/FocusButton",
+      "b": "/root/Main/HudBuilder/HUD/MarkHint",
+      "hit": "(680,484 94x23)",
+      "parent": "/root/Main/HudBuilder/HUD",
+      "rect_a": "(680,420 120x120)",
+      "rect_b": "(360,484 414x23)"
+    },
+    "MarkWheel|HP": {
+      "a": "/root/Main/HudBuilder/HUD/MarkWheel",
+      "b": "/root/Main/HudBuilder/HUD/HP",
+      "hit": "(840,188 100x21)",
+      "parent": "/root/Main/HudBuilder/HUD",
+      "rect_a": "(840,188 120x120)",
+      "rect_b": "(802,186 138x23)"
+    },
+    "MarkWheel|MapButton": {
+      "a": "/root/Main/HudBuilder/HUD/MarkWheel",
+      "b": "/root/Main/HudBuilder/HUD/MapButton",
+      "hit": "(840,234 42x44)",
+      "parent": "/root/Main/HudBuilder/HUD",
+      "rect_a": "(840,188 120x120)",
+      "rect_b": "(802,234 80x44)"
+    },
+    "MatchClock|MarkWheel": {
+      "a": "/root/Main/HudBuilder/HUD/MatchClock",
+      "b": "/root/Main/HudBuilder/HUD/MarkWheel",
+      "hit": "(840,210 105x23)",
+      "parent": "/root/Main/HudBuilder/HUD",
+      "rect_a": "(802,210 143x23)",
+      "rect_b": "(840,188 120x120)"
+    },
+    "QuestCard|CombatFeed": {
+      "a": "/root/Main/HudBuilder/HUD/QuestCard",
+      "b": "/root/Main/HudBuilder/HUD/CombatFeed",
+      "hit": "(300,60 16x88)",
+      "parent": "/root/Main/HudBuilder/HUD",
+      "rect_a": "(16,60 300x96)",
+      "rect_b": "(300,38 360x110)"
+    }
+  },
+  "scene": "res://scenes/gameplay/Main.tscn",
+  "viewport": "960x540"
+}

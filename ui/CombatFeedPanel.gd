@@ -35,7 +35,10 @@ func setup(main_node) -> void:
 	fit_content = false
 	mouse_filter = Control.MouseFilter.MOUSE_FILTER_IGNORE
 	# 位置：顶部中间那块空地（左有操作说明行、左下是占领 HUD 与任务卡片，右上是小地图）
-	position = Vector2(GameConfig.VIEWPORT_WIDTH * 0.5 - 180.0, 34.0)
+	# ⚠ 第四十一版补丁9 收尾：+ HUD_FEED_TOP_GAP_DY —— 说明行在 y=12、高 23（底 35），
+	#   播报原先在 y=34 会被压住 1 px（几何回归实测）。这里要的是稳的间隔，不是「差 1 px 不重叠」。
+	position = Vector2(GameConfig.VIEWPORT_WIDTH * 0.5 - 180.0,
+			34.0 + GameConfig.HUD_FEED_TOP_GAP_DY)
 	size = Vector2(360.0, 110.0)
 	add_theme_font_size_override("normal_font_size", 15)
 	add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.85))

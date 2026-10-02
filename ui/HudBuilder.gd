@@ -129,7 +129,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	# 战局状态行（候选 Q，docx 5.7）：剩余时间 + 加时提示 + 重生预算
 	match_label = Label.new()
 	match_label.name = "MatchClock"
-	match_label.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 26.0)
+	match_label.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 52.0)
 	layer.add_child(match_label)
 	update_score(main.score)
 
@@ -175,21 +175,34 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	map_button.name = "MapButton"
 	map_button.text = "地图"
 	map_button.size = Vector2(80.0, 44.0)
-	map_button.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 30.0)
+	map_button.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 76.0)
 
 	# 左侧功能键排成两列（列1 x=16 / 列2 x=104，行 y=140/186/232）＋第三列的单颗（烟雾 x=192,y=232）：
 	# 底界 272，给左下角摇杆（圆心 100,440、半径 90、触摸判定 144）留出空间不受遮挡
+	# ⚠ 第四十一版补丁9 收尾：整个 3×3 集群再下移 HUD_BUTTON_CLUSTER_DY ——
+	#   任务卡占 (16,60)-(316,156)，原先第一行 y=140 会被卡片盖住 16 px（几何回归实测）。
+	#   下移后第一行 y=162、底界 294，仍不碰摇杆触摸区。
+	var _dy: float = GameConfig.HUD_BUTTON_CLUSTER_DY
+	# 2026-10-02 真机修：CommandWheel 的 _ready 用的是 GameConfig 常量（不含 _dy），
+	# 真机实测它落在 (272,186)：既比集群高 22 px，又正好被角色文字框（280,170 宽 500）压住 ⇒
+	# 「指令」键点不开、轮盘在手机上根本看不到（几何基线里记为 CommandWheel|Role）。
+	# 这里在 _dy 之后显式对齐到第三列（同 弹种 192,162 / 烟雾 192,254）。
+	command_wheel.position = Vector2(192.0, GameConfig.COMMAND_BUTTON_Y + _dy)
 	# 兵种按钮放左侧（右侧已被小地图/分数/地图按钮占满），点一下循环切兵种
 	role_button = Button.new()
 	role_button.name = "RoleButton"
 	role_button.text = "兵种"
 	role_button.size = Vector2(80.0, 40.0)
-	role_button.position = Vector2(16.0, 140.0)
+	role_button.position = Vector2(16.0, 140.0 + _dy)
 	layer.add_child(role_button)
 
 	role_label = Label.new()
 	role_label.name = "Role"
-	role_label.position = Vector2(192.0, 148.0)
+	# 2026-10-02 真机修：原来在 (192,148+dy) —— 正好压在第三列（弹种 192,162 / 指令 192,208）上，
+	# 真机上「指令」键因此点不开（截图里那个深色文字框就是它）。挪到第三列右侧（280）+ 限宽裁剪。
+	role_label.position = Vector2(280.0, 148.0 + _dy)
+	role_label.size = Vector2(500.0, 46.0)
+	role_label.clip_text = true
 	layer.add_child(role_label)
 	update_role()
 
@@ -198,7 +211,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	posture_button.name = "PostureButton"
 	posture_button.text = "姿势"
 	posture_button.size = Vector2(80.0, 40.0)
-	posture_button.position = Vector2(16.0, 186.0)
+	posture_button.position = Vector2(16.0, 186.0 + _dy)
 	layer.add_child(posture_button)
 
 	# 间瞄按钮：直接开图并切到选点模式（省得玩家先开图再切开关）
@@ -206,7 +219,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	indirect_button.name = "IndirectButton"
 	indirect_button.text = "间瞄"
 	indirect_button.size = Vector2(80.0, 40.0)
-	indirect_button.position = Vector2(16.0, 232.0)
+	indirect_button.position = Vector2(16.0, 232.0 + _dy)
 	layer.add_child(indirect_button)
 
 	# 烟雾（候选 P，docx 4.12）：步兵按下＝朝准心投一发烟雾弹；人在车里按下＝载具发烟器。
@@ -216,7 +229,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	smoke_button.name = "SmokeButton"
 	smoke_button.text = "烟雾"
 	smoke_button.size = Vector2(80.0, 40.0)
-	smoke_button.position = Vector2(192.0, 232.0)
+	smoke_button.position = Vector2(192.0, 232.0 + _dy)
 	layer.add_child(smoke_button)
 
 	# 换枪按钮（C3：切枪 1.04 s，期间不能开火）
@@ -224,7 +237,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	weapon_button.name = "WeaponButton"
 	weapon_button.text = "换枪"
 	weapon_button.size = Vector2(80.0, 40.0)
-	weapon_button.position = Vector2(104.0, 140.0)
+	weapon_button.position = Vector2(104.0, 140.0 + _dy)
 	layer.add_child(weapon_button)
 
 	# 上车 / 下车（8.1 舱室与座位）
@@ -232,7 +245,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	vehicle_button.name = "VehicleButton"
 	vehicle_button.text = "上车"
 	vehicle_button.size = Vector2(80.0, 40.0)
-	vehicle_button.position = Vector2(104.0, 186.0)
+	vehicle_button.position = Vector2(104.0, 186.0 + _dy)
 	layer.add_child(vehicle_button)
 
 	# 换座位（8.1：驾驶位 ⇄ 武器位；只有武器位能开炮）
@@ -240,7 +253,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	seat_button.name = "SeatButton"
 	seat_button.text = "换座"
 	seat_button.size = Vector2(80.0, 40.0)
-	seat_button.position = Vector2(104.0, 232.0)
+	seat_button.position = Vector2(104.0, 232.0 + _dy)
 	layer.add_child(seat_button)
 
 	# 弹种键：左侧第三列唯一剩下的空位 (192,140)。非载具状态下按它只会得到一句提示。
@@ -248,7 +261,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	ammo_type_button.name = "AmmoTypeButton"
 	ammo_type_button.text = "弹种"
 	ammo_type_button.size = Vector2(80.0, 40.0)
-	ammo_type_button.position = Vector2(192.0, 140.0)
+	ammo_type_button.position = Vector2(192.0, 140.0 + _dy)
 	layer.add_child(ammo_type_button)
 	layer.add_child(map_button)
 
@@ -284,7 +297,9 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 
 	hp_label = Label.new()
 	hp_label.name = "HP"
-	hp_label.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 24.0)
+	# 2026-10-02 真机修：右列重排 162 / 186 / 210 / 234（原 162/182/184/188：血量与战局行贴身、
+	# 地图键压住战局行 ⇒ 真机上倒计时被盖住看不见）
+	hp_label.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 28.0)
 	layer.add_child(hp_label)
 
 	ammo_label = Label.new()

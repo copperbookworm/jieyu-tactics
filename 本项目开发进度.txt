@@ -1,32 +1,27 @@
 《解域》jieyu-1 开发进度
 ========================
-最后更新：2026-10-02（第四十一版 · 候选 Q：docx 5.7 完整胜负流程（15 分钟计时 / 加时突然死亡 / 平局 / 重生预算）；动代码） ｜ git HEAD：a74620e（本轮新增 2 个 + 改 4 个文件）
-本次更新：本轮做**候选 R（数据表扩到文档规模）**，并顺手收掉两件事：
-	  · ① 武器表 5 → 25 把（官方「解域游戏武器数据表.csv」全量）：已校准的 5 把**原样保留**，
-	    只补官方表里还没有的 20 把；官方表有的列（类别 / 射速 / 弹匣 / 游戏射程 / 基础与最低伤害 /
-	    衰减起止 / MOA / 数据来源）直接抄，官方表没有的列（备弹 = 弹匣 × 4、换弹 / 切枪）按**类别模板**内联
-	    并在 source 列写明。栓动 / 单发按 45 RPM 折、半自动按 220 RPM 折（与现有 qbu191 的 220 同口径）
-	  · ② 载具表 2 → 18 辆（官方载具表全量）：同样保留 ifv_a / mbt_t1 原值；官方表有的列（尺寸 / 速度 /
-	    乘员 / 载员 / 主武器 / 射程 / 备弹 / 四向装甲@倾角）直接抄；官方表**没有**的列（hp / 炮伤 / 穿深 /
-	    装填）按类别模板内联 —— 模板锚定在两辆已校准的车上（主战坦克 2000/400/700/6.0、步兵战车 800/40/60/0.15），
-	    其余类别取其间的工程默认值。**这些模板值未经平衡校验**，只保证「表能读、字段齐全」（登记在六节）
-	  · ③ 三个测试态调试值恢复正式值：ENEMY_VEHICLE_DAMAGE_SCALE 0.0 → 1.0、Enemy.fire_damage 0.0 → 20.0
-	    （注释写着「5 枪毙命」的那个，一直在工作区为零）、Enemy.detection_range 20 → 120。
-	    三个开关各自的「怎么切回测试态」都写进了代码注释与七节
-	  · ④ 恢复正式值后**测试暴露了两处脆弱**（不是功能坏）：敌人真会打死玩家 ⇒ 玩家在脚本检查途中被击倒，
-	    「玩家还站着」「开一枪多 3 个节点」这类前置随机红。修法：集成冒烟开头把敌人单发伤害临时清零 +
-	    加 _restore_player()（只关伤害，不动 detection / AI）；另一处是伤害断言的**血量下限**
-	    （一发 400 打在 100 血步兵身上会夹到 0，期望值要取 min(伤害, 满血)）
-	  · ⑤ 导出验收里那条一直假红的断言修掉了：Godot 4.7.1 会把源文件路径也注册进包（file_exists 恒真），
-	    改成看**PNG 魔数**判断「包里到底有没有原图数据」（实测整个 pack 里 PNG 签名 0 次，符合预期）
-· 实测（本轮真跑）：29 个测试脚本 **845 项断言全绿**（843 → 845：加「武器表 25 把 / 载具表 18 辆」
-	  + 扩表后 ifv_a 与 mbt_t1 数值没被改动）／集成冒烟 **205 项全绿**／导出包验收 **11 项全过**／
-	  102 个 .gd / 14723 行 ／ Main.gd **398 行没涨**（本轮全在数据表 + 测试 + 注释）
-	· 本轮改动面：data/weapons_data.txt（5 → 25 行）、data/vehicles_data.txt（2 → 18 行）、
-	  VehicleTable.gd（模板来源注释）、GameConfig/Enemy（三个调试值恢复 + 注释写清怎么切回测试态）、
-	  test/{weapon,vehicle}_test（表规模与已校准值回归）、tools/{run_integration_headless,probe_export_pack}（测试加固）
-	  上一轮为「第三十九版 · 真机复测反馈修复 5 项（含真机复验通过）」
-	  更早一轮为「第三十八版 · 反坦克导弹 ATGM（+ 导出 include_filter 修复）」
+最后更新：2026-10-02（第四十一版补丁9 · 队友 Ally 进局 + 补刀开关 + 倒地姿势 + 指令轮盘向右展开；动代码） ｜ git HEAD：c28efbf（第四十一版补丁6~9）
+本次更新：本轮做**第四十一版补丁6~9**（同日四轮连做，全部动代码）：
+	· ⑥ 补刀开关：敌人对倒地目标不再补刀（当前为**测试态**，切回正式态写进代码注释与七节）
+	· ⑦ 队友单位 **Ally**（docx 3.1 队友定位）：血 200 / 一发 45 / 0.35 s 一发 / 跑速 3.4，
+	  复用 UnitFigure / BlobShadow / BallisticsSystem / Sfx / EffectSpawner；进 friendly 组 ⇒
+	  MatchFlow 重生预算（＝进攻方人数 × 2）自动把队友算进去（1 玩家 + 3 队友 ⇒ 8 次）
+	· ⑧ 倒地姿势（躺平）+ ⑨ 坦克乘员与弃车逃生（结构值 ≤30% 时乘员落车、回 enemy 组、AI 打开）
+	· ⑪ **指令轮盘改成向右展开**（使用者真机反馈：「向左展开会挡住其他按钮」）：
+	  把 MarkWheel.item_offset() 的 x 取绝对值镜像成右半圈；clamp 兜底保留
+· 实测（本轮真跑）：单元 **31 个脚本 / 927 项断言全绿**／集成冒烟 **229 项全绿**／
+	  **108 个 .gd / 16353 行**（LF 字节口径）／Main.gd **398 行**（守住 ≤400 验收线）
+	· 本轮改动面：entities/ally/Ally.gd（新）、test/ally_test.gd（新）、test/match_flow_test.gd、
+	  ui/CommandWheel.gd、ui/MarkWheel.gd、scenes/gameplay/WorldSetup.gd、tools/run_integration_headless.gd、
+	  entities/enemy/Enemy.gd、entities/vehicle/Vehicle.gd、systems/match/*、data/config/GameConfig.gd
+	  更早一轮为「第四十一版 · 候选 Q：docx 5.7 完整胜负流程」
+	  更早的「第四十版 · 候选 R：数据表扩到官方全量」见下方同名版本段
+
+【补记 · 2026-10-02：第四十一版补丁6~9 与抬头对齐】
+	本节由 DSH 会话用 jieyu-progress-sync 技能收尾时补写。抬头的「最后更新 / 本次更新」
+	先前停留在候选 Q 口径（29 脚本 / 845 项 / 102 个 .gd），与下方第四十一版的实测
+	（31 脚本 / 926 项 / 104 个 .gd）以及本轮复跑（31 脚本 / 927 项 / 108 个 .gd / 16353 行）都不一致；
+	现按**本轮真跑**统一。旧抬头原文保留在 .bak-*-post 备份里，未改写任何历史版本段。
 
 【用法约定】做本项目前先读本文件，再动手；做完一件事后回来更新「二、已完成」与「四/五、接下来」两节。
 		   本文件是 jieyu-1 的唯一进度入口，不凭记忆判断进度。
@@ -77,7 +72,7 @@
   重力/弹道高度（simulate）只保留给间瞄（高弹道越障）
 
 三、当前状态
-· 规模：106 个 .gd / 15831 行（2026-10-02 本机实测，LF 字节口径，不含 addons 与 .godot）；Main.gd **398 行**（候选 Q 净 0：新增 3 行建模块、删掉旧阵亡处理 3 行、收掉两句注释、双接修复再删 1 行接线；≤400 回到 **2 行**余量）
+· 规模：**108 个 .gd / 16353 行**（2026-10-02 本轮复跑实测，LF 字节口径，不含 addons / gdtoolkit / .godot）；Main.gd **398 行**（守住 ≤400 验收线）
   文件数从上一轮的 78 掉到 71 是**归档**造成的（候选 T ④ 移走 13 个零引用 .gd：11 个 1 行空骨架 + 2 个哥布林/史莱姆占位），
   同时新增 6 个（SmokeScreen / SmokeController / MapLayerSource / smoke_test / map_layer_test / probe_height_export）⇒ 78 − 13 + 6 = 71，账对得上
   Main 行数曲线（候选 N 的 ≤400 验收线）：968 → 391（拆分）→ 393 → 385 → 395（L3 后告急）
@@ -88,9 +83,9 @@
   ⚠ 数行口径：本机必须用「LF 字节数」统计（pwsh 的 Get-Content 在中文 UTF-8 文件上会少数约 6%）。
   上一轮我因此把 Main.gd 数成 911 行、全项目数成 6862 行，还误以为本文件原来的 7251 / 968 是错的——
   原值其实是对的（Main.gd 968 与 read 工具一致），三节这一段的数字已按正确口径重写。
-· 测试：29 个 @tool EditorScript（terrain / ballistics / capture / cover / crosshair / handling /
+· 测试：**31** 个 @tool EditorScript
   height_image / indirect / map_inspector / **map_layer** / mark / quest / role / **smoke** / suppression /
-tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **command** / **downed** / **terrain_zone** / **effects** / **audio** / **figure** / **vehicle_anim** / **atgm**），共 927 项断言，2026-10-02 复跑全绿（351 → 927：
+），共 **927 项断言**，2026-10-02 本轮复跑**全绿**（退出码 0；351 → 927：
   载具开火链 11 项（vehicle_test 25 → 36）、启动自检 9 项（boot_check_test，新增脚本）
   候选 P 的 smoke_test 31 项 + 地图图层的 map_layer_test 26 项 + height_image 与 role_test 各补若干 +
   载具开火链的 11 项（vehicle_test 25 → 36，见第二十八版·补记）
@@ -1428,12 +1423,80 @@ tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **co
   集成冒烟 **229 项全绿**（战局流程 / 重生 / 倒地姿势 / 补刀 / 坦克乘员接进真场景后原有检查未回归）／104 个 .gd / 15010 行 ／ Main.gd 399 行。
 · 待办（下一轮）：① 真机看一眼倒计时行与加时提示；② 候选 S（信誉分与治理）—— 它是「平局信誉分不变」的落点；
   ③ 5.4 攻防转换 / 4.4 剩余部分 / 载具相机三档（19 章 ②）。
+【第四十一版补丁6~9 · 队友 Ally 进局 + 补刀开关 + 倒地姿势 + 指令轮盘向右展开（2026-10-02，动代码）】
+· 本轮主题：把「队友」这条线做完（定位 → 生成 → 验收），并收掉三条使用者真机反馈的体验问题。
+· 做了什么：
+  · ⑥ 补刀开关：新增「敌人是否对倒地目标补刀」的开关，当前为**测试态**（不补刀）；
+    切回正式态的写法写进了代码注释与「七、已知待拍板」。
+  · ⑦ 队友单位 Ally（`res://entities/ally/Ally.gd` + `res://test/ally_test.gd`）：
+    强力一档 —— 血 200（敌人 100）、一发 45（敌人 3 发带走）、0.35 s 一发（敌人 1.5 s）、跑速 3.4（敌人 2.0）；
+    复用 UnitFigure / BlobShadow / BallisticsSystem / Sfx / EffectSpawner；进 friendly 组 ⇒
+    MatchFlow 的重生预算（＝进攻方人数 × 2）会自动把队友算进去（1 玩家 + 3 队友 ⇒ 8 次）。
+  · ⑦附 定位并放开：实测 enemy 组 = [Enemy1, Infiltrator1..3] —— 开局步兵 Enemy0 是被**队友**先击毙的；
+    事件驱动的 T-S6 穿插兵（Infiltrator*）也在该组。原「敌人 2 个」的等值断言本身过期，
+    已改成「≥ 2 个且成员必须是敌兵类」，并新增「队友没有一个漏进 enemy 组」「friendly 组 3 名」。
+  · ⑧ 倒地姿势（躺平）：倒地单位改为躺平绘制（不再是站立）。
+  · ⑨ 坦克乘员 + 弃车逃生：Vehicle 加 crew 挂载（乘员是 Enemy，不是 PlayerUnit，所以不走会写 input_locked 的 enter()）——
+    登车后 visible=false + 脱离 enemy 组（在车里不作为独立目标被打）+ 自身 AI 关闭（Enemy.ai_enabled）+ 坐标随车；
+    结构值 ≤ VEHICLE_CREW_BAILOUT_FRACTION(30%) 时 _bail_out()：乘员落到车旁、回到 enemy 组、AI 打开，车 ai_enabled=false 停火；
+    VehicleController 给敌方坦克配一名 EnemyTankCrew。
+  · ⑪ **指令轮盘改成向右展开**（使用者真机反馈：「向左边展开会挡住其他按钮」）：
+    指令键在左侧第三列（x=192），环形菜单原来走左半圈，正好压住中间那列（换枪 / 上车 / 换座）；
+    改成把 `MarkWheel.item_offset()` 的 x 取绝对值（镜像成右半圈）—— 同一高度右侧是空的；clamp 兜底保留。
+    回归断言同步翻新：「菜单向右展开、不压住中间那列按钮」，并保留「6 项都在屏内」。
+· 验收（本轮真跑）：单元 **31 个脚本 / 927 项断言全绿**（退出码 0）／集成冒烟 **229 项全绿**（退出码 0）／
+  **108 个 .gd / 16353 行**（LF 字节口径，不含 addons / gdtoolkit / .godot）／Main.gd **398 行**（守住 ≤400）。
+· 未做（留给后续）：队友不占点 / 不报点 / 不扶起倒地的玩家；没有战术指令交流。
+  载具相机三档（19 章 ②）仍未做。
+· 待办（下一轮）：① 真机看一眼队友 Ally 的表现（当前只跑过 headless 逻辑与集成验收）；
+  ② 候选 S（信誉分与治理）—— 它是「平局信誉分不变」的落点；
+  ③ 5.4 攻防转换 / 4.4 剩余部分；④ 载具相机三档（19 章 ②）。
+【第四十一版补丁9 收尾 · HUD 几何回归 + DSH 技能体系（2026-10-02，动代码 / 未提交）】
+· 本轮主题：把上一轮玩家真机反馈的「按钮被盖住」这一类问题**做成可回归的**，并顺手修掉其中最实的两处；
+  同时把 DSH 侧的技能体系补齐（与本文件的进度对账工具化）。
+· 做了什么：
+  · ① 新增几何回归工具 `res://tools/geom_assertions.gd`（来自 DSH 技能 visual-regression）：
+    在 headless 下实例化 Main.tscn，断言「不出屏 / 同级控件不重叠 / 点按目标 ≥32 px / CanvasLayer 层号」。
+    **关键设计**：默认模式只对**新出现**的重叠报警（基线存 `res://test/geom_baseline.json`），
+    `--strict` 模式才列全部重叠。之所以不做成「一有重叠就红」：本工程 HUD 是平铺在同一 CanvasLayer 上的
+    绝对定位控件，轮盘展开 / 提示行 / 任务卡显隐本来就会短暂重叠，一刀切全红会让门禁立刻被关掉。
+  · ② 实测出 18 组同级重叠，修掉其中 5 组（18 → 13）：
+    · 任务卡盖住左侧按键第一行（`QuestCard` 占 (16,60)-(316,156)，而第一行在 y=140）——
+      新增 `GameConfig.HUD_BUTTON_CLUSTER_DY = 22.0`，把 3×3 集群整体下移：
+      第一行 y=162（与卡片底边留 6 px）、底界 294，仍不碰左下摇杆触摸区。
+      消掉 4 组：QuestCard × RoleButton / WeaponButton / AmmoTypeButton / Role。
+    · 顶部操作说明行压住战斗播报 1 px —— 新增 `GameConfig.HUD_FEED_TOP_GAP_DY = 4.0`，
+      播报下移到 y=38。要的是稳的间隔，不是「差 1 px 不重叠」。
+    · 指令键从 (192,186) 移到 (272,186)：原先它与 3×3 第三列水平重叠，轮盘展开后
+      与 AmmoTypeButton 重叠 16 px；移开后该组清零（`COMMAND_BUTTON_X` 改常量，
+      command_test 的两条轮盘断言读的是常量，自动跟随并通过）。
+  · ③ 生成几何基线 `res://test/geom_baseline.json`（登记剩余 13 组），此后只对新重叠报警。
+  · ④ DSH 侧（不在本工程内，另存于 D:\dsh-data\skills）：新落 6 个技能
+    （android-device-verify / visual-regression / godot-perf-profile / release-engineering-android /
+    netcode-godot / asset-pipeline），每个含 SKILL.md + 可跑脚本；本轮 ①就是用它跑出来的。
+· 验收（本轮真跑）：单元 **31 个脚本 / 927 项全绿**（退出码 0）／集成冒烟 **229 项全绿**（退出码 0）／
+  geom_assertions 默认模式 **5 项全绿**、`--strict` 报 13 组（已登记基线）。
+  `git status`：GameConfig.gd / CombatFeedPanel.gd / HudBuilder.gd 三个文件被改，**未提交**。
+· 剩余 13 组重叠的分类（**未修**，需要一个 HUD 专项拍板，不是能顺手改的）：
+  · 有意分层（6 组）：各轮盘展开时盖住右下角的地图键 / 血量 / 计时 —— 这是设计意图，
+    已通过基线登记为「已知」，只防新增；
+  · 疑似误报（2 组）：Score × HP（3 px）、Score × MatchClock（1 px）—— 三个 Label 同列相邻，
+    几何上只差 1~3 px，文字本身并不重叠；
+  · 真·视觉冲突（2 组）：QuestCard × CombatFeed（卡片右缘压到播报左边 16 px）、
+    CaptureStatus × QuestCard（占领状态行被卡片压住 25 px）——
+    这两组要动 HUD 版式（卡片宽度 300 与播报左边界 300 天然相接），建议与 11.2「对局内 HUD」一起定；
+  · 其余（3 组）：FocusButton × MarkHint、MarkWheel × MapButton、MapButton × HP 等，同上属分层或小重叠。
+· 未做（留给后续）：上条 4 类的版式调整；`tools/geom_assertions.gd` 与 `test/geom_baseline.json` 尚未提交。
+· 待办（下一轮）：① 真机确认队友 Ally 的表现；② 决定是否把几何回归挂进 run_tests_headless 汇总；
+  ③ 候选 S（信誉分与治理）；④ 载具相机三档（19 章 ②）。
+
+
 
 四、接下来（候选 A~N 已全部完成；✅ 候选 L（L1~L5）、✅ 候选 P（烟雾遮蔽）、✅ 候选 T 除 ⑥ 外的各条
-	亦已完成；单元测试 927 项全绿、集成冒烟 229 项全绿、导出包验收 失败 0 项（2026-10-02 本轮复跑）；
+	亦已完成；**单元测试 31 个脚本 / 927 项全绿、集成冒烟 229 项全绿**（2026-10-02 本轮真跑，退出码均 0）；
 	docx 第二十章回流这笔账已在第二十七版还清，第二十八版把新做的三项回流了一遍；第二十九版把设计文档的去冲突与集中拍板做完（不动代码）；第三十版做了候选 O 第一轮（4.14 战斗播报 + 4.15 操作提示）
-	下一批建议：候选 M 已收官、ATGM 主链路与 5 项真机修复均已真机验收通过（2026-10-02）；下一批从
-	候选 R（数据表扩到文档规模）、候选 Q（胜负流程接入 5.7）或候选 S（信誉分与治理）里挑一个开工。
+	下一批建议：第四十一版补丁6~9（队友 Ally / 补刀开关 / 倒地姿势 / 指令轮盘向右）已落地但**只跑过 headless**，
+	先补一次真机确认；之后从候选 S（信誉分与治理）、载具相机三档（19 章 ②）、5.4 攻防转换里挑一个开工。
 	候选 M 仍未做的是「需要美术资产」的那部分（12.7.6 的 91 帧规格表、骨骼手部动作、全身倒地阵亡帧）
 	与「音频的定位 / 音量界面」；另欠载具相机三档（19 章 ②）与两个调试值的恢复）
 
@@ -1655,6 +1718,42 @@ tactical_map / vehicle / weapon / boot_check / **combat_feed** / **tips** / **co
 · 🧪 【2026-10-02 · 第四十一版测试态】GameConfig.ENEMY_FINISH_OFF_ENABLED = false（敌人不补刀，倒地目标免伤）。
   恢复正式值：改成 true。与 ENEMY_VEHICLE_DAMAGE_SCALE / fire_damage / detection_range 属于同一类工作区调试开关，
   真机验收前记得一起恢复。
+· 【新，2026-10-02 · 第四十一版补丁6~9 收尾时实测】HUD 控件重叠 18 组（未修）：
+  用新增的 visual-regression 技能的 `tools/geom_assertions.gd`（--strict 模式）跑真场景，
+  HUD 层（CanvasLayer layer=1）里有 18 组「同一父节点下的可见 Control 两两相交」。5 组代表：
+  ① QuestCard(16,60 300×96) × RoleButton(16,140 80×40) —— 任务卡盖住左下按键；
+  ② MatchClock(802,184 143×23) × HP(802,182 138×23) —— 右上角两行贴身压住；
+  ③ MarkWheel(840,188 120×120) × MapButton(802,188 80×44) —— 报点轮盘展开时压住地图键；
+  ④ Hint(16,12 441×23) × CombatFeed(300,34 360×110)；
+  ⑤ Score(802,162 71×23) × MatchClock(802,184 143×23)。
+  这 18 组里有一部分是**按状态显隐**的短暂重叠（轮盘展开、提示行、任务卡出现/消失），
+  哪些是有意堆叠、哪些是真 bug 要逐个确认，**不能直接「全改成不重叠」**。
+  处置建议：① 先 `--init` 生成几何基线（res://test/geom_baseline.json）把回归钉住；
+  ② 再逐个确认真 bug 改位置。工具与用法见技能 visual-regression。
+  ✅ 2026-10-02 本轮处理（第四十一版补丁9 收尾）：**18 → 13**。修掉 5 组 ——
+  任务卡盖住第一行按键（集群下移 HUD_BUTTON_CLUSTER_DY=22）、顶部说明行压住播报 1 px
+  （HUD_FEED_TOP_GAP_DY=4）、指令键从 (192,186) 移到 (272,186) 以脱离第三列与轮盘展开区。
+  剩余 13 组已登记为几何基线（res://test/geom_baseline.json）：其中 6 组是有意分层（轮盘盖地图键等）、
+  2 组是 Label 相邻 1~3 px 的疑似误报、2 组是真视觉冲突（QuestCard × CombatFeed / CaptureStatus × QuestCard，
+  要动版式）；详见下方同名版本段。
+· 【新，2026-10-02】队友 Ally 只跑过 headless 验收（单元 14 项 + 集成若干），**尚未真机确认**：
+  它的表现（UnitFigure 绘制、进 friendly 组后的重生预算、与玩家/敌人的交互观感）需要一次真机复测。
+  真机流程见技能 android-device-verify（装包 → 启动 → 抓 logcat → 截图 → 模拟触摸）。
+· 【新，2026-10-02 · DSH 侧，不阻塞工程】技能（skill）子系统整体归零：本轮在会话里调 `skill` 加载
+  任何技能都返回 `unknown or no longer available` —— 包括老技能 `jieyu-progress-sync`、本轮新增的 6 个、
+  以及 rank500 的 ECC 技能；「不存在的对照名」返回完全一样 ⇒ 一个技能都查不到。
+  已排除与本轮改配置有关：跑 `cordis` preset 的子代理会话同样 0 个技能，而该 preset 的 skill-filesystem
+  根本不读 `customSkillDirs`。`include:skill-filesystem` 显示 inactive 是设计使然（同一组合下
+  tool-pwsh / tool-fs / tool-web 也是 inactive 却都可用）。疑似 preset 挂载 / provider 注册失败，
+  运行期日志目录为空 ⇒ 未定论。
+  影响：本轮收尾用的是 `jieyu-progress-sync` 的**脚本体**（inspect_project.py + 手工锚点脚本），流程照跑；
+  但「技能被 agent 自动发现」这条暂时是断的。
+  验证办法（别踩两个坑）：① 必须**在配置写入之后新开会话**（preset 是 eager 加载，已有会话保留启动时 revision；
+  本次 patch 写于 14:46:35，而改造会话建于 14:20:20 ⇒ 本会话测不了）；
+  ② **不要用 subagent 验证**（subagent 跑 cordis preset，必然假阴性）——要在 GUI 新开一个标准会话，
+  只看两点：开头发言有没有「技能目录」消息、`skill` 试 `jieyu-progress-sync`。
+
+
 
 七、已知待拍板
 · 【新，2026-10-01 · 第三十三版，待拍板】地形内容层的表达方式：现在泥泞 / 雪地 / 草丛是三片圆形区域

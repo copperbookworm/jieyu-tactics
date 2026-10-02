@@ -506,6 +506,10 @@ func _finish_reload() -> void:
 func take_damage(amount: float) -> void:
 	if not alive:
 		return
+	if downed:
+		# 候选 Q（2026-10-02 使用者反馈「被敌人击倒之后仍会被攻击」）：倒地期间不再吃伤害。
+		# 敌人 AI 也会停止把倒地的玩家当目标，这里是兜底（流弹 / 爆炸也不该继续削血）。
+		return
 	hp = maxf(hp - amount, 0.0)
 	# 12.7.4 受击反馈：闪白（本体画白圈）+ 广播给相机做轻微屏幕震动
 	_hit_flash_left = GameConfig.HIT_FLASH_TIME
@@ -540,6 +544,11 @@ func revive() -> void:
 	downed = false
 	downed_time_left = 0.0
 	hp = maxf(hp, GameConfig.DOWNED_REVIVE_HP)
+
+
+## 失去战斗能力（倒地或已阵亡）：敌人 AI 与重生流程都看这个，别再对它开火
+func is_incapacitated() -> bool:
+	return downed or not alive
 
 
 ## 重生（候选 Q 的战局流程用）。与上面的 revive() 是**两件事**，别混：

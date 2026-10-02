@@ -135,9 +135,54 @@ func _respawn_player() -> void:
 		main.vehicles.vehicle.exit_vehicle()
 	if main.player == null:
 		return
-	main.player.respawn()
+	# 落点：出生点 + 我方已占领的节点（5.2 的重生语义 = 回己方控制区，不是死在原地，也不是固定出生点）
+	var candidates: Array = []
+	if main.player.respawn_point != Vector2.ZERO:
+		candidates.append(main.player.respawn_point)
+	if main.capture_zones != null:
+		for zone in main.capture_zones:
+			if zone.state == CaptureZone.State.BLUE:
+				candidates.append(zone.global_position)
+	var enemy_positions: Array = []
+	var tree := get_tree()
+	if tree != null:
+		for e in tree.get_nodes_in_group("enemy"):
+			enemy_positions.append(e.global_position)
+	var point: Vector2 = main.player.respawn_point
+	if not candidates.is_empty():
+		point = pick_respawn_point(candidates, enemy_positions)
+	var nearest := nearest_enemy_distance(point, enemy_positions)
+	if nearest < GameConfig.RESPAWN_SAFE_DISTANCE:
+		_hint("重生落点附近有敌人（最近 %.0f m）—— 小心" % nearest)
+	main.player.respawn(point)
 	if main.camera_controller != null:
-		main.camera_controller.crosshair_world = main.player.global_position
+		main.camera_controller.crosshair_world = point
+
+
+## 选重生点（纯函数，测试直接调）：候选点里挑「离最近敌人最远」的那个。
+## 候选 = 出生点 + 我方已占领的节点。若所有候选都贴着敌人，也返回其中最好的一个
+## （调用方负责提示；不强行改落点，因为「哪里能重生」本身是关卡设计问题）。
+static func pick_respawn_point(candidates: Array, enemy_positions: Array) -> Vector2:
+	if candidates.is_empty():
+		return Vector2.ZERO
+	if enemy_positions.is_empty():
+		return candidates[0]
+	var best: Vector2 = candidates[0]
+	var best_distance := -1.0
+	for c in candidates:
+		var d := nearest_enemy_distance(c, enemy_positions)
+		if d > best_distance:
+			best_distance = d
+			best = c
+	return best
+
+
+## 某个点到最近敌人的距离（场上没敌人时返回 INF）
+static func nearest_enemy_distance(point: Vector2, enemy_positions: Array) -> float:
+	var nearest := INF
+	for p in enemy_positions:
+		nearest = minf(nearest, point.distance_to(p))
+	return nearest
 
 
 func _finish(who: String, why: String) -> void:

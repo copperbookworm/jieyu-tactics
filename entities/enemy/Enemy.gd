@@ -164,6 +164,13 @@ func _process(delta: float) -> void:
 
 ## AI：发现玩家（通视 + 距离内）→ 交战；只被烟挡住 → 朝最后已知位置盲射；否则巡逻
 func _update_ai(delta: float) -> void:
+	# 候选 Q（2026-10-02 使用者反馈「被敌人击倒之后仍会被攻击」）：目标已倒地或阵亡就不再打，
+	# 退回巡逻（人还在场上晃，但不再朝倒地的玩家开火）。
+	if _player != null and _player.has_method("is_incapacitated") \
+			and _player.is_incapacitated():
+		_state = AIState.PATROL
+		_move_patrol()
+		return
 	if _player == null or _grid == null:
 		return
 	_last_known_age += delta

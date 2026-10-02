@@ -17,6 +17,8 @@ func _run() -> void:
 	_test_clock_phases()
 	_test_respawn_budget()
 	_test_respawn_resets_player()
+	_test_pick_respawn_point()
+	_test_downed_player_ignores_damage()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
 		print("！！ 有 %d 项失败，往上翻看期望与实际" % _failed)
@@ -98,6 +100,43 @@ func _test_respawn_resets_player() -> void:
 	_check_true("重生：可见 + 输入解锁", p.visible and not p.input_locked)
 	p.respawn(Vector2(3.0, 4.0))
 	_check("重生：显式落点覆盖出生点", p.global_position, Vector2(3.0, 4.0))
+	p.free()
+
+
+## 重生点不能挑在敌人旁边（使用者 2026-10-02：复活在敌人旁边）
+func _test_pick_respawn_point() -> void:
+	var spawn := Vector2(0.0, 0.0)
+	var node := Vector2(1000.0, 0.0)
+	_check("选点：没敌人时用第一个候选（出生点）",
+			MatchFlowScript.pick_respawn_point([spawn, node], []), spawn)
+	# 敌人就压在出生点上 → 应该改选那个远点
+	_check("选点：出生点旁有敌人 → 换到更远的己方节点",
+			MatchFlowScript.pick_respawn_point([spawn, node], [Vector2(10.0, 0.0)]), node)
+	# 敌人在远点旁边 → 留在出生点
+	_check("选点：己方节点旁有敌人 → 留在出生点",
+			MatchFlowScript.pick_respawn_point([spawn, node], [Vector2(1010.0, 0.0)]), spawn)
+	# 哪都近 → 仍返回相对最好的那个
+	_check("选点：所有候选都贴着敌人 → 仍取最远的",
+			MatchFlowScript.pick_respawn_point([spawn, node],
+					[Vector2(5.0, 0.0), Vector2(900.0, 0.0)]), node)
+	_check("选点：候选为空 → 零向量", MatchFlowScript.pick_respawn_point([], []), Vector2.ZERO)
+	_check("距离：场上没敌人 → INF",
+			MatchFlowScript.nearest_enemy_distance(spawn, []) > 1.0e30, true)
+
+
+## 倒地期间不再吃伤害（兜底：即使有流弹 / 爆炸，也不该继续削血）
+func _test_downed_player_ignores_damage() -> void:
+	var p := PlayerUnit.new()
+	_check_true("健康时：is_incapacitated 为假", not p.is_incapacitated())
+	p.hp = 50.0
+	p.down()
+	_check_true("倒地后：is_incapacitated 为真", p.is_incapacitated())
+	p.take_damage(10.0)
+	_check("倒地后挨打不掉血（hp 保持 50）", p.hp, 50.0)
+	p.respawn(Vector2(1.0, 1.0))
+	_check_true("重生后：is_incapacitated 为假", not p.is_incapacitated())
+	p.take_damage(10.0)
+	_check("重生后挨打照常掉血（hp 90）", p.hp, 90.0)
 	p.free()
 
 

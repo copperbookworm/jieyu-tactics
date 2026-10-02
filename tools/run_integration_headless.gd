@@ -112,6 +112,7 @@ func _process(delta: float) -> bool:
 				_check_wreck_hittable()
 				_check_vehicle_smoke()
 				_check_respawn()
+				_check_downed_not_targeted()
 				# 候选 O 第三轮：被击倒时的视角（会把玩家打死，必须是最后一项）
 				_check_downed()
 				print("—— 集成冒烟：通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
@@ -854,7 +855,8 @@ func _check_respawn() -> void:
 	flow.phase = 0                        # Phase.PLAYING
 	var spawn: Vector2 = _main.player.respawn_point
 	_check_true("重生：出生点已记录（不是零向量）", spawn != Vector2.ZERO)
-	_main.player.global_position = spawn + Vector2(120.0, 80.0)   # 死在离出生点 140 m 处
+	var death_pos := spawn + Vector2(120.0, 80.0)
+	_main.player.global_position = death_pos                     # 死在离出生点 140 m 处
 	_main.player.suppression = 0.9
 	_main.player.hp = 0.0
 	_main.player.alive = true
@@ -863,10 +865,59 @@ func _check_respawn() -> void:
 	_check("重生：预算扣 1", flow.budget, 1)
 	_check_true("重生：人复活了（不再停在阵亡态）", _main.player.alive)
 	_check("重生：血量补满", _main.player.hp, GameConfig.SOLDIER_HP)
-	_check("重生：回到出生点（不是死在原地）", _main.player.global_position, spawn)
+	# 落点现在是「出生点 + 我方节点」里离敌人最远的那个（候选 Q 的安全落点），不再写死出生点
+	var landed: Vector2 = _main.player.global_position   # _main 是鸭子类型，必须显式标类型
+	var is_candidate := landed == spawn
+	for zone in _main.capture_zones:
+		if landed == zone.global_position:
+			is_candidate = true
+	_check_true("重生：落在己方候选点（出生点 / 我方节点）上，不是死亡位置",
+			is_candidate and landed != death_pos)
 	_check("重生：压制清零", _main.player.suppression, 0.0)
 	_check_true("重生：不再是倒地态 + 输入解锁",
 			not _main.player.downed and not _main.player.input_locked)
+
+
+# ────────────── 倒地后不再被攻击（候选 Q，使用者 2026-10-02 反馈）──────────────
+
+func _check_downed_not_targeted() -> void:
+	var enemies := get_nodes_in_group("enemy")
+	_check_true("倒地停火：场上有敌人可测", enemies.size() > 0)
+	if enemies.is_empty():
+		return
+	var enemy = enemies[0]
+	_restore_player()
+	_main.player.global_position = enemy.global_position + Vector2(12.0, 0.0)   # 站到敌人眼前
+	enemy._update_ai(0.05)
+	var engaged: bool = int(enemy._state) == 1        # AIState.COMBAT
+	# 再倒地：应退回巡逻、并且不再开火
+	_main.player.hp = 0.0
+	_main.player.down()
+	enemy._update_ai(0.05)
+	_check("倒地停火：步兵敌人退回巡逻（不再交战）", int(enemy._state), 0)
+	_check_true("倒地停火：站着时会交战（说明这条判定真的有效）", engaged)
+	# 敌方坦克：站着会开炮，倒地的玩家不再挨炮
+	var tank = _main.vehicles.enemy_vehicle
+	if tank != null:
+		tank.destroyed = false
+		tank.hp = tank.max_hp
+		tank.ai_enabled = true
+		tank._player_ref = _main.player
+		tank.global_position = _main.player.global_position + Vector2(-100.0, 0.0)
+		tank.turret_facing = Vector2.RIGHT
+		tank._fire_cooldown = 0.0
+		var ammo_before: int = tank._ammo
+		_restore_player()
+		tank._ai_update(0.05)
+		var fired_when_alive: bool = tank._ammo < ammo_before
+		tank._ammo = ammo_before
+		tank._fire_cooldown = 0.0
+		_main.player.hp = 0.0
+		_main.player.down()
+		tank._ai_update(0.05)
+		_check("倒地停火：倒地的玩家不再挨坦克的炮", tank._ammo, ammo_before)
+		_check_true("倒地停火：站着时坦克会开炮（说明这条判定真的有效）", fired_when_alive)
+	_main.player.respawn()      # 收尾：让人站起来
 
 
 func _check_vehicle_smoke() -> void:

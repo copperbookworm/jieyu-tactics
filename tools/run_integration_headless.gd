@@ -898,7 +898,10 @@ func _check_downed_not_targeted() -> void:
 	_main.player.down()
 	enemy._update_ai(0.05)
 	_check_true("补刀前提：站着时敌人交战", engaged)
-	_check("补刀前提：玩家倒地后敌人仍然交战（会来补刀）", int(enemy._state), 1)
+	if GameConfig.ENEMY_FINISH_OFF_ENABLED:
+		_check("补刀开：玩家倒地后敌人仍然交战（会来补刀）", int(enemy._state), 1)
+	else:
+		_check("补刀关（🧪 测试态）：玩家倒地后敌人退回巡逻", int(enemy._state), 0)
 	# 敌方坦克：站着会开炮，倒地的玩家不再挨炮
 	var tank = _main.vehicles.enemy_vehicle
 	if tank != null:
@@ -919,7 +922,10 @@ func _check_downed_not_targeted() -> void:
 		_main.player.down()
 		tank._ai_update(0.05)
 		_check_true("补刀前提：站着时坦克会开炮", fired_when_alive)
-		_check("补刀前提：玩家倒地后坦克照打（会来补刀）", tank._ammo < ammo_before, true)
+		if GameConfig.ENEMY_FINISH_OFF_ENABLED:
+			_check("补刀开：玩家倒地后坦克照打（会来补刀）", tank._ammo < ammo_before, true)
+		else:
+			_check("补刀关（🧪 测试态）：玩家倒地后坦克不开炮", tank._ammo, ammo_before)
 	_main.player.respawn()      # 收尾：让人站起来
 
 
@@ -936,12 +942,18 @@ func _check_finish_off_pose() -> void:
 	_main.match_flow.budget = 2
 	_main.match_flow.phase = 0                       # 复位到 PLAYING（前面的 4.16 检查可能已把战局结算掉）
 	_main.player.take_damage(1.0)
-	_check_true("补刀：被打中一发 → 阵亡 → 立刻复活（不用等 60 s）", _main.player.alive)
-	_check("补刀：直接扣掉一次重生预算", _main.match_flow.budget, 1)
-	_check_true("补刀：复活时满血 + 姿势站回 + 换了落点",
-			_main.player.hp == GameConfig.SOLDIER_HP
-			and not _main.player._visual.downed
-			and _main.player.global_position != pos)
+	if GameConfig.ENEMY_FINISH_OFF_ENABLED:
+		_check_true("补刀：被打中一发 → 阵亡 → 立刻复活（不用等 60 s）",
+				_main.player.alive and _main.match_flow.budget == 1)
+		_check_true("补刀：复活时满血 + 姿势站回 + 换了落点",
+				_main.player.hp == GameConfig.SOLDIER_HP
+				and not _main.player._visual.downed
+				and _main.player.global_position != pos)
+	else:
+		_check_true("补刀关（🧪 测试态）：倒地期间挨打不掉血、也不扣预算（仍在等 60 s 流血）",
+				_main.player.downed and _main.player.alive
+				and _main.match_flow.budget == 2)
+		_main.player.respawn()
 	# 敌人：血打光倒地 → 补刀阵亡
 	var enemies := get_nodes_in_group("enemy")
 	if enemies.size() > 0:
@@ -1219,8 +1231,10 @@ func _check_downed() -> void:
 	# ④ 60 s 到点 → 转阵亡（走真实的 _physics_process → die → player_died）
 	player.downed_time_left = 0.01
 	player._physics_process(0.05)
-	_check_true("候选 O 4.16：倒地超时 → 阵亡", not player.alive and not player.downed)
-	_check_true("候选 O 4.16：阵亡信号真的发了（player_died）", died[0])
+	# 注意：候选 Q 之后「阵亡」会立刻扣预算重生（有预算时），所以不能再断言 alive == false 这个瞬间；
+	# 这里盯的是「阵亡事件真的发生了」——也是这一项原本要保的东西。
+	_check_true("候选 O 4.16：倒地超时 → 触发阵亡（player_died；有重生预算时会立刻重生）", died[0])
+	_check_true("候选 O 4.16：阵亡后不再处于倒地态", not player.downed)
 	_main.hud.tick(0.0)
 	_check_true("候选 O 4.16：阵亡后倒地画面层收起",
 			not _main.hud.downed_overlay.visible)

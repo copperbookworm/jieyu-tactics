@@ -507,9 +507,11 @@ func take_damage(amount: float) -> void:
 	if not alive:
 		return
 	if downed:
-		# 补刀（2026-10-02 使用者拍板：要更硬核）：对倒地目标再打中一发 = 直接阵亡。
-		# die() 发 player_died → MatchFlow 扣一次重生预算 → 立刻重生；预算耗尽才判负。
-		die()
+		if GameConfig.ENEMY_FINISH_OFF_ENABLED:
+			# 补刀（2026-10-02 拍板：更硬核）：倒地再中一发 = 直接阵亡 → 扣 1 次预算立刻重生。
+			# die() 发 player_died → MatchFlow 扣预算 → 立刻重生；预算耗尽才判负。
+			die()
+		# 关掉时（🧪 测试态）：倒地期间免伤（流弹 / 爆炸也不算补刀），可安稳等 60 s 流血结算
 		return
 	hp = maxf(hp - amount, 0.0)
 	# 12.7.4 受击反馈：闪白（本体画白圈）+ 广播给相机做轻微屏幕震动

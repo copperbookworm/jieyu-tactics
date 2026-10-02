@@ -151,7 +151,11 @@ func _test_finish_off_and_pose() -> void:
 	_check_true("姿势：倒地后角色图切到躺平", p._visual.downed)
 	_check_true("补刀：倒地的人还活着（等补刀或 60 s 流血）", p.alive)
 	p.take_damage(1.0)
-	_check_true("补刀：倒地后被打中一发 = 直接阵亡", not p.alive)
+	if GameConfig.ENEMY_FINISH_OFF_ENABLED:
+		_check_true("补刀开：倒地后被打中一发 = 直接阵亡", not p.alive)
+	else:
+		_check_true("补刀关（🧪 测试态）：倒地期间免伤，人还活着等流血", p.alive and p.downed)
+		p.die()
 	p.respawn()
 	_check_true("复活：姿势回到站立", not p._visual.downed)
 	p.free()

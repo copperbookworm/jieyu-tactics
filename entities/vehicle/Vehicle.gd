@@ -441,7 +441,10 @@ func fire(targets: Array) -> Dictionary:
 func _ai_update(delta: float) -> void:
 	if _player_ref == null:
 		return
-	# 注：2026-10-02 使用者拍板「倒地可被补刀」⇒ 这里**不**因为目标倒地就停火
+	# 🧪 补刀开关（关掉时不再朝倒地目标开炮）—— 使用者 2026-10-02 的测试态
+	if not GameConfig.ENEMY_FINISH_OFF_ENABLED and _player_ref.has_method("is_incapacitated") \
+			and _player_ref.is_incapacitated():
+		return
 	var target_position: Vector2 = _player_ref.global_position
 	var to_player := target_position - global_position
 	var distance := to_player.length()

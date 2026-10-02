@@ -199,8 +199,13 @@ func _update_ai(delta: float) -> void:
 	if not ai_enabled:
 		velocity = Vector2.ZERO
 		return
-	# 自己倒地：不能动也不能打，只走流血计时（到点阵亡）。补刀在 take_damage 里 ——
-	# 使用者 2026-10-02 拍板「倒地可被补刀（更硬核）」，所以这里不再阻止 AI 打倒地目标。
+	# 🧪 补刀开关：关掉时不再把倒地目标当靶子（步兵退回巡逻）—— 使用者 2026-10-02 的测试态
+	if not GameConfig.ENEMY_FINISH_OFF_ENABLED and _player != null \
+			and _player.has_method("is_incapacitated") and _player.is_incapacitated():
+		_state = AIState.PATROL
+		_move_patrol()
+		return
+	# 自己倒地：不能动也不能打，只走流血计时（到点阵亡）。补刀在 take_damage 里。
 	if downed:
 		downed_time_left -= delta
 		velocity = Vector2.ZERO

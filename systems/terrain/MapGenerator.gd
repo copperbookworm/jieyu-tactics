@@ -127,6 +127,18 @@ static func demo_cover_points() -> Array[Vector2]:
 
 ## 敌人初始位置：出生点前方 45~75 m（第一版的"30 秒体验"要求出生后不久就能撞见敌人；
 ## 正式地图里敌人应按 RAAS 节点分布，这里只是让循环先闭环）
+## 环境互动区（docx 4.17，候选 O 第四轮）：泥泞 / 雪地 / 草丛各一片 demo 摆位。
+## kind ＝ 0 泥泞 / 1 雪地 / 2 草丛（与 entities/zone/TerrainZone.gd 的 Kind 枚举同值）。
+## 摆位刻意远离五节点、出生点与车辆（≥ 250 m）：候选 P 的烟、4.16 的倒地这些集成检查会在地形上
+## 扫位置，别让「草丛隐蔽」顺手把敌人的发现距离打折而干扰它们的结论。
+static func demo_terrain_zones() -> Array:
+	return [
+		{"kind": 0, "position": Vector2(120.0, 150.0), "radius": 26.0},   # 泥泞（西北）
+		{"kind": 1, "position": Vector2(760.0, 240.0), "radius": 24.0},   # 雪地（东北）
+		{"kind": 2, "position": Vector2(250.0, 820.0), "radius": 30.0},   # 草丛（西南）
+	]
+
+
 static func demo_enemy_points() -> Array[Vector2]:
 	var spawn := demo_spawn_point()
 	return [
@@ -142,3 +154,16 @@ static func demo_vehicle_points() -> Array[Vector2]:
 		demo_spawn_point() + Vector2(35.0, 0.0),
 		DEMO_NODES[1] + Vector2(40.0, 20.0),
 	]
+
+
+## 敌方 FOB 位置（候选 L2）：放在 N4 外侧、通往 N5 的必经方向上——等于是敌方后方的工事。
+## 单一数据源：WorldSetup 建实体与地图预览画标记都用它，免得两边坐标各写一份慢慢漂移。
+static func demo_enemy_fob_point() -> Vector2:
+	return DEMO_NODES[3] + Vector2(40.0, 40.0)
+
+
+## 侧翼通路（候选 L4，docx 4.10.11 T-S6）：[入口（敌方来向）, 出口（我方一侧）]。
+## 北路侧翼：从东北方向沿 y≈180 插向我方西侧高地。长度 220 m，穿插兵 2.6 m/s 约 85 s 走完，
+## 短于官方给的 150 s 时限 —— 有真实压力，但也留得出拦截时间。
+static func demo_flank_lane() -> Array[Vector2]:
+	return [Vector2(520.0, 180.0), Vector2(300.0, 180.0)]

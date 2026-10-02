@@ -5,9 +5,11 @@ extends Control
 ## 定位：取消对局内全部麦之后，这是唯一的战术沟通渠道，也是任务 / 报点 / 间瞄三件事的载体
 ## 第一版做到：① 不暂停游戏（只是个覆盖层）② 开图期间由 Main 冻结移动与开火
 ##             ③ 固定朝北不旋转，拖动平移 + 三档缩放
-##             ④ 图层：地形 → 节点与净进度 → 任务目标 → 己方 → 报点标记
+##             ④ 图层：地形 → 节点与净进度 → 任务目标 → 世界目标（补给车 / 侧翼通路 / 敌方 FOB）→ 己方 → 报点标记
 ##             ⑤ 报点：底部先选类型 → 点地图位置（通视前提由 Main 判定后回话）
 ## 未做：间瞄选落点（7.4.2）、小队标记链与集结点、载具图层、PVEVP 战线
+
+const MapLayerSourceScript := preload("res://ui/MapLayerSource.gd")
 
 signal closed
 signal mark_placed(type: int, position: Vector2)
@@ -24,6 +26,7 @@ var _zones: Array = []
 var _marks: MarkSystem = null
 var _quests: QuestSystem = null
 var _terrain_texture: Texture2D = null
+var _main = null     # Main（鸭子类型）：世界目标图层从这里取（2026-10-01 ④）
 
 var _center_world := Vector2.ZERO
 var _zoom_index := 0
@@ -38,13 +41,14 @@ var _drag_moved := 0.0
 
 
 func setup(grid: HeightGrid, player: Node2D, zones: Array, marks: MarkSystem,
-		quests: QuestSystem, terrain_texture: Texture2D) -> void:
+		quests: QuestSystem, terrain_texture: Texture2D, main_node = null) -> void:
 	_grid = grid
 	_player = player
 	_zones = zones
 	_marks = marks
 	_quests = quests
 	_terrain_texture = terrain_texture
+	_main = main_node
 
 
 func _ready() -> void:
@@ -266,6 +270,7 @@ func _draw() -> void:
 	_draw_terrain_layer()
 	_draw_zone_layer()
 	_draw_quest_layer()
+	_draw_world_layer()
 	_draw_unit_layer()
 	_draw_mark_layer()
 
@@ -320,6 +325,49 @@ func _draw_quest_layer() -> void:
 	draw_arc(_to_screen(target.global_position),
 			GameConfig.CAPTURE_ZONE_RADIUS * _zoom() + 7.0, 0.0, TAU, 48,
 			Color(1.0, 0.85, 0.35, 0.95), 3.0)
+
+
+## ③.5 世界目标层（2026-10-01 ④，docx 4.11.1 ④单位层）
+## 侧翼通路（地形要素，常显；任务激活时画亮）／己方补给车（含到目标的路线）／敌方 FOB（暴露后）
+func _draw_world_layer() -> void:
+	if _main == null:
+		return
+	var lane = MapLayerSourceScript.lane(_main)
+	if lane != null:
+		var lane_color := Color(0.95, 0.75, 0.30, 0.9) if lane.active \
+				else Color(0.75, 0.70, 0.45, 0.4)
+		# 走廊两边：与 Lane 世界视图同一口径（半宽 × 当前缩放），四角由 MapLayerSource 统一算
+		var corners := MapLayerSourceScript.lane_edges(lane.entry_position,
+				lane.exit_position, lane.half_width)
+		if corners.size() == 4:
+			var left_entry := _to_screen(corners[0])
+			var right_entry := _to_screen(corners[1])
+			var left_exit := _to_screen(corners[2])
+			var right_exit := _to_screen(corners[3])
+			draw_line(left_entry, left_exit, lane_color, 2.0)
+			draw_line(right_entry, right_exit, lane_color, 2.0)
+			# 入口（敌方来向）红、出口（我方一侧）蓝——与 Lane._draw 一致
+			draw_line(left_entry, right_entry, Color(0.90, 0.35, 0.30, 0.85), 3.0)
+			draw_line(left_exit, right_exit, Color(0.35, 0.75, 0.95, 0.85), 3.0)
+	var convoy = MapLayerSourceScript.convoy(_main)
+	if convoy != null:
+		var from := _to_screen(convoy.global_position)
+		var to := _to_screen(convoy.target_position)
+		draw_line(from, to, Color(0.55, 0.85, 0.55, 0.5), 2.0)
+		draw_circle(to, 8.0, Color(0.45, 0.90, 0.55, 0.25))
+		draw_circle(from, 6.0, Color(0.45, 0.90, 0.55, 0.95))
+		draw_arc(from, 11.0, 0.0, TAU, 24, Color(0.45, 0.90, 0.55, 0.6), 1.5)
+	for fob in MapLayerSourceScript.visible_fobs(get_tree()):
+		var fob_screen := _to_screen(fob.global_position)
+		var half_size := Vector2(GameConfig.FOB_HALF_X, GameConfig.FOB_HALF_Y) * _zoom()
+		if bool(fob.destroyed):
+			draw_rect(Rect2(fob_screen - half_size, half_size * 2.0),
+					Color(0.45, 0.40, 0.36, 0.7))
+		else:
+			draw_rect(Rect2(fob_screen - half_size, half_size * 2.0),
+					Color(0.90, 0.28, 0.24, 0.85))
+			draw_rect(Rect2(fob_screen - half_size, half_size * 2.0),
+					Color(1.0, 0.92, 0.82, 0.95), false, 2.0)
 
 
 ## ④ 单位层：己方（第一版只有玩家自己；docx 4.11.2：己方全显）

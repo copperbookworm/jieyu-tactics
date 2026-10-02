@@ -63,6 +63,11 @@ const ENEMY_BASE_MOA := 3.0
 ## 出口三处：步兵在 Enemy._try_fire 打玩家、敌人打掩体耐久、载具主炮在 Vehicle，三处都乘它。
 ## 注意：压制不随它归零（准心仍会抖、HUD 仍显示压制值），因为压制不是伤害。
 const ENEMY_DAMAGE_SCALE := 1.0
+## 敌人**载具主炮**伤害倍率。1.0 = 正式数值。
+## 🧪 想开「坦克打不掉血」的测试态：把下面这行改成 0.0 —— 坦克照常开炮（火光 / 曳光 / 炮声 / 炮塔后坐 /
+## 命中闪白 / 屏幕震动都在），但一炮都不掉血。只作用于载具；要连步兵一起关，用上面的 ENEMY_DAMAGE_SCALE。
+## ⚠ 测完改回 1.0：调试值留在工作区会被误判成「敌人 AI 坏了」（2026-09-30 踩过这坑）。
+const ENEMY_VEHICLE_DAMAGE_SCALE := 1.0
 ## 与压制散布叠加
 
 # ────────────── 弹道（7.4.2 确认稿）─────────────
@@ -131,6 +136,95 @@ const MARK_ITEM_WIDTH := 84.0      # px，菜单项尺寸（测试与布局共�
 const MARK_ITEM_HEIGHT := 44.0
 const MARK_ICON_RADIUS := 6.0      # m，主视图标记圆点半径
 
+# ────────────── 快捷指令（docx 4.13 局内对话设置，候选 O 第二轮）─────────────
+## 按键放左侧第三列（x=192 / y=186）：右侧已被小地图 / 地图键 / 报点轮盘占满，这里是唯一空位
+const COMMAND_BUTTON_X := 192.0
+const COMMAND_BUTTON_Y := 186.0
+const COMMAND_BUTTON_WIDTH := 80.0
+const COMMAND_BUTTON_HEIGHT := 40.0
+## 环形菜单的半径与菜单项尺寸直接复用报点轮盘的那一套（MARK_WHEEL_RADIUS / MARK_ITEM_*）：
+## 同一套手感参数，不另抄一份数值。
+const COMMAND_GLOBAL_COOLDOWN := 1.5   # s，任意两条指令之间的公共冷却（防连点刷屏）
+const COMMAND_COOLDOWN := 6.0          # s，同一条指令的冷却
+
+# ────────────── 被击倒与倒地视角（docx 4.16，候选 O 第三轮）─────────────
+## 4.16 原文：倒地超时（默认值 60 s，待实测）转为阵亡 —— 这里就是那个默认值
+const DOWNED_TIMEOUT := 60.0
+## 被扶起后的血量（4.16 的队友救援路径；第一版单机没有队友，数值待实测）
+const DOWNED_REVIVE_HP := 25.0
+## 画面表现：全屏灰罩（「去色」的近似，本项目零 shader）+ 复用聚焦那套暗角贴图
+const DOWNED_GRAY := Color(0.42, 0.45, 0.50)
+const DOWNED_VEIL_ALPHA := 0.62
+
+# ────────────── 环境互动区（docx 4.17，候选 O 第四轮）─────────────
+## 地形内容层：高程网格只有高度、没有材质，所以泥泞 / 雪地 / 草丛先用独立圆形区域表达
+const TERRAIN_ZONE_GROUP := "terrain_zone"
+const TERRAIN_ZONE_RADIUS := 24.0         # m，区域默认半径
+const TERRAIN_MUD_SPEED_SCALE := 0.70     # 泥泞：移速 ×0.70
+const TERRAIN_SNOW_SPEED_SCALE := 0.55    # 雪地：移速 ×0.55
+const TERRAIN_GRASS_CONCEAL := 0.35       # 草丛：敌人发现距离 −35%
+const TERRAIN_GRASS_PRONE_BONUS := 0.20   # 卧姿再加一档（呼应 C2 的「矮掩体」属性）
+const TERRAIN_CONCEAL_MAX := 0.60         # 隐蔽度上限：隐蔽＝更难被发现，不是隐身
+## 掩体互动（4.17）：贴着掩体但不聚焦＝缩在掩体后（暴露面积打折）；按住聚焦＝探头（暴露回满）
+const COVER_HUG_RANGE := 1.5              # m，算作「贴着掩体」的距离
+const COVER_HUG_EXPOSURE := 0.5           # 缩在掩体后的命中面积倍率
+
+# ────────────── 表现层：阴影 / 枪口火光 / 命中特效 / 受击闪白 / 屏幕震动（候选 M · 12.3 / 12.7）──
+## 12.3 Blob Shadow：脚底一个扁椭圆，不随身体转动；越高越小越淡（滞空），全场景统一光照偏移
+const BLOB_SHADOW_COLOR := Color(0.0, 0.0, 0.0)
+const BLOB_SHADOW_RADIUS := 0.55          # m，默认阴影半径（角色会按身体尺寸再乘一档）
+const BLOB_SHADOW_BODY_SCALE := 1.30      # 阴影半径 ＝ 身体半径 × 此值
+const BLOB_SHADOW_SQUASH := 0.55          # 椭圆压扁比（Y/X）——12.3 的「扁椭圆」
+const BLOB_SHADOW_ALPHA := 0.42           # 贴地时的不透明度
+const BLOB_SHADOW_HEIGHT_SCALE := 0.80    # 离地每 1 m 缩小 / 变淡多少（12.3「滞空时缩小变模糊」）
+const BLOB_SHADOW_MIN_SCALE := 0.35       # 缩小下限，别缩成一个点
+const BLOB_SHADOW_LIGHT_DEG := 135.0      # 度，全局光照方向（12.3「统一微调」，不做逐光源计算）
+const BLOB_SHADOW_LIGHT_OFFSET := 0.18    # m，阴影沿光照方向的统一偏移
+## 12.7.3 枪口火光：开火瞬间闪一下
+const MUZZLE_OFFSET := 0.60               # m，枪口相对身体中心的距离
+const MUZZLE_FLASH_LIFETIME := 0.06       # s，2~4 帧
+const MUZZLE_FLASH_LENGTH := 0.90         # m
+const MUZZLE_FLASH_WIDTH := 0.50          # m
+const MUZZLE_FLASH_COLOR := Color(1.0, 0.86, 0.45)
+## 12.7.4 命中特效：火花 + 扩散环
+const IMPACT_FX_LIFETIME := 0.22          # s
+const IMPACT_FX_SPARKS := 6               # 火花条数（确定性方向，不用 randf）
+const IMPACT_FX_SPARK_LENGTH := 0.55      # m
+const IMPACT_FX_RING_RADIUS := 0.75       # m
+## 12.7.4 受击闪白 + 轻微屏幕震动
+const HIT_FLASH_TIME := 0.09              # s，闪白时长
+const HIT_FLASH_ALPHA := 0.65             # 闪白圆周的不透明度（按剩余时间衰减）
+const SCREEN_SHAKE_TIME := 0.18           # s，每次受击的抖动时长
+const SCREEN_SHAKE_STRENGTH := 0.35       # m，抖动幅度（俯视 2D 下很小的位移）
+
+# ────────────── 音效（docx 第十章，候选 M · 第二轮）─────────────
+## 工程没有任何音频资产 ⇒ 第一版用程序生成的 PCM（systems/audio/ProceduralAudio.gd）
+const SFX_MIN_INTERVAL := 0.045   # s，同一种音效的最小间隔（连发时别糊成一片）
+const SFX_MAX_VOICES := 4         # 每种音效的并发声部数（轮换复用，避免声部爆炸）
+const SFX_SAMPLE_RATE := 22050    # Hz，移动端够用（样本量是 44100 的一半）
+
+# ────────────── 角色图：12.7.1 上下半身分离（候选 M · 第三轮）─────────────
+## 第一版没有帧资源 ⇒ 用程序绘制的 Lower / Upper 替代精灵帧；腿的交替由相位驱动（等价走 / 跑节奏）
+const FIGURE_STRIDE_HZ := 1.5             # 次/秒，全速前进时的步频（相位推进速率）
+const UNIT_COLOR_PLAYER := Color(0.310, 0.616, 0.878)   # ＝ 旧圆点贴图色 #4f9de0
+const UNIT_COLOR_ENEMY := Color(0.851, 0.326, 0.310)    # ＝ 旧圆点贴图色 #d9534f
+
+# ────────────── 载具动画（docx 12.7.2，候选 M · 第四轮）─────────────
+## 履带滚动：相位 ＝ 跑过的距离（m），停车即冻结；报废后冻结 + 变黑（M-kill 的等效表现）
+const VEHICLE_TRACK_SPACING := 0.62       # m，履带齿间距
+const VEHICLE_TRACK_WIDTH := 0.34         # m，履带宽度
+const VEHICLE_TRACK_COLOR := Color(0.16, 0.16, 0.16, 0.95)
+const VEHICLE_TRACK_WRECK_COLOR := Color(0.10, 0.09, 0.08, 0.95)
+const VEHICLE_TRACK_TOOTH_COLOR := Color(0.55, 0.55, 0.52, 0.55)
+## 报废后的炮管：俯视 2D 画不出「下垂」，用「变黑 + 缩短」等效（12.7.2 F-kill 的取舍，登记在 20.5）
+const VEHICLE_WRECK_BARREL_SHRINK := 0.15
+const VEHICLE_WRECK_BARREL_COLOR := Color(0.30, 0.28, 0.26, 0.95)
+## 残骸冒烟（K-kill 的「持续冒烟」）
+const VEHICLE_SMOKE_PUFFS := 5            # 烟团数
+const VEHICLE_SMOKE_RADIUS := 1.6         # m，烟团最大半径
+const VEHICLE_SMOKE_RISE := 2.2           # m，向外扩散 / 上飘的视觉量
+const VEHICLE_SMOKE_LIFETIME := 3.6       # s，一个烟团从生到灭
+
 # ────────────── 载具（docx 第八章 8.1 舱室与座位 / 8.2 武器与装甲）─────────────
 ## 第一版只做「能上车 / 能开炮 / 装甲能挡弹」；炮塔回正与弹簧模型（8.2.6）后置
 const VEHICLE_NON_PEN_DAMAGE_SCALE := 0.05  # 未击穿时只吃 5% 伤害（装甲的主要意义）
@@ -146,6 +240,7 @@ const PISTOL_BULLET_PENETRATION_MM := 3.0
 const TURRET_ROTATE_SPEED := 45.0        # 度/秒，炮塔最大转向速率（8.2.6 默认值待实测）
 const TURRET_RECENTER_STIFFNESS := 1.8   # 回正弹簧刚度（越大回正越快）
 const TURRET_RECENTER_DAMPING := 0.7     # 回正阻尼（0~1，越大越不摆）
+const ATGM_TRACER_COLOR := Color(1.0, 0.45, 0.25, 0.95)  # 反坦克导弹尾迹色（与机炮曳光区分）
 const TURRET_RECOIL_DECAY := 4.0         # /s，后坐视觉量衰减
 const TURRET_RECOIL_OFFSET := 1.2        # m，开火瞬间炮塔后座位移（纯视觉）
 const VEHICLE_AI_RANGE := 900.0          # m，敌方载具发现玩家的距离
@@ -178,6 +273,43 @@ const COVER_SIGHT_SLACK := 0.15         # m，视线高度需高出掩体顶这�
 const PRONE_SIGHT_HEIGHT := 0.6         # m，卧姿视线高度（C2「矮掩体」：少 1 m 看不到东西）
 const SUPPORT_RANGE := 2.5              # m，离掩体多近算「依托/架枪」
 const SUPPORT_SPREAD_SCALE := 0.7       # 依托额外精度档（C3：架枪/依托提供一档精度）
+
+# ────────────── FOB（前进作战基地 / 工事，docx 4.10.11 T-S2「摧毁敌方 FOB」）─────────────
+## 第一版只做「敌方 FOB」：它是个大目标（子弹 / 车载炮 / 间瞄爆炸都吃伤害），结构值打光即摧毁，
+## 摧毁时发 wrecked 信号（任务系统订阅它推进 T-S2）。
+## 「暴露」判定（官方触发条件「敌方 FOB 被标记暴露」）：FOB 附近要有未过期的阵地/补给报点，见 QuestSystem。
+const FOB_MAX_HP := 1200.0            # 结构值：步枪 62 伤 → 约 20 发；间瞄爆心 90 → 约 14 发；载具主炮 400 → 3 发
+const FOB_HIT_RADIUS := 3.0           # m，弹道命中半径（大目标，别套步兵的 0.25）
+const FOB_HALF_X := 5.0               # m，占地半宽（画面上是 10 × 7 的工事）
+const FOB_HALF_Y := 3.5
+const FOB_EXPOSE_RADIUS := 60.0       # m，报点落在这个范围内才算「FOB 被标记暴露」
+
+# ────────────── 补给车（docx 4.10.11 T-S5「护送补给至前线」）─────────────
+## 第一版补给车不可被击毁、也不吸引敌人火力——官方表给 T-S5 的失败条件只有「超时」。
+const SUPPLY_SPEED := 4.0              # m/s，比步兵（5.0）慢一点：护送者跟得上，也能提前清路
+const SUPPLY_ARRIVE_RADIUS := 15.0     # m，进这个半径算「抵达指定节点」（＝占领区半径）
+
+# ────────────── 侧翼通路（docx 4.10.11 T-S6「守住侧翼通路」）─────────────
+## 第一版：一条直线通路，敌人在入口放穿插兵、沿通路推进到出口；玩家在时限内拦住他们。
+## 官方达成＝「时限内阻止敌人通过该通道」，所以它是「守住型」任务：拖到时限到点也算达成（见 QuestSystem）。
+const LANE_HALF_WIDTH := 25.0          # m，通路半宽（50 m 宽的走廊，够两三个人侧身通过）
+const LANE_INFILTRATORS := 3           # 个，一次派出的穿插兵数量（第一版固定）
+const LANE_INFILTRATOR_SPEED := 2.6    # m/s，比普通敌人（2.0）快一点——穿插就该有点紧迫感
+
+# ────────────── 烟雾与遮蔽（docx 4.12 + 4.12.8 确认稿，候选 P）─────────────
+## 烟雾＝临时 Occluder：通视判定遇到它就判「被遮挡」，等价于一面不透明墙；
+## 但它不阻挡子弹与单位移动（4.12.6），所以**不进 OCCLUDER_GROUP**——那个组同时被
+## 「子弹截断（SightSystem.first_cover）」用，混进去会让子弹被烟挡住。
+## 五项参数全部取 4.12.8 确认稿：半径 10 m / 高 3 m / 持续 25 s / 触发即生效 / AI 盲射 −70%。
+const SMOKE_GROUP := "smoke"              # 烟雾节点所在组（SightSystem 单独遍历它）
+const SMOKE_RADIUS := 10.0                # m，单发覆盖半径（4.12.8 ①）
+const SMOKE_HEIGHT := 3.0                 # m，烟高：遮住坦克 2.5~3 m 观察高度，飞机 / 高处仍可越过（4.12.8 ②）
+const SMOKE_DURATION := 25.0              # s，持续时间、触发即生效、多发可叠加（4.12.8 ③）
+const SMOKE_BLIND_FIRE_HIT_SCALE := 0.3   # 倍，AI 朝最后已知位置盲射的命中率（＝下降 70%，4.12.8 ④）
+const SMOKE_BLIND_FIRE_WINDOW := 10.0     # s，「最后已知位置」的有效期：太久没见就放弃盲射
+const SMOKE_GRENADE_COUNT := 2            # 发，步兵携带的烟雾弹（第一版固定，不做补给）
+const SMOKE_VEHICLE_COUNT := 1            # 次，载具发烟器（8.3 的落地：一局一次，下车不恢复）
+const SMOKE_DRAW_SEGMENTS := 24           # 画烟饼用的圆周分段数
 
 # ────────────── 连发散布与姿势（docx 7.3 连发扩大/点射收敛 · C2 姿态 · C3 姿势精度）─────────────
 ## 连发：按住连发逐发扩大，停火后逐发收敛（点射纪律的落地）
@@ -245,3 +377,16 @@ const RESPAWN_BUDGET_MULTIPLIER := 2   # 重生预算 = 进攻方人数 × 2
 # ────────────── 评分（第一版只留两项，4.8）─────────────
 const SCORE_KILL := 1
 const SCORE_CAPTURE_FLAG := 40
+
+# ────────────── 局内界面与体验（候选 O：docx 4.14 战斗播报 / 4.15 操作提示）─────────────
+## 4.14：同类事件在 FEED_MERGE_WINDOW 内合并成一条（limiting），每条停留 FEED_TTL 秒
+const FEED_MERGE_WINDOW := 1.5    # s，同类事件合并窗口（合并＝限频）
+const FEED_TTL := 4.5             # s，一条播报在 HUD 上停留多久
+const FEED_MAX_LINES := 4         # HUD 上最多同时显示几条（新的在上）
+const FEED_MAX_ENTRIES := 12      # 逻辑上最多留几条（超出的从最旧丢）
+## 4.15：每条只弹一次；两条之间至少隔 TIP_MIN_INTERVAL 秒，避免开场连环弹
+const TIP_MIN_INTERVAL := 2.0     # s，两条提示之间的最小间隔
+const TIP_TTL := 5.0              # s，一条提示停留多久
+const TIP_DEFAULT_ENABLED := true # 「可在设置关闭」的默认值（设置界面后置，先给 API）
+const TIP_SUPPRESSION := 0.25     # 压制高于它才提示「你正被压制」
+const TIP_LOW_HP := 25.0          # 血量低于它才提示「血量过低」

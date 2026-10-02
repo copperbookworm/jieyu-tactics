@@ -4,7 +4,8 @@ extends RefCounted
 ## 通视检测（docx 4.7 三级递进）——决定敌人是否显示，不是隐身而是没通视
 ##   ① 框检测：目标不在屏幕框内，一律不显示
 ##   ② 地形连线检测：1 m 网格 DDA 逐格，地面比视线高 SIGHT_MARGIN(0.3 m) 以上判遮挡
-##   ③ 掩体连线检测：点-多边形 / Occluder 层（第一版未接入，接口留在 occluder_blocks）
+##   ③ 掩体连线检测：点-多边形 / Occluder 层（见 occluder_blocks）
+##   ④ 烟雾层（docx 4.12.1，候选 P）：烟雾＝临时 Occluder，只挡视线不挡子弹（见 smoke_blocks）
 ## 视线起点取被控单位中心（docx 4.7 / 12.2 补充）
 ## 数学内核：高度差 ÷ 水平距离 = 坡度（tanθ）——与仰视极限、障碍物阻挡共用
 
@@ -78,6 +79,54 @@ func terrain_first_blocker(origin: Vector2, origin_height: float,
 	return result
 
 
+## ③·补充 烟雾层（docx 4.12.1：烟雾 = 临时 Occluder）
+## 与掩体同一套高度规则（blocks_sight），但走**独立的 SMOKE_GROUP**——因为 occluder 组
+## 同时被子弹截断（first_cover）使用，烟雾混进去就会挡子弹，违反 4.12.6。
+## 只要线段穿过任一活着的烟饼、且穿越点的视线高度低于烟顶（地面 + 3 m），就判被遮挡。
+func smoke_blocks(origin: Vector2, origin_height: float,
+		target: Vector2, target_height: float) -> bool:
+	var total := origin.distance_to(target)
+	if total <= 0.001:
+		return false
+	for node in _smokes():
+		var smoke = node
+		if smoke == null or not smoke.has_method("segment_crossing"):
+			continue
+		if smoke.has_method("is_active") and not smoke.is_active():
+			continue
+		var hit: Vector2 = smoke.segment_crossing(origin, target)
+		if hit == Vector2.INF:
+			continue
+		var t := clampf(origin.distance_to(hit) / total, 0.0, 1.0)
+		var sight_height := lerpf(origin_height, target_height, t)
+		var ground := 0.0
+		if grid != null:
+			ground = grid.sample_bilinear(smoke.global_position)
+		if blocks_sight(sight_height, smoke.top_height_at(ground)):
+			return true
+	return false
+
+
+## 线段上第一个活烟饼的入射点（准心回退用，docx 4.12.4）；没有烟则返回 Vector2.INF
+func first_smoke_hit(from: Vector2, to: Vector2) -> Vector2:
+	var nearest := Vector2.INF
+	var nearest_distance := INF
+	for node in _smokes():
+		var smoke = node
+		if smoke == null or not smoke.has_method("segment_crossing"):
+			continue
+		if smoke.has_method("is_active") and not smoke.is_active():
+			continue
+		var hit: Vector2 = smoke.segment_crossing(from, to)
+		if hit == Vector2.INF:
+			continue
+		var distance := from.distance_to(hit)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest = hit
+	return nearest
+
+
 ## ③ 掩体层（第一版未接入物理查询，保留接口避免后面挖坑）
 ## 期望实现：Occluder 组节点提供 [H_low, H_top] 高度区间，
 ## 用 intersect_ray 取 t，与地形结果取 t 小者（docx 4.7 第③级 / 12.2 补充职责收缩）
@@ -148,14 +197,24 @@ func _occluders() -> Array:
 	return loop.get_nodes_in_group(GameConfig.OCCLUDER_GROUP)
 
 
-## ② 与 ③ 合并：地形层 + 掩体层
+## 烟雾组（与掩体分开取：烟只挡视线，见 smoke_blocks 注释）
+func _smokes() -> Array:
+	var loop := Engine.get_main_loop() as SceneTree
+	if loop == null:
+		return []
+	return loop.get_nodes_in_group(GameConfig.SMOKE_GROUP)
+
+
+## ② 与 ③ 合并：地形层 + 掩体层 + 烟雾层
 ## margin_per_meter 只作用于地形层（准心瞄准用，见 AimCameraController 的注释）
 func has_sight(origin: Vector2, origin_height: float,
 		target: Vector2, target_height: float, margin_per_meter: float = 0.0) -> bool:
 	if terrain_first_blocker(origin, origin_height, target, target_height,
 			margin_per_meter)["blocked"]:
 		return false
-	return not occluder_blocks(origin, origin_height, target, target_height)
+	if occluder_blocks(origin, origin_height, target, target_height):
+		return false
+	return not smoke_blocks(origin, origin_height, target, target_height)
 
 
 ## 单位的视线绝对高度：带 sight_eye_height() 的单位（玩家）按姿态取值——

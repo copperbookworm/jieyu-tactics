@@ -164,6 +164,15 @@ func _explode(target: Vector2) -> void:
 		var cover_damage := blast_damage_at(cover_distance)
 		if cover_damage > 0.0:
 			cover.take_damage(cover_damage)
+	# 候选 L2：工事（敌方 FOB）同样吃爆炸伤害——间瞄本来就是砸固定目标的手段
+	for node in loop.get_nodes_in_group("fob_enemy"):
+		var fob = node
+		if fob == null or not fob.has_method("take_damage") or bool(fob.destroyed):
+			continue
+		var fob_distance := target.distance_to(fob.global_position)
+		var fob_damage := blast_damage_at(fob_distance)
+		if fob_damage > 0.0:
+			fob.take_damage(fob_damage)
 
 
 ## 爆心向外线性衰减：爆心 90 → 半径处 25；半径外 0

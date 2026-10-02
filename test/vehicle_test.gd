@@ -20,9 +20,63 @@ func _run() -> void:
 	_test_turret_recenter()
 	_test_seats()
 	_test_ai_gate()
+	_test_enemy_vehicle_damage()
+	_test_occupant_carried()
+	_test_fire_block_reason()
+	_test_wreck_refuses_boarding()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
 		print("！！ 有 %d 项失败，往上翻看期望与实际" % _failed)
+
+
+## 乘员跟着车走（2026-10-02 真机修）：相机 / 开发用黄箭头 / 载具发烟器都读乘员坐标，
+## 以前上车后坐标冻在上车点，所以「黄箭头停在上车点、镜头不跟车、烟放在原地」。
+func _test_occupant_carried() -> void:
+	var vehicle = VehicleScript.new()
+	vehicle.setup("ifv_a", null)
+	var player := PlayerUnit.new()
+	vehicle.enter(player)
+	_check("上车：坐进驾驶位", vehicle.seat_of(player), "driver")
+	_check_true("上车：人被藏起来 + 输入锁住", not player.visible and player.input_locked)
+	vehicle.global_position = Vector2(120.0, -40.0)
+	vehicle._process(0.016)
+	_check("乘员坐标跟着车走（相机 / 箭头 / 发烟器读的就是它）",
+			player.global_position, vehicle.global_position)
+	vehicle.switch_seat(player)
+	vehicle.global_position = Vector2(-8.0, 33.0)
+	vehicle._process(0.016)
+	_check("换到武器位后照样跟着走", player.global_position, vehicle.global_position)
+	vehicle.exit_vehicle()
+	_check_true("下车：人重新可见 + 输入解锁", player.visible and not player.input_locked)
+	_check("下车：人落在车旁 5 m（不是上车点）",
+			int(player.global_position.distance_to(vehicle.global_position)), 5)
+	vehicle.free()
+	player.free()
+
+
+## 敌人载具主炮的伤害出口：表值 × ENEMY_DAMAGE_SCALE × ENEMY_VEHICLE_DAMAGE_SCALE。
+## 期望值从常量派生 ⇒ 调试倍率是 0.0 还是 1.0 这条都通过（不会把调试态锁进测试里）。
+func _test_enemy_vehicle_damage() -> void:
+	var tank = VehicleScript.new()
+	tank.setup("mbt_t1", null)
+	tank.turret_facing = Vector2.RIGHT
+	var player := PlayerUnit.new()
+	player.position = Vector2(200.0, 0.0)     # 正对炮口、在射程内
+	player.hp = GameConfig.SOLDIER_HP
+	tank._player_ref = player
+	tank._ammo = 10
+	tank._fire_ai()
+	var table_damage := VehicleTableScript.number(tank.data, "gun_damage", 0.0)
+	# 注意血量下限：一发 400 打在 100 血的步兵身上，PlayerUnit.take_damage 会夹到 0（不会出现 -300），
+	# 所以期望值要取 min(伤害, 满血)。调试倍率是 0 时两者都是 0，这条依旧成立。
+	var expected := minf(table_damage * GameConfig.ENEMY_DAMAGE_SCALE \
+			* GameConfig.ENEMY_VEHICLE_DAMAGE_SCALE, GameConfig.SOLDIER_HP)
+	_check("主炮消耗 1 发（表里有弹药）", tank._ammo, 9)
+	_check_true("主炮伤害 = min(表值 %.0f × 两个开关, 满血 %.0f) = %.0f"
+			% [table_damage, GameConfig.SOLDIER_HP, expected],
+			is_equal_approx(GameConfig.SOLDIER_HP - player.hp, expected))
+	tank.free()
+	player.free()
 
 
 func _check(title: String, actual: Variant, expected: Variant) -> void:
@@ -142,3 +196,46 @@ func _test_ai_gate() -> void:
 	vehicle.ai_enabled = true
 	_check("AI：AI 车可自主开火", vehicle.can_fire(), true)
 	vehicle.free()
+
+
+## 开不了炮时必须说得出原因（2026-10-01 修：原来 can_fire() 为假就静默返回，
+## 玩家在报废车的武器位上按开火键完全没反馈，看起来就是「开火键坏了」）
+func _test_fire_block_reason() -> void:
+	var vehicle = _make_vehicle()
+	_check("原因：空车（没人操炮、也不是 AI 车）⇒ 说得出原因",
+			vehicle.fire_block_reason(), "没人操炮")
+
+	var player := PlayerUnit.new()
+	vehicle.enter(player)
+	vehicle.switch_seat(player)
+	_check("原因：武器位 + 有弹 ⇒ 无原因（能开）", vehicle.fire_block_reason(), "")
+
+	vehicle._fire_cooldown = 1.0
+	_check("原因：冷却中", vehicle.fire_block_reason(), "装填中")
+	vehicle._fire_cooldown = 0.0
+
+	var ammo_backup: int = vehicle.ammo()
+	vehicle._ammo = 0
+	_check("原因：没弹", vehicle.fire_block_reason(), "车载弹药耗尽")
+	_check("原因：没弹时 can_fire 为假", vehicle.can_fire(), false)
+	vehicle._ammo = ammo_backup
+
+	vehicle.take_hit(99999.0, 99999.0, Vector2.RIGHT)
+	_check("原因：报废", vehicle.fire_block_reason(), "载具已报废")
+	_check("报废：can_fire 为假", vehicle.can_fire(), false)
+	_check_true("报废：take_hit 会把乘员请下车", not vehicle.is_occupied())
+	vehicle.free()
+	player.free()
+
+
+## 报废车不许再上（2026-10-01 修）：否则玩家会坐上「永远打不出炮、也没有提示」的座位
+func _test_wreck_refuses_boarding() -> void:
+	var vehicle = _make_vehicle()
+	vehicle.take_hit(99999.0, 99999.0, Vector2.RIGHT)
+	_check_true("报废：destroyed 为真", vehicle.destroyed)
+	var player := PlayerUnit.new()
+	vehicle.enter(player)
+	_check("报废车：enter() 拒绝载人（驾驶位仍空）", vehicle.driver, null)
+	_check("报废车：整辆车没人占用", vehicle.is_occupied(), false)
+	vehicle.free()
+	player.free()

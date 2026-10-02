@@ -10,11 +10,13 @@ const LIFETIME := 0.25  # s，可见时长
 var _elapsed := 0.0
 
 
-func setup(origin: Vector2, direction: Vector2, distance: float) -> void:
+## color 可选：机炮 / 步枪用默认曳光色，反坦克导弹给一个更暖的红（一眼分得出弹种）
+func setup(origin: Vector2, direction: Vector2, distance: float,
+		color: Color = Color(1.0, 0.85, 0.35, 0.95)) -> void:
 	var end := origin + direction * maxf(distance, 0.0)
 	points = PackedVector2Array([origin, end])
 	width = 0.3  # m，zoom16 下约 5px
-	default_color = Color(1.0, 0.85, 0.35, 0.95)
+	default_color = color
 
 
 func _process(delta: float) -> void:

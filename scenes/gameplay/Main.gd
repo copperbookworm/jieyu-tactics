@@ -1,23 +1,32 @@
 extends Node2D
 
-## 间瞄模块用 preload（这两个文件刻意不写 class_name，避免「新类未进全局类缓存」那套问题）
-const IndirectFireScript := preload("res://systems/combat/IndirectFire.gd")
-const IndirectOverlayScript := preload("res://ui/IndirectOverlay.gd")
+## 间瞄链模块用 preload（刻意不写 class_name，避免「新类未进全局类缓存」那套问题）
+const IndirectControllerScript := preload("res://scenes/gameplay/IndirectController.gd")
 ## 2026-09-30 候选 N：按职责拆出的四个 Node 子模块（同样不写 class_name，统一 preload 引用）
 const WorldSetupScript := preload("res://scenes/gameplay/WorldSetup.gd")
 const VehicleControllerScript := preload("res://scenes/gameplay/VehicleController.gd")
 const MarkControllerScript := preload("res://systems/marks/MarkController.gd")
 const HudBuilderScript := preload("res://ui/HudBuilder.gd")
+## 2026-10-01 候选 L3：补给护送控制器（任务系统发出 T-S5 时派车）
+const SupplyControllerScript := preload("res://scenes/gameplay/SupplyController.gd")
+## 2026-10-01 候选 L4：侧翼通路控制器（任务系统发出 T-S6 时派穿插兵）
+const LaneControllerScript := preload("res://scenes/gameplay/LaneController.gd")
+## 2026-10-01 候选 P：烟雾控制器（按烟雾键派发烟雾弹 / 载具发烟器）
+const SmokeControllerScript := preload("res://scenes/gameplay/SmokeController.gd")
+## 数据表健康自检（2026-10-01）：三张 .txt 表不在导出包里时，降级全是静默的 —— 见 BootCheck.gd
+const BootCheckScript := preload("res://scenes/gameplay/BootCheck.gd")
 
 ## 第一版主场景装配（挂在 Main.tscn 的根节点上）
 ## 地形、玩家、相机、敌人、HUD 全部在 _ready 里用代码创建——
 ## 场景文件只需要一个空 Node2D + 本脚本，避免手改 .tscn
 ##
 ## 【候选 N · 职责拆分（2026-09-30）】本文件从 968 行瘦到 400 行以内，只剩四件事：
-##   ① 配置：@export 开关 ② 装配：new 出各系统与四个子模块 ③ 信号接线：全在 _wire_signals()
-##   ④ 战局流程：分数 / 任务结算 / 占领胜负 / 间瞄 / 输入
+##   ① 配置：@export 开关 ② 装配：new 出各系统与六个子模块 ③ 信号接线：全在 _wire_signals()
+##   ④ 战局流程：分数 / 任务结算 / 占领胜负 / 输入
 ## 分工：世界建场 → WorldSetup ｜ HUD 构建与刷新 → HudBuilder
 ##       载具（上下车·换座·操炮·开火）→ VehicleController ｜ 报点标记链 → MarkController
+##       补给护送（派车 + 抵达回告）→ SupplyController ｜ 侧翼通路（派穿插兵 + 穿线判定）→ LaneController
+##       间瞄链（选点 / 发射 / 落弹）→ IndirectController
 ## 拆分时的字段改名（模块要读，所以从私有变公开）：_score → score、
 ##   _capture_zones → capture_zones、_terrain_sprite.texture → terrain_texture、_indirect → indirect
 ## 子模块一律用鸭子类型拿本节点（Main 没有 class_name），所以这里的字段就是模块的接口。
@@ -43,19 +52,22 @@ var terrain_texture: Texture2D = null
 ## 占领节点（HudBuilder 刷 HUD、TacticalMap / QuestSystem 都要读）
 var capture_zones: Array = []
 
-## 四个子模块（各自持有本节点引用）
+## 五个子模块（各自持有本节点引用）
 var world = null            # WorldSetup
 var vehicles = null         # VehicleController
 var mark_ctl = null         # MarkController
 var hud = null              # HudBuilder
+var supply_ctl = null       # SupplyController（候选 L3）
+var lane_ctl = null         # LaneController（候选 L4）
+var smoke_ctl = null        # SmokeController（候选 P）
 
 ## 各系统
 var quests: QuestSystem = null
 var marks: MarkSystem = null
-var indirect = null         # IndirectFire（preload 脚本实例，动态类型：不标类型才不会卡未知成员）
+var indirect = null         # IndirectFire（由 IndirectController 建好后写回；HUD / 小地图读它的余弹）
+var indirect_ctl = null     # IndirectController（候选 L4 前从 Main 拆出）
 
 var score := 0              # 战力分（HUD 由 HudBuilder 显示）
-var _indirect_overlay = null
 var _victory := false
 var _defeat := false
 
@@ -84,30 +96,58 @@ func _ready() -> void:
 	mark_overlay.name = "MarkOverlay"
 	mark_overlay.setup(marks)
 	add_child(mark_overlay)
-	# 间瞄火力（docx 7.4 / 4.11.3）：先于 HUD 创建（HUD 标签要读它的弹药数）
-	indirect = IndirectFireScript.new()
-	indirect.name = "IndirectFire"
-	add_child(indirect)
-	indirect.setup(player, sight)
-	indirect.shell_landed.connect(_on_indirect_landed)
-	_indirect_overlay = IndirectOverlayScript.new()
-	_indirect_overlay.name = "IndirectOverlay"
-	_indirect_overlay.setup(indirect)
-	add_child(_indirect_overlay)
-	# HUD（含战术地图图层 / 小地图 / 任务卡片 / 报点轮盘）
-	hud = HudBuilderScript.new()
-	hud.name = "HudBuilder"
-	add_child(hud)
-	hud.setup(self, terrain_texture)
-	_wire_signals()
-	# 任务系统（docx 4.10）：第一版只做主线「占领节点」，开局即下发第一个
+	# 间瞄链（候选 L4 前从 Main 拆出）：IndirectFire + 落点预警层 + 选点 / 发射 / 落弹提示
+	# 必须先于 HUD 创建（HUD 标签与小地图要读 indirect 的余弹）
+	indirect_ctl = IndirectControllerScript.new()
+	indirect_ctl.name = "IndirectController"
+	add_child(indirect_ctl)
+	indirect_ctl.setup(self, player, sight)
+	# 任务系统（docx 4.10）：必须先于 HUD 建好——战术地图的「主线任务高亮」要读它
+	# （原来建在 HUD 之后，TacticalMap 拿到的是 null，高亮从来没生效过；2026-09-30 修）
 	quests = QuestSystem.new()
 	quests.name = "QuestSystem"
 	add_child(quests)
 	quests.quest_list_changed.connect(_on_quest_list_changed)
 	quests.quest_completed.connect(_on_quest_completed)
 	quests.quest_failed.connect(_on_quest_failed)
+	# 补给护送（候选 L3，docx 4.10.11 T-S5）：任务系统发出护送任务时派车，车抵达后回告任务系统
+	# 必须在 quests.start() 之前建好，才接得住「开局就发」的那次列表广播
+	supply_ctl = SupplyControllerScript.new()
+	supply_ctl.name = "SupplyController"
+	add_child(supply_ctl)
+	supply_ctl.setup(self)
+	# 侧翼通路（候选 L4，docx 4.10.11 T-S6）：任务系统发出「守住侧翼通路」时在通路入口派穿插兵
+	lane_ctl = LaneControllerScript.new()
+	lane_ctl.name = "LaneController"
+	add_child(lane_ctl)
+	lane_ctl.setup(self)
+	# 烟雾（候选 P，docx 4.12）：按烟雾键投烟雾弹 / 放载具发烟器；配额与流程都在模块里
+	smoke_ctl = SmokeControllerScript.new()
+	smoke_ctl.name = "SmokeController"
+	add_child(smoke_ctl)
+	smoke_ctl.setup(self)
+	# HUD（含战术地图图层 / 小地图 / 任务卡片 / 报点轮盘）
+	hud = HudBuilderScript.new()
+	hud.name = "HudBuilder"
+	add_child(hud)
+	hud.setup(self, terrain_texture)
+	_check_data_tables()
+	_wire_signals()
+	# 开局下发任务（此时 HUD 与任务卡片已就绪，任务列表信号能直接刷到卡片上）
 	quests.start(capture_zones, marks, player_role)
+
+
+## 启动自检：三张数据表是 .txt，**不是 Godot 资源**（刻意如此：.csv 会被当翻译表导入），
+## 导出时必须在 export_presets.cfg 的 include_filter 里，否则包里读不到而三条降级全是静默的：
+## 载具 hp/弹药归零（车显示 0/0、炮永远打不出来）、武器退回 GameConfig 默认值、任务没有模板。
+## 2026-10-01 真机「上车换座后开不了炮」就是这个。判定与文案都在 BootCheck.gd。
+func _check_data_tables() -> void:
+	var missing := BootCheckScript.missing_tables()
+	if missing.is_empty():
+		return
+	push_error(BootCheckScript.missing_error(missing))
+	if hud != null:
+		hud.show_hint(BootCheckScript.missing_hint(missing), 8.0)
 
 
 ## 信号接线表：控件、战术地图、事件总线、玩家的回调全部集中在这一处，便于以后查「谁接了谁」
@@ -116,17 +156,20 @@ func _wire_signals() -> void:
 	hud.fire_button.fired.connect(_on_fire)
 	hud.focus_button.focus_changed.connect(hud.apply_focus)
 	hud.mark_wheel.mark_requested.connect(mark_ctl.place_at_crosshair)
+	hud.command_wheel.command_requested.connect(mark_ctl.send_command)   # 4.13 快捷指令
 	hud.map_button.pressed.connect(hud.toggle_map)   # 地图开合归 HUD（含玩家输入冻结）
 	hud.role_button.pressed.connect(_cycle_role)
 	hud.posture_button.pressed.connect(_cycle_posture)
-	hud.indirect_button.pressed.connect(_request_indirect)
+	hud.indirect_button.pressed.connect(indirect_ctl.request_targeting)
+	hud.smoke_button.pressed.connect(smoke_ctl.deploy)
 	hud.weapon_button.pressed.connect(_switch_weapon)
 	hud.vehicle_button.pressed.connect(vehicles.toggle)
 	hud.seat_button.pressed.connect(vehicles.switch_seat)
+	hud.ammo_type_button.pressed.connect(vehicles.switch_ammo)   # 弹种：主炮 ⇄ 反坦克导弹
 	# 战术地图
 	hud.tactical_map.mark_placed.connect(mark_ctl.place_at)
 	hud.tactical_map.closed.connect(hud.close_map)
-	hud.tactical_map.indirect_target_selected.connect(_on_indirect_target)
+	hud.tactical_map.indirect_target_selected.connect(indirect_ctl.on_map_target)
 	# 事件总线 / 玩家
 	EventBus.enemy_killed.connect(_on_enemy_killed)
 	EventBus.flag_state_changed.connect(_on_flag_state_changed)
@@ -153,15 +196,20 @@ func _on_reload_finished() -> void:
 
 func _on_fire() -> void:
 	if player == null or grid == null or camera_controller == null:
+		# 只在「按了开火键却什么都没发生」时打印，方便真机用 logcat 定位是哪一段拦下的
+		print("[开火] 未执行：装配没就绪（player=%s grid=%s camera_controller=%s）" % [
+				str(player != null), str(grid != null), str(camera_controller != null)])
 		return
 	# 开图期间不能开火（docx 4.11.7 ①）
 	if hud != null and hud.is_map_open():
+		print("[开火] 未执行：战术地图开着")
 		return
 	# 人在载具里：步兵的枪收起来；只有武器位能开炮（8.1 座位分工）
 	if vehicles.vehicle != null and vehicles.vehicle.is_occupied():
 		if vehicles.is_gunner(player):
 			vehicles.fire()
 		else:
+			print("[开火] 载具分支：坐在驾驶位，不出炮")
 			hud.show_hint("驾驶位不能开炮——先按「换座」到武器位")
 		return
 	var direction := camera_controller.crosshair_world - player.global_position
@@ -170,7 +218,11 @@ func _on_fire() -> void:
 	else:
 		direction = direction.normalized()
 	var enemies := get_tree().get_nodes_in_group("enemy")
-	var result := player.shoot(direction, enemies)
+	# 候选 L2：敌方 FOB（工事）也在可打目标里——它自带 3 m 命中半径（BallisticsSystem 按 hit_radius() 取）。
+	# 压制列表仍然只用 enemy 组（压制是打步兵的手感机制，不该被工事带偏）
+	var targets: Array = enemies.duplicate()
+	targets.append_array(get_tree().get_nodes_in_group("fob_enemy"))
+	var result := player.shoot(direction, targets)
 	# 被射速冷却 / 换弹拦下时什么都不做：触屏会把一次点按变成 touch + 模拟鼠标两次调用，
 	# 第二次本来就该被拦（原来是继续打印 0.0 m 并画一条零长曳光，纯噪音）
 	if not result.get("fired", false):
@@ -181,14 +233,18 @@ func _on_fire() -> void:
 		# 子弹打在掩体上：扣掩体耐久（打光就破，之后不再挡通视与子弹）
 		var cover = result.get("cover")
 		if cover != null and cover.has_method("take_damage"):
-			cover.take_damage(_damage_at(result["distance"])
+			cover.take_damage(player.damage_at(result["distance"])
 					* RoleTable.damage_scale(player_role))
 	elif result["hit"]:
 		var enemy := result["target"] as Enemy
 		if enemy != null:
 			# 先记压制再结算伤害：被打死时 alive=false，add_suppression 会直接返回（2026-09-28 修）
 			enemy.add_suppression(GameConfig.SUPPRESSION_HIT_BONUS)
-			enemy.take_damage(_damage_at(result["distance"])
+			enemy.take_damage(player.damage_at(result["distance"])
+					* RoleTable.damage_scale(player_role))
+		elif result["target"] != null and result["target"].has_method("take_damage"):
+			# 不是步兵就是工事（FOB）：照样按武器伤害 × 兵种倍率扣
+			result["target"].take_damage(player.damage_at(result["distance"])
 					* RoleTable.damage_scale(player_role))
 	_suppress_enemies(enemies, direction)
 
@@ -206,22 +262,6 @@ func _suppress_enemies(enemies: Array, direction: Vector2) -> void:
 		if factor <= 0.0:
 			continue
 		enemy.add_suppression(SuppressionSystem.per_shot_amount(factor))
-
-
-## 伤害随距离线性衰减（7.2 / 武器表：起点内满伤，终点外最低伤）
-func _damage_at(distance: float) -> float:
-	if player == null:
-		return 0.0
-	var base := player.weapon_field("dmg_base", GameConfig.WEAPON_DAMAGE_BASE)
-	var lowest := player.weapon_field("dmg_min", GameConfig.WEAPON_DAMAGE_MIN)
-	var start := player.weapon_field("falloff_start", GameConfig.WEAPON_DAMAGE_FALLOFF_START)
-	var end := player.weapon_field("falloff_end", GameConfig.WEAPON_DAMAGE_FALLOFF_END)
-	if distance <= start:
-		return base
-	if distance >= end:
-		return lowest
-	var t := (distance - start) / maxf(end - start, 0.001)
-	return lerpf(base, lowest, t)
 
 
 ## 画一条曳光（步兵与载具共用；敌方载具开炮也接在这里）
@@ -282,39 +322,6 @@ func _switch_weapon() -> void:
 		return
 	player.switch_weapon()
 	hud.show_hint("换枪中：%.2f s" % player.weapon_switch_time())
-
-
-## 间瞄：开图 + 切到选点模式（docx 4.11.3）；落点由 TacticalMap 的信号回来
-func _request_indirect() -> void:
-	if hud.tactical_map == null or indirect == null:
-		return
-	if not hud.tactical_map.is_open():
-		hud.toggle_map()
-	hud.tactical_map.indirect_mode = true
-	hud.show_hint("间瞄选点：在地图上点落点（剩余 %d 发）" % indirect.ammo)
-
-
-## 地图选了落点 → 请求打一发
-func _on_indirect_target(target: Vector2) -> void:
-	if indirect == null:
-		return
-	if indirect.fire_at(target):
-		hud.show_hint("间瞄已发射（剩余 %d 发）" % indirect.ammo)
-		return
-	if indirect.ammo <= 0:
-		hud.show_hint("间瞄弹药耗尽")
-	elif indirect.cooldown_left() > 0.0:
-		hud.show_hint("间瞄冷却中：%.1f s" % indirect.cooldown_left())
-	else:
-		hud.show_hint("落点超出间瞄射程（%.0f~%.0f m）"
-				% [GameConfig.INDIRECT_MIN_RANGE, GameConfig.INDIRECT_MAX_RANGE])
-
-
-## 落弹：预警圈闪一下 + 提示
-func _on_indirect_landed(target: Vector2) -> void:
-	if _indirect_overlay != null:
-		_indirect_overlay.flash_at(target)
-	hud.show_hint("间瞄命中")
 
 
 func _on_flag_state_changed(_zone_name, _state) -> void:

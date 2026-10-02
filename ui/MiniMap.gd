@@ -4,6 +4,11 @@ extends Node2D
 ## 小地图（CS:GO 风格角落缩略图）：地形缩略 + 节点 + 玩家位置
 ## 挂在 HUD CanvasLayer 下（屏幕坐标）；世界 1000 m 映射到 150 px
 ## 节点圆点颜色随占领状态：灰=未占、白=争夺中、蓝=已占；黄点=玩家
+##
+## 【2026-10-01 ④】补世界目标图层：己方补给车 / 侧翼通路 / 敌方 FOB（暴露后）。
+## 取数统一走 MapLayerSource（与战术地图同一份口径，别在两张图上各写一套）。
+
+const MapLayerSourceScript := preload("res://ui/MapLayerSource.gd")
 
 const MINI_SIZE := 150.0
 const MAP_SIZE := 1000.0
@@ -13,14 +18,16 @@ var _player: Node2D = null
 var _zones: Array = []
 var _marks: MarkSystem = null
 var _indirect = null   # IndirectFire（动态类型：该模块刻意无 class_name，见其文件头）
+var _main = null       # Main（鸭子类型）：世界目标图层从这里取
 
 
 func setup(terrain_texture: ImageTexture, player: Node2D, zones: Array,
-		marks: MarkSystem = null) -> void:
+		marks: MarkSystem = null, main_node = null) -> void:
 	_terrain_texture = terrain_texture
 	_player = player
 	_zones = zones
 	_marks = marks
+	_main = main_node
 
 
 ## 间瞄落点也要在小地图上看得见——否则选了远处的点，玩家完全没有反馈
@@ -81,5 +88,38 @@ func _draw() -> void:
 			var life := clampf(float(mark["time_left"]) / total, 0.0, 1.0)
 			color.a = 0.4 + 0.6 * life
 			draw_circle(mark_position * scale_factor, 4.0, color)
+	_draw_world_layer(scale_factor)
 	draw_rect(Rect2(Vector2.ZERO, Vector2(MINI_SIZE, MINI_SIZE)),
 			Color(1.0, 1.0, 1.0, 0.5), false, 2.0)
+
+
+## 世界目标图层（2026-10-01 ④）：侧翼通路（地形要素，常显）→ 补给车（己方全显）→ 敌方 FOB（暴露后）
+## 画在标记层之上：报点是「情报」，这些是「已知实体」，压在上面更醒目
+func _draw_world_layer(scale_factor: float) -> void:
+	if _main == null:
+		return
+	var lane = MapLayerSourceScript.lane(_main)
+	if lane != null:
+		var lane_color := Color(0.95, 0.75, 0.30, 0.9) if lane.active \
+				else Color(0.75, 0.70, 0.45, 0.4)
+		var corners := MapLayerSourceScript.lane_edges(lane.entry_position,
+				lane.exit_position, lane.half_width)
+		if corners.size() == 4:
+			draw_line(corners[0] * scale_factor, corners[2] * scale_factor, lane_color, 2.0)
+			draw_line(corners[1] * scale_factor, corners[3] * scale_factor, lane_color, 2.0)
+	var convoy = MapLayerSourceScript.convoy(_main)
+	if convoy != null:
+		var from: Vector2 = convoy.global_position
+		draw_line(from * scale_factor, convoy.target_position * scale_factor,
+				Color(0.55, 0.85, 0.55, 0.45), 1.0)
+		var box := Rect2(from * scale_factor - Vector2(3.0, 3.0), Vector2(6.0, 6.0))
+		draw_rect(box, Color(0.45, 0.90, 0.55, 0.95))
+		draw_rect(box, Color(0.9, 1.0, 0.9, 0.9), false, 1.0)
+	for fob in MapLayerSourceScript.visible_fobs(get_tree()):
+		var fob_pos: Vector2 = fob.global_position * scale_factor
+		var fob_box := Rect2(fob_pos - Vector2(4.0, 3.0), Vector2(8.0, 6.0))
+		if bool(fob.destroyed):
+			draw_rect(fob_box, Color(0.45, 0.40, 0.36, 0.7))
+		else:
+			draw_rect(fob_box, Color(0.90, 0.28, 0.24, 0.95))
+			draw_rect(fob_box, Color(1.0, 0.92, 0.82, 0.95), false, 1.0)

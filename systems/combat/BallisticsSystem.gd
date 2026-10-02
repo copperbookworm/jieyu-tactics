@@ -70,7 +70,11 @@ static func resolve_shot(origin: Vector2, direction: Vector2, max_range: float,
 		var enemy_node := enemy as Node2D
 		if enemy_node == null or enemy_node.is_queued_for_deletion():
 			continue
-		var t := _ray_hit_circle(origin, dir, enemy_node.global_position, hit_radius)
+		# 大目标自带命中半径（载具 / FOB 都有 hit_radius()）；没有该方法的（步兵）用调用方给的半径
+		var radius := hit_radius
+		if enemy_node.has_method("hit_radius"):
+			radius = float(enemy_node.hit_radius())
+		var t := _ray_hit_circle(origin, dir, enemy_node.global_position, radius)
 		if t >= 0.0 and t <= best_distance:
 			best_distance = t
 			best = enemy_node

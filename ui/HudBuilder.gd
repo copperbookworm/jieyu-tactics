@@ -9,6 +9,7 @@ extends Node
 ##   setup(main, terrain_texture)  建 HUD（必须在地形/玩家/标记/间瞄之后调用）
 ##   tick(delta)                   每帧：血量 + 准心 + 占领/兵种标签（0.25 s 节流）+ 提示超时
 ##   show_hint(text)               左下/底部提示行（原来叫 Main._show_mark_hint，各模块共用）
+##   push_feed(kind, text, color)  战斗播报（4.14）；tick 里驱动播报与操作提示（4.15）
 ##   update_ammo / mark_reloading / update_score / update_capture / update_role
 ##   apply_focus(on)               聚焦开关（准心收窄 + 暗角 + 玩家散布收紧）
 ##   toggle_map / close_map / is_map_open     战术地图开合（含开图期间的玩家输入冻结）
@@ -19,6 +20,13 @@ extends Node
 
 ## HUD 程序生成贴图（准心箭头 / 聚焦暗角）：2026-09-29 从 Main.gd 拆出，Main 因此回到 1000 行以内
 const HudTextureFactory := preload("res://ui/HudTextureFactory.gd")
+## 候选 O 第一轮：战斗播报（4.14）+ 操作提示（4.15）两个 HUD 面板
+const CombatFeedPanelScript := preload("res://ui/CombatFeedPanel.gd")
+const TipPanelScript := preload("res://ui/TipPanel.gd")
+## 候选 O 第二轮：快捷指令轮盘（4.13）
+const CommandWheelScript := preload("res://ui/CommandWheel.gd")
+## 候选 O 第三轮：被击倒时的全屏视角（4.16）
+const DownedOverlayScript := preload("res://ui/DownedOverlay.gd")
 
 var main = null                 # Main（不标类型：Main 无 class_name，用鸭子类型）
 var layer: CanvasLayer = null
@@ -29,6 +37,7 @@ var score_label: Label = null
 var capture_hud: Label = null
 var quest_card: QuestCard = null
 var mark_wheel: MarkWheel = null
+var command_wheel = null
 var mark_hint: Label = null
 var role_label: Label = null
 var hp_label: Label = null
@@ -39,14 +48,23 @@ var map_button: Button = null
 var role_button: Button = null
 var posture_button: Button = null
 var indirect_button: Button = null
+## 烟雾（候选 P，docx 4.12）：步兵投烟雾弹 / 在载具里放发烟器
+var smoke_button: Button = null
 var weapon_button: Button = null
 var vehicle_button: Button = null
 var seat_button: Button = null
+## 弹种键（ATGM 落地后加的）：武器位一键切「主炮 ⇄ 反坦克导弹」
+var ammo_type_button: Button = null
 var fire_button: FireButton = null
 var focus_button: FocusButton = null
 var joystick: TouchJoystick = null
 var tactical_map: TacticalMap = null
 var mini_map: MiniMap = null
+## 候选 O 第一轮：战斗播报（4.14）与操作提示（4.15），纯展示、不参与交互
+var feed = null
+var tips = null
+## 候选 O 第三轮：被击倒时的全屏视角（4.16）
+var downed_overlay = null
 
 var _hint_timer := 0.0
 var _focusing := false
@@ -122,11 +140,27 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	mark_wheel.name = "MarkWheel"
 	layer.add_child(mark_wheel)
 
+	# 指令键（docx 4.13 快捷指令轮盘）：左侧第三列的空位；展开只走左半圈（与报点轮盘同一套几何）
+	command_wheel = CommandWheelScript.new()
+	command_wheel.name = "CommandWheel"
+	layer.add_child(command_wheel)
+
 	mark_hint = Label.new()
 	mark_hint.name = "MarkHint"
 	mark_hint.position = Vector2(GameConfig.VIEWPORT_WIDTH * 0.5 - 120.0,
 			GameConfig.VIEWPORT_HEIGHT - 56.0)
 	layer.add_child(mark_hint)
+
+	# 对局内战斗播报（docx 4.14）与操作提示（docx 4.15）：候选 O 第一轮
+	feed = CombatFeedPanelScript.new()
+	feed.name = "CombatFeed"
+	layer.add_child(feed)
+	feed.setup(main)
+
+	tips = TipPanelScript.new()
+	tips.name = "TipPanel"
+	layer.add_child(tips)
+	tips.setup(main)
 
 	# 战术地图：M 键或这个按钮开图；单独一层盖在 HUD 之上（docx 4.11.3）
 	map_button = Button.new()
@@ -135,7 +169,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	map_button.size = Vector2(80.0, 44.0)
 	map_button.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 30.0)
 
-	# 左侧功能键排成两列（列1 x=16 / 列2 x=104，行 y=140/186/232）：
+	# 左侧功能键排成两列（列1 x=16 / 列2 x=104，行 y=140/186/232）＋第三列的单颗（烟雾 x=192,y=232）：
 	# 底界 272，给左下角摇杆（圆心 100,440、半径 90、触摸判定 144）留出空间不受遮挡
 	# 兵种按钮放左侧（右侧已被小地图/分数/地图按钮占满），点一下循环切兵种
 	role_button = Button.new()
@@ -167,6 +201,16 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	indirect_button.position = Vector2(16.0, 232.0)
 	layer.add_child(indirect_button)
 
+	# 烟雾（候选 P，docx 4.12）：步兵按下＝朝准心投一发烟雾弹；人在车里按下＝载具发烟器。
+	# 放左侧第三列（x=192）的 y=232 行：右侧那一列被小地图 / 血量 / 地图键 / 报点轮盘占满，
+	# 且报点轮盘展开半径 108 px，塞在它附近会被轮盘项抢触摸。本位置离摇杆触摸圈（r=144）227 px，安全。
+	smoke_button = Button.new()
+	smoke_button.name = "SmokeButton"
+	smoke_button.text = "烟雾"
+	smoke_button.size = Vector2(80.0, 40.0)
+	smoke_button.position = Vector2(192.0, 232.0)
+	layer.add_child(smoke_button)
+
 	# 换枪按钮（C3：切枪 1.04 s，期间不能开火）
 	weapon_button = Button.new()
 	weapon_button.name = "WeaponButton"
@@ -190,6 +234,14 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	seat_button.size = Vector2(80.0, 40.0)
 	seat_button.position = Vector2(104.0, 232.0)
 	layer.add_child(seat_button)
+
+	# 弹种键：左侧第三列唯一剩下的空位 (192,140)。非载具状态下按它只会得到一句提示。
+	ammo_type_button = Button.new()
+	ammo_type_button.name = "AmmoTypeButton"
+	ammo_type_button.text = "弹种"
+	ammo_type_button.size = Vector2(80.0, 40.0)
+	ammo_type_button.position = Vector2(192.0, 140.0)
+	layer.add_child(ammo_type_button)
 	layer.add_child(map_button)
 
 	var map_layer := CanvasLayer.new()
@@ -200,7 +252,13 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	tactical_map.name = "TacticalMap"
 	map_layer.add_child(tactical_map)
 	tactical_map.setup(main.grid, main.player, main.capture_zones, main.marks, main.quests,
-			terrain_texture)
+			terrain_texture, main)
+
+	# 4.16 被击倒时的视角：全屏去色灰罩 + 暗角 + 倒计时。放最后（盖住其它控件），但不吃触摸
+	downed_overlay = DownedOverlayScript.new()
+	downed_overlay.name = "DownedOverlay"
+	layer.add_child(downed_overlay)
+	downed_overlay.setup(main)
 
 	victory_label = Label.new()
 	victory_label.name = "Victory"
@@ -213,7 +271,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	mini_map = MiniMap.new()
 	mini_map.name = "MiniMap"
 	layer.add_child(mini_map)
-	mini_map.setup(terrain_texture, main.player, main.capture_zones, main.marks)
+	mini_map.setup(terrain_texture, main.player, main.capture_zones, main.marks, main)
 	mini_map.set_indirect(main.indirect)
 
 	hp_label = Label.new()
@@ -256,14 +314,35 @@ func tick(delta: float) -> void:
 		_hint_timer = maxf(_hint_timer - delta, 0.0)
 		if _hint_timer <= 0.0 and mark_hint != null:
 			mark_hint.text = ""
+	# 候选 O：播报倒计时（4.14）与操作提示（4.15）
+	if feed != null:
+		feed.tick(delta)
+	if tips != null:
+		tips.tick(delta)
+	# 候选 O 第三轮：倒地视角（4.16）
+	if downed_overlay != null:
+		downed_overlay.tick(delta)
 
 
 ## 提示行：所有模块共用（原来叫 Main._show_mark_hint）
-func show_hint(text: String) -> void:
+## seconds：默认 1.6 s（既有观感）；启动自检这类「必须让人看见」的提示可以给长一点
+func show_hint(text: String, seconds: float = 1.6) -> void:
 	if mark_hint == null:
 		return
 	mark_hint.text = text
-	_hint_timer = 1.6
+	_hint_timer = seconds
+
+
+## 战斗播报入口（docx 4.14）：各模块往 HUD 播报里塞一条（与 show_hint 同一套用法）
+func push_feed(kind: String, text: String, color: Color = Color.WHITE) -> void:
+	if feed != null:
+		feed.push(kind, text, color)
+
+
+## 操作提示总开关（docx 4.15「可在设置关闭」；设置界面后置，先给 API）
+func set_tips_enabled(value: bool) -> void:
+	if tips != null:
+		tips.set_enabled(value)
 
 
 # 刷新弹药 HUD。
@@ -320,10 +399,17 @@ func update_role() -> void:
 		return
 	var vehicle = main.vehicles.vehicle if main.vehicles != null else null
 	if vehicle != null and vehicle.is_occupied():
+		# 载具数据没读到（导出包里少了 data/vehicles_data.txt 就是这样）时别只显示 0/0 ——
+		# 2026-10-01 真机上「车体 0/0 ｜ 余弹 0」被当成「正常车但开不了炮」，绕了一大圈才定位。
+		if vehicle.data.is_empty():
+			role_label.text = "⚠ 载具数据缺失：data/vehicles_data.txt 没读到（导出包要在 include_filter 里带上 data/*.txt）"
+			return
 		var seat_text := "武器位" if vehicle.seat_of(main.player) == "gunner" else "驾驶位"
-		role_label.text = "%s（%s）｜ 余弹 %d ｜ 车体 %.0f/%.0f ｜ 首上等效 %.0f mm" % [
-			vehicle.vehicle_name(), seat_text, vehicle.ammo(), vehicle.hp, vehicle.max_hp,
-			vehicle.armor_summary("front")]
+		# 弹种（武器位一键切）：主炮 ⇄ 反坦克导弹；余弹显示的是**当前弹种**的可用数
+		role_label.text = "%s（%s）｜ 弹种 %s %d/%d ｜ 车体 %.0f/%.0f ｜ 首上等效 %.0f mm" % [
+			vehicle.vehicle_name(), seat_text, vehicle.ammo_type_name(),
+			vehicle.selected_ammo(), vehicle.selected_total(),
+			vehicle.hp, vehicle.max_hp, vehicle.armor_summary("front")]
 		return
 	role_label.text = "%s ｜ %s ｜ 标记 %.0f s\n%s%s ｜ 连发 %d 发 ｜ 散布 ×%.2f ｜ 间瞄 %d 发" % [
 		RoleTable.role_name(main.player_role), main.player.weapon_name(),
@@ -368,6 +454,8 @@ func update_crosshair() -> void:
 			aim = vehicle.hull_facing
 	if aim.length_squared() <= 0.000001:
 		return
+	# 12.7.1：上半身随准星方向 —— HUD 每帧已经算好这个方向，顺势推给角色图（Main 不必插一行）
+	main.player.set_aim_direction(aim)
 	# 压制只晃「视觉」：真实射击方向仍取准心世界坐标，抖动不参与弹道
 	# （docx 已判定抖准心＝抖镜头为负收益，所以幅度刻意做小且只在表现层）
 	var jitter := 0.0

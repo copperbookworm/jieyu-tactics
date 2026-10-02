@@ -1,0 +1,591 @@
+《解域》jieyu-1 开发进度
+========================
+最后更新：2026-09-30 ｜ git HEAD：1a111c0（本机工作区没有 .git，无法核对/回退；改动一律以本文件为准）
+本次更新：补记「知识库与协作资产入库」——docs/kb 知识库（1460 个文件，kb_search / kb_read / kb_list 可查）、
+	  docs/notes.md、AGENTS.md 首次登记进本文件；复测受限沙箱仍只放开工作区根目录；
+	  上一轮为「第二十版 · 候选 N 完成」（Main.gd 968 → 391 行 + 集成冒烟 38 项全绿）
+
+【用法约定】做本项目前先读本文件，再动手；做完一件事后回来更新「二、已完成」与「四/五、接下来」两节。
+		   本文件是 jieyu-1 的唯一进度入口，不凭记忆判断进度。
+		   改完代码必须跑一遍测试：godot --headless --path . --script res://tools/run_tests_headless.gd
+		   拆了装配/交互之后再加跑集成冒烟：--script res://tools/run_integration_headless.gd
+		   （受限沙箱里两条都要加 --log-file <工作区内可写路径>，否则 Godot 写不了 user:// 日志会直接崩）
+		   引擎行为 / API 别靠记忆猜：先 kb_search 定位，再 kb_read 读全文（MCP agent-tools，检索根 = docs/kb）；
+		   知识库结构与来历见二节末尾「补记 · 2026-09-30」。
+		   工作区根的 AGENTS.md 是给 AI 干活的规则（测试命令 / preload 约定 / 数行口径 / 环境坑），不冲突时照着做。
+项目：主工作副本 = D:\Godot4.7_Proj\jieyu-1（Windows，DSH 这台机；没有 .git）
+	  历史副本 = /storage/emulated/0/Documents/Godot4.7Proj/[JIEYU]/jieyu-1（Android 侧，2026-09-29 之前的工作地）
+依据文档：[JIEYU]/squad-2d/解域游戏.docx
+
+一、项目定位
+《解域》第一版垂直切片。目标：跑通「出生 → 移动 → 遇敌交火 → 占点 → 胜负」的完整循环。
+文档口径来源：7.2 武器数据 / 7.4.2 弹道 / 4.2 白旗点 / 4.7 通视 / 12.2 高程 / 第十八章直瞄射程口径。
+
+二、已完成
+
+【第一版 · 垂直切片闭环】
+· S1 地形层：1 m 高程网格 HeightGrid + DDA 逐格通视 SightSystem
+· S2 玩家与相机：摇杆移动 + 准心 = 屏心 = 相机中心 AimCameraController
+· S3 触屏摇杆 TouchJoystick
+· S4 射击层：BallisticsSystem + 曳光 Tracer + 开火键 FireButton + 击杀计分
+· S5 占领层：CaptureZone 状态机 + 3 节点全占即胜 + 胜利结算 + 点按重开
+· 收尾：小地图 MiniMap + 开发箭头 DebugEnemyArrow + 项目设置（横屏 960×540）
+
+【第二版】
+· P1 敌人与生死：敌人 AI 状态机（巡逻→发现→交火还击）+ 玩家血量/死亡 + 失败结算
+· P2 占领深化：净进度模型（-1..1 蓝/红对冲）+ 敌人占领行为 + 敌方全占即败 + HUD 三态
+
+【射击系统补全（对齐 7.2）】
+· 武器数据 QBZ-191：62/35 伤害、60~300 m 衰减、750 RPM、30 发、换弹 4.28/4.85 s、MOA 3
+· 弹药与射速：弹匣/备弹、射速冷却、换弹状态机（战术/空仓）、打空自动换弹
+· 散布 MOA 3；伤害衰减（60 m 内 62 → 300 m 外 35，替换原一击必杀）
+· HUD 显示弹药/换弹状态；R 键换弹
+
+【真机暴露的缺陷修复】
+· 占领 30 s 不翻蓝：浮点累加停在 0.9999999999999961，状态机加容差吸附（±1 附近吸附精确值）
+· 「敌能打、我瞄不到」单向通视：统一眼高口径（敌人射击/显隐由身体中心 0.9 改眼高 1.6）
+· EventBus 信号 @tool 环境访问失败：三处 emit 改 has_signal + 字符串 emit_signal
+
+【口径对齐（文档已拍板 → 代码跟上）】
+· 直瞄弹道：去掉弹道高度/下坠/落地，改「射线穿圆 + max_range 截断」；
+  重力/弹道高度（simulate）只保留给间瞄（高弹道越障）
+
+三、当前状态
+· 规模：72 个 .gd / 7819 行（2026-09-30 本机实测，不含 gdtoolkit 与 .godot）；Main.gd 391 行
+  ⚠ 数行口径：本机必须用「LF 字节数」统计（pwsh 的 Get-Content 在中文 UTF-8 文件上会少数约 6%）。
+  上一轮我因此把 Main.gd 数成 911 行、全项目数成 6862 行，还误以为本文件原来的 7251 / 968 是错的——
+  原值其实是对的（Main.gd 968 与 read 工具一致），三节这一段的数字已按正确口径重写。
+· 测试：16 个 @tool EditorScript（terrain / ballistics / capture / cover / crosshair / handling /
+  height_image / indirect / map_inspector / mark / quest / role / suppression / tactical_map /
+  vehicle / weapon），共 277 项断言，2026-09-30 复跑全绿
+  运行方式 A：Godot 脚本编辑器打开 → 文件 → 运行（原口径）
+  运行方式 B：godot --headless --path . --script res://tools/run_tests_headless.gd
+  （不用开编辑器；退出码 0=全绿 / 1=有失败，可加「-- test/cover_test.gd」只跑一个）
+  运行方式 C：godot --headless --path . --script res://tools/run_integration_headless.gd
+  （集成冒烟：真实例化 Main.tscn 跑五条交互链，38 项断言；第二十版新增）
+· 可玩循环：完整（出生 → 移动 → 交火 → 占点 → 胜负 → 重开）
+
+【第三版 · P2 射击手感补完】
+· 散布「动/静二分」：GameConfig 新增 WEAPON_SPREAD_MOVE 2.5 / WEAPON_SPREAD_STILL 1.0 /
+  MOVE_SPEED_EPSILON 0.5；Player 记录 is_moving（实际速度超阈值），
+  effective_spread_moa() = 基础 MOA × 动静倍率 × 聚焦倍率，shoot 用它取散布
+· 聚焦模式（取代开镜）：ui/FocusButton.gd 按住式触屏键 + 桌面 Shift；
+  Player.set_focus() 收紧散布；Main 聚焦时准心缩到 0.45、全屏边缘暗角（程序生成渐变贴图）
+· 测试：test/ballistics_test.gd 新增 _test_spread_scales（站定 / 移动 / 移动+聚焦 / 站定+聚焦）
+· 修复（用户真机反馈「准心老是被挡住」）：地形遮挡容差改为随距离放宽
+  （CROSSHAIR_SIGHT_MARGIN_PER_METER 0.02 ⇒ 200 m 处多给 4 m，约 1.15° 仰角），
+  并加近距豁免（CROSSHAIR_SIGHT_NEAR_EXEMPT 10 m 内不判遮挡）；准心被地形挡住时染橙色提示。
+  SightSystem.terrain_first_blocker 新增可选参数 margin_per_meter，敌人通视行为不变（默认 0.0）。
+· P3-1 任务系统（4.10 垂直切片，已完成）：QuestSystem 主线模板「占领节点」——
+  规则模板选第一个非我方控制的节点；进度＝节点净进度映射（-1→0、0→0.5、+1→1）；
+  节点翻蓝即完成 → +40 战力分 → 自动下发下一个节点。ui/QuestCard.gd 任务卡片
+  （目标 + 奖励 + 进度条，完成时高亮 2 s）；Main 的 _score 改为「战力分」。
+  未做：支线（+10/+15/+20）、权重表与战局变量、时限与失败条件。
+  测试：test/quest_test.gd（4 组 11 项断言）。
+【自制地图工具链 A · 灰度高度图导入】
+· 流程：画 1000×1000 灰度 PNG（黑 = 0 m、白 = 150 m）→ 放进 assets/maps/ →
+  Main 节点的 map_height_image（@export）填路径，或改 GameConfig.MAP_HEIGHT_IMAGE
+· 代码：HeightGrid.fill_from_image()（尺寸不符直接拒绝、绝不缩放）、
+  Main._load_grid()（导入失败报错并退回噪声地形）、
+  MapGenerator.export_height_image() + tools/export_height_map.gd（把当前噪声地形导成起手稿）
+· 起手图：assets/maps/map_01_height.png（Python 生成：西侧河谷 + 南北山脊 + 东北高地 +
+  5 个节点平台；当前 GameConfig.MAP_HEIGHT_IMAGE 已指向它，清空即回到噪声地形）
+· 测试：test/height_image_test.gd（黑=0 / 白=满高 / 中灰=半高 / 渐变线性 / 尺寸不符拒绝）
+· 验收四条：① 纯黑→平地 ② 左黑右白→左谷右高 ③ 中间白山→准心被挡 ④ 非 1000×1000→报错
+· 未做：内置笔刷编辑器 / 运行时雕刻（方案 B/C，后置）
+· 修复（用户真机反馈「玩家不能反拉回敌人已占的起点」）：
+  ① 翻转速率口径修正——原来 rate = delta / hold_time 表示「半个行程 30 s」，
+	 从敌方满占（-1）翻回我方（+1）要 60 s，实战根本站不住；现改为
+	 「完整翻转（-1 → +1）= FLAG_HOLD_TIME = 30 s」（首占 15 s、反夺 30 s）。
+  ② 占领 HUD 增加「区内兵力 我 N ｜ 敌 M」与「对冲」标记（节流 0.25 s 刷新）——
+	 推不动时立刻分清是「圈里有敌人＝对冲不涨」还是「没人却不涨」。
+  ③ test/capture_test.gd 新增 _test_retake_from_red（RED → BLUE，30 s）。
+【地图检测模式（预览）】
+· 用途：自制地形图导入后，不进游戏循环就能看地形效果——画完图 → 勾开关 → 直接看
+· 开关：Main 节点的 map_preview_mode（@export）勾上，只建地形 + 预览层，
+  不建玩家/敌人/占领/任务（游戏循环一行不动）
+· 看什么：① 地形贴图 ② 可达性红域（坡度 > MAX_SLOPE_DEG 的方块，采样步长 4 m）
+  ③ 关键点（5 个节点含 15 m 占领半径、出生点、2 个敌人初始点）
+  ④ 通视探针（轻触落点，120 条射线 × 300 m，绿=该向可见、红=被地形挡，
+	遮挡距离取第一个阻挡格中心；与准心同口径，容差随距离放宽）
+· 操作：单指拖动平移 ｜ 轻触落探针 ｜ 右上三按钮（可达性图层 / 放大 / 缩小）｜ R 重扫
+· 代码：systems/terrain/MapInspector.gd（纯逻辑可测）+ ui/MapPreview.gd
+· 测试：test/map_inspector_test.gd（平地全可达 / 陡坡标红 / 平地探针全通 / 山脊挡东向）
+· 准心改版（2026-09-28，用户要求「更符合操作直觉」）：十字准心 → 等腰三角形箭头。
+  尖端＝纹理中心＝屏心＝准心点，所以旋转轴正好落在尖端；每帧朝「玩家 → 准心」方向旋转，
+  即箭头始终指向射击方向（俯视不旋转视角 ⇒ 屏幕方向＝世界方向）。
+  形态常量 GameConfig.CROSSHAIR_ARROW_SIZE/LENGTH/HALF_HEIGHT；聚焦整体缩小的语义不变；
+  遮挡染色、拖拽上限、探针口径一律不动。设计文档 C3 手感参数段已同步「准星形态（2026-09-28 确认）」。
+· 修复（用户真机反馈「箭头指向刚好反了」）：三角形箭身原先画在纹理 +x 侧，
+  而尖端在纹理中心 ⇒ 箭头实际朝 -x，与 rotation ＝ (准心 − 玩家).angle() 正好相反。
+  现改为箭身向 -x 延伸、尖端仍在中心，箭头朝 +x（rotation 0 时 +x 即射击方向）。
+  新增回归测试 test/crosshair_test.gd（尖端列 ≤ 3 px / 底边列最宽 / 中心右侧无像素）。
+· 准心遮挡恢复严格口径（2026-09-28，用户要求「恢复到文档一样严格」）：
+  SIGHT_MARGIN 1.0 → 0.3（＝文档 12.2），CROSSHAIR_SIGHT_MARGIN_PER_METER 0.02 → 0、
+  CROSSHAIR_SIGHT_NEAR_EXEMPT 10 → 0。效果：起伏地形上准心会更频繁被地形挡住并回退
+  （这正是当初临时放宽的原因）；遮挡染橙提示保留，便于分辨「地形挡」还是「手感问题」。
+  terrain_test 的「1 m 矮坎不该挡 1.6 m 视线（容差 0.3）」断言与之一致。
+· P3-2 压制机制（docx 7.3）：
+  · 近失判定 systems/combat/SuppressionSystem.gd——弹道到玩家的最近距离 < 3 m 才算近失，
+	因子按贴近程度取 0..1（正对 = 1、擦过打折、背向 = 0），每发最多 +0.18
+  · Player 新增 suppression（0..1）：近失按因子累积、被命中额外 +0.3、每秒衰减 0.25；
+	散布恶化 ×(1 + 1.8 × 压制)——这是压制唯一的手感惩罚出口
+  · Enemy._try_fire：命中叠加强压制，未命中走 _suppress_near_miss（够近才压）
+  · 表现层：准心随压制做视觉抖动（最多 6°，只旋转 Sprite，真实射击方向不变——
+	docx 判定「抖准心＝抖镜头」为负收益，故只做表现）；HUD 血量后显示「压制 N%」
+  · 未做：压制对 AI 的影响（被压制不还击/躲掩体）、压制音效与屏幕效果、武器原型差异
+  · 测试：test/suppression_test.gd（近失因子 4 点 / 累积与上限 / 衰减 / 散布恶化）
+【第三版 · P3-3 报点 / 标记】
+· systems/marks/MarkSystem.gd：6 类标记（敌人/载具/阵地/补给/烟雾/集结点）、普通报点 30 s 时效、
+  同类型 5 m 内再次报点＝刷新而非堆叠（4.11.2 信息分层 / 4.11.7 确认稿）
+· ui/MarkWheel.gd：右下角「报点」键（开火键上方，右手拇指区）→ 环形菜单选类型
+· 落点＝准心世界坐标；准心被地形挡住时报点失败并提示文字（4.11.2「通视前提」红线）
+· ui/MarkOverlay.gd 主视图标记（类型色 + 时效渐隐）；MiniMap 同步显示标记
+· 未做：侦察兵 90 s 标记、权限分级（集结点仅小队长）、战术地图全屏（M 键，4.11.1/4.11.3）、
+  间瞄选落点、被标记者可见提示
+· 测试：test/mark_test.gd（落点 / 刷新 / 时效 / 类型表）
+· 修复（用户真机反馈「轮盘有 2 个按钮被推到屏幕右边缘外」）：报点键贴着屏幕右侧，
+  整圈展开时 ±30° 那两个按钮右边缘冲到 x ≈ 1035（屏宽 960）。
+  改为「只向左半圈展开」（角度 90° → 270°，首尾各内收半个间隔），偏移量抽成
+  MarkWheel.item_offset() 供测试复用；另保留一次 clamp 兜底，防止以后改半径/位置再越界。
+  菜单项尺寸提到 GameConfig.MARK_ITEM_WIDTH / MARK_ITEM_HEIGHT（布局与测试共用同一数值）。
+  回归断言：test/mark_test.gd → _test_wheel_items_stay_on_screen（全部在屏内 + 只走左半圈）。
+【第四版 · 战术地图全屏（docx 4.11.1 / 4.11.3 / 4.11.7）】
+· ui/TacticalMap.gd：全屏覆盖层（不暂停游戏），固定朝北；拖动平移 + 三档缩放（0.5 / 0.9 / 1.6 px/m）
+· 图层（自下而上）：地形贴图 → 节点（蓝/红/白 + 净进度条）→ 当前任务目标高亮 → 己方（玩家点）
+  → 报点标记（类型色 + 时效渐隐）；敌方仍只在被报点后以「最后目击位置」出现
+· 报点：底部 6 类按钮选类型 → 点地图位置；守 4.11.2 通视红线（玩家→落点必须通视且在 500 m 拖拽上限内）
+· 开关：右侧「地图」按钮或 M 键；开图时 Player.input_locked 冻结移动、_on_fire 拦截开火（4.11.7 ①）
+· 地图挂在独立 CanvasLayer（layer=10）盖在 HUD 之上
+· 未做：间瞄选落点（7.4.2）、集结点与小队标记链、载具图层、PVEVP 战线
+· 测试：test/tactical_map_test.gd（坐标互逆 / 屏幕中心 / 缩放档 / 拖动换算）
+· 修复（用户真机反馈「打开再关闭地图后摇杆无法使用」）：地图里的「关闭」按钮走的是
+  TacticalMap.close()，不经过 Main._toggle_map()，而当时冻结的复位只写在 _toggle_map 的分支里
+  → player.input_locked 永远停在 true，摇杆被永久锁死。
+  修法：① Main 连接 TacticalMap.closed 信号，新增 _on_map_closed() 作为复位唯一出口
+  （M 键 / 右侧地图按钮 / 地图内关闭三条路径都汇到它）② TouchJoystick 新增 reset()、
+  Player 新增 release_joystick()，开图瞬间丢掉可能还按在摇杆上的触点（防触点卡死）。
+  回归断言：test/tactical_map_test.gd → _test_close_emits_closed_signal。
+【第五版 · 候选 C 压制对 AI 的影响（docx 7.3 反向）】
+· SuppressionSystem 新增两个纯函数：return_fire_spread_deg()（0 → 上限 8°）、holds_fire()（阈值 0.6）
+· Enemy：suppression 状态（与 Player 同一套累积/衰减口径）、_try_fire 里
+  ① 压制 ≥ 阈值 → 进入 1.2 s 犹豫、暂停还击（不敢露头）② 还击方向按压制加散布（原本零散布直射）
+  ③ 视觉反馈：被压住的敌人变暗偏橙，玩家一眼看得出压制生效
+· Main._on_fire：命中额外 +0.3，未命中走 _suppress_enemies（按弹道离每个敌人的贴近程度加）
+· 未做：转移掩体（需要掩体/寻路系统）、敌人主动躲进掩体的行为、语音/音效反馈
+· 测试：test/suppression_test.gd 扩展两组（还击散布/停火阈值、敌人累积与衰减）
+· 修复（用户真机反馈「敌人都被我击倒了，也没看出任何变化」）：
+  ① 阈值不可达——SUPPRESSION_AI_HOLD_FIRE 原为 0.6，而「2 发就把敌人打死」的节奏下根本到不了，
+	 真机永远看不到停火；现降到 0.35（打中一发＝0.3 + 近失 0.18 ＝ 0.48 就能触发）。
+  ② 视觉太弱——原来只把红色圆点压暗，红点本来就暗，等于没有表现；现在敌人脚下画橙色压制弧
+	 （弧长＝压制值，Enemy._draw），压暗幅度也加大到 0.6 / 0.8。
+  ③ 顺手修：命中致死那一发的压制无效（take_damage 先跑会把 alive 置 false，
+	 add_suppression 直接 return）——改为先记压制再结算伤害。
+  验证前提：压制看得见，需要敌人还活着且正在朝你开火（detection_range 20 m 内），
+  所以别把它打死再看——打偏/擦身几发才对。
+· 修复（用户真机反馈「停手 20 多秒橙弧仍很小但未消失」）：两个原因
+  ① 屏幕残留（真因）：重绘条件写成「有压制才 queue_redraw」，从「有」掉到「无」的那一帧
+	 没有重绘——Godot 的 _draw 内容不会自己清，于是最后一帧的小橙弧永久留在屏幕上。
+	 改用 _suppression_drawn 标记：跨越阈值那一帧补一次重绘，把它擦掉。
+  ② 衰减太慢：0.25/s（4 s 清空）观感黏人，改 0.4/s（2.5 s 清空）；
+	 画弧阈值提到 SUPPRESSION_DRAW_THRESHOLD 0.05，不再画几乎没有的小弧。
+  同类检查：MarkOverlay / MapPreview 都是无条件每帧重绘，不受这个问题影响。
+· 修复（用户报 GDScript 解析错误：Could not resolve external class member "decayed"）：
+  上一轮编辑自己踩坑——把 SUPPRESSION_DECAY 那一行当作 old 覆盖成了 SUPPRESSION_DRAW_THRESHOLD
+  的声明，等于把 SUPPRESSION_DECAY 常量删了；SuppressionSystem.decayed 的默认参数引用它，
+  于是整个函数解析失败、Enemy.gd 直接加载不了（报错定位在 Enemy 的调用行，根因在 GameConfig）。
+  已补回常量（0.4/s），并跑了一次「GameConfig 引用 vs 定义」全量比对确认无其它漏项。
+  教训：gdlint 只查语法与风格，查不到「外部类成员是否存在」——改常量区时 old/new 千万别写反。
+【第六版 · 候选 D 兵种与侦察兵标记（docx 3.1 兵种表 / 4.11.4 侦察兵差异）】
+· data/config/RoleTable.gd：三兵种，只决定「标记时效 / 弹匣 / 备弹 / 伤害倍率」，
+  刻意不动散布与射速（那是刚验收的手感基线）
+  · 步枪兵：QBZ-191，30 发 / 120，伤害 ×1.0，标记 30 s
+  · 侦察兵：消音步枪，20 发 / 100，伤害 ×0.75，标记 90 s（4.11.4 的核心特权）
+  · 精确射手：DMR，10 发 / 70，伤害 ×1.5，标记 30 s
+· Player：mag_size 实例化（原写死 GameConfig.WEAPON_MAG_SIZE）+ apply_role()；
+  换弹 / 开火 / HUD 全部改读实例弹匣，切兵种即刻生效
+· Main：@export player_role + 左侧「兵种」按钮循环切换 + 左上显示「兵种｜武器｜标记时效」；
+  报点与地图报点按兵种取时效；伤害乘兵种倍率
+· MarkSystem 标记字典新增 duration 字段，三个界面的时效渐隐改用它——否则侦察兵 90 s 标记
+  前 60 秒都不渐隐（原先把分母写死成 MARK_DURATION）
+· 未做：真正的多把枪自由切换与武器数据表重构、侦察兵「稳定观测 1.5 s / 20 s 冷却」、
+  兵种影响散布与射速（要动就得重调手感，单独开版）
+· 测试：test/role_test.gd（表结构 / 侦察兵 90 s / apply_role / 换弹跟随实例弹匣）
+【第七版 · 候选 B 射击手感补完（docx 7.3 连发 · C2 姿态 · C3 姿势精度）】
+· 连发散布：第 1 发 ×1.0，之后每多发一发 +0.12，封顶 ×2.2；停火 0.35 s 后按 0.08 s 节拍逐发
+  收敛——这才是「连发扩大、点射收敛」的落地（此前按住连发与点射精度完全一样）
+· 姿态三态（C2）：站 / 蹲 / 卧，切换耗时 0.45 / 0.65 s（到时才生效，防连点刷精度）
+  · 散布精度档（C3）：站 1.0 / 蹲 0.75 / 卧 0.5
+  · 命中面积系数（C2 确认值）：站 1.0 / 蹲 0.7 / 卧 0.5 —— Enemy 开火判定半径跟着缩，
+	卧姿更难被打中
+  · 移动速度：蹲 0.6 / 卧 0.35（数值待实测）
+· UI：左侧「姿势」按钮循环切换；左上标签第二行实时显示「姿态 ｜ 连发 N 发 ｜ 散布 ×N」
+· 未做：架枪 / 依托（「蹲或卧 + 依托物」的组合态，需要 Occluder 掩体层）、卧姿「矮掩体」属性、
+  触屏辅助瞄准（6 px 吸附减速）、准星回正刚度与阻尼
+· 测试：test/handling_test.gd（连发递增 / 封顶 / 收敛、姿态散布、命中面积、切换计时）
+【第八版 · 候选 E 掩体与依托（docx 4.7 第③级检测 · C2 矮掩体与架枪/依托）】
+· entities/cover/Cover.gd：轴对齐矩形掩体（沙袋 7.2×2.2 m、顶高 1.1 m），自动进
+  "occluder" 组；提供 segment_hit（线段求交）与 distance_to_edge（依托判定）
+· SightSystem 实装第③级：occluder_blocks 遍历掩体组——视线穿过掩体且交点处视线高度
+  没高出「掩体顶 + COVER_SIGHT_SLACK」→ 判遮挡；has_sight 现在合并地形层 + 掩体层
+· 卧姿矮掩体（C2）：玩家视线目标高度在卧姿时降到 0.6 m → 站着能看过沙袋、趴下看不出去
+· 敌人侧：_can_see_player 与显隐都改用 has_sight（含掩体）——躲在沙袋后的敌人不该被看见
+· 准心侧：被沙袋挡住时准心回退到掩体前（AimCameraController._first_cover_hit）
+· 架枪 / 依托（C3）：「蹲或卧 + 离掩体 ≤ 2.5 m」判为依托 → 散布再 ×0.7（不改命中面积）
+· Main：按 demo 点放 12 个沙袋（3 个节点 × 4）；左上标签显示「（依托）」
+· 已知取舍：子弹能穿掩体（弹道只认地形，7.4.2 第一版口径）；掩体是轴对齐矩形，不随朝向旋转
+· 测试：test/cover_test.gd（线段求交 / 依托距离 / 顶高 / 高度规则与卧姿矮掩体）
+· .gdlintrc：max-public-methods 20 → 30（Player 的公开 API 已超过 20 个）
+· 修复（用户真机反馈三条，2026-09-28）：
+  ① 「趴着能越过沙袋瞄准、敌人仍显示」→ 从玩家出发的视线高度没按姿态算：
+	 AimCameraController 的准心遮挡、Enemy._update_visibility 的玩家侧视线都还写着
+	 eye_height_at()＝1.6 m。现统一走 SightSystem.unit_sight_height()（内部鸭子类型调
+	 Player.sight_eye_height()，卧姿 0.6 m）——趴下后准心会被沙袋挡住，也不再被远处敌人看见。
+  ② 「命中率不受散布影响」→ ENEMY_HIT_RADIUS 0.6 → 0.3：C2 的判定口径是 0.6 m × 0.4 m
+	 矩形，而半径 0.6 的圆等于判定面积是它的 4 倍，散布再大也几乎枪枪命中。
+	 改小后 300 m 处 3 MOA（±26 cm）才真正开始决定命中。
+  ③ 敌人零散布直射（远距离比玩家还准）→ 加 ENEMY_BASE_MOA 1.5 基础散布，与压制散布叠加。
+  ④ 开火日志噪音「距离=0.0m 命中=false」→ Main._on_fire 里 fired=false 直接 return
+	 （触屏一次点按会产生 touch + 模拟鼠标两次调用，第二次被射速冷却拦住属正常行为）。
+  测试提示：敌人默认只去白旗点，想测掩体请把 Enemy.detection_range 调大（如 120），
+  它会主动来找你；主视图上有黄色箭头指向敌人。
+【第九版 · 子弹挡掩体 + 散布可感知（2026-09-28 真机反馈）】
+· 散布可感知：WEAPON_MOA 3 → 6（现实 3 MOA 在 100 m 只散 ±8.7 cm，玩家感知不到；
+  6 MOA 时 100 m ±17 cm、300 m ±52 cm）；ENEMY_HIT_RADIUS 0.3 → 0.25（C2 判定矩形
+  0.6 × 0.4 的圆近似中值）；ENEMY_BASE_MOA 1.5 → 3.0
+· 子弹挡掩体（docx 4.7 第③级 + C2 矮掩体）：BallisticsSystem.resolve_shot 新增可选参数
+  sight / shooter_eye_height —— 弹道与通视走**同一套高度规则**：站姿眼高 1.6 m 能打过
+  1.1 m 沙袋、趴下 0.6 m 就打不过；返回字典新增 cover_hit 字段
+· SightSystem.first_cover_hit() 成为唯一实现：AimCameraController 里的私副本删掉，
+  准心回退与子弹截断共用一份
+· Player.sight 由 Main 注入；Enemy 射击同样传 _sight —— 双方的子弹都会被打在掩体上
+· 测试：test/ballistics_test.gd 新增 _test_spread_can_miss，把「散布必须能造成脱靶」
+  固化成断言（300 m 最大偏移 > 命中半径；100 m 偏移 > 0.4 × 命中半径）
+· 仍未做：掩体可破坏 / 掩体不随朝向旋转（轴对齐矩形）
+【第十版 · 散布回文档值 + 可破坏 / 可旋转掩体（2026-09-28）】
+· 散布回文档口径：WEAPON_MOA 6 → 3（用户拍板：按 PPU 尺度，散布本来就不该被明显感觉到；
+  3 MOA 在 100 m 只散 ±8.7 cm、300 m ±26 cm 就是设计意图）。断言改成
+  test_spread_scale_is_realistic —— 守住「近距指哪打哪、远距靠点射与估距」，防回头路
+· 掩体可旋转：Cover 的 segment_hit / distance_to_edge 改在本地空间做（global_transform
+  的逆变换）→ 支持任意角度，不再限定轴对齐矩形
+· 掩体可破坏：Cover 新增 max_hp / hp（默认 GameConfig.COVER_HP 200，近距约 4 发打坏）、
+  take_damage / is_destroyed / health_ratio；耐久清零后退出 occluder 组 ⇒ 不再挡通视与子弹；
+  表现为受损渐暗 + 顶部耐久条，摧毁后变半透明残骸
+· 子弹打掩体：BallisticsSystem.resolve_shot 命中掩体时把掩体节点一并返回（"cover" 键），
+  Main 与 Enemy 各自给自己的子弹扣掩体耐久 —— 双方都能拆掩体，躲沙袋白嫖行不通
+· SightSystem.first_cover() 返回 {node, point}，first_cover_hit() 退化为它的薄封装
+· 测试：test/cover_test.gd 新增 _test_rotated_hit（旋转后同一条线由不挡变挡）与
+  _test_destroy_removes_blocking（半血未破 / 打光摧毁 / 摧毁后再打不会变负）
+· 仍未做：掩体按类型分档（矮墙 1.4 m 有常量无实例）、可破坏掩体的碎块表现
+【第十一版 · 候选 F 间瞄选落点（docx 7.4 闭式解 / 4.11.3 地图选点 / 4.11.4 侦察兵标记）】
+· 解算：BallisticsSystem 新增三个纯函数（7.4 的无阻力闭式解）——solve_elevation(D, v0)
+  用判别式 T = (A − B)/(gD) 解低弹道仰角（打不到返回负值）、solve_flight_time(D, v0, θ)
+  = D/(v0·cosθ)、solve_arc() 采样 h(d) 供可视化
+· 火力：systems/combat/IndirectFire.gd —— 落弹队列（目标点 / 剩余时间 / 总时间）、
+  弹药 4 发、冷却 3 s、射程 60~400 m、爆炸半径 10 m（爆心 90 → 边缘 25 线性衰减）；
+  爆炸同时伤敌人与掩体（间瞄本来就是用来砸掩体的）
+· UI：战术地图新增「间瞄选点」开关（开后点地图 = 选落点）；落点 12 m 内有报点标记会
+  自动吸附 —— 这就是 4.11.4「侦察兵标 → 间瞄覆盖」的杀伤链；
+  主视图 ui/IndirectOverlay.gd 画落点预警（外圈＝爆炸半径、内圈随剩余时间收缩、命中白闪）
+· Main：左侧新增「间瞄」按钮（一步开图并切到选点模式）；左上标签显示剩余间瞄弹药
+· 第一版取舍：解算与飞行都不带阻力（用 7.4 的校验基准解，7.4.2 的带阻力正式模型后续再上）；
+  高弹道解、地图上画完整弧线、间瞄的弹道碰撞（撞地形提前炸）均未做
+· 测试：test/indirect_test.gd（弹道落回地面的自洽校验 / 射程边界 / 飞行时间 / 爆炸衰减）
+【第十二版 · 候选 G 武器系统重构（docx 7.5 CSV 表 / 3.1 兵种装备 / C3 切枪基线）】
+· 数据：data/weapons.csv —— 5 把枪，从官方「解域游戏武器数据表.csv」（squad-2d 下 19 列、
+  25 把武器）抄出关键列并补游戏列：qbz191（5.8mm 制式步枪 A，与 7.2 数据一致）、qbz192（短步枪 B）、
+  qbu191（精确射手，官方表标注侦察兵备选）、mp5（冲锋枪）、m17（手枪）；
+  列：rpm/mag_size/reserve/game_range/dmg_base/dmg_min/falloff_start/falloff_end/moa/
+  reload_tactical/reload_empty/switch_time/source
+· 加载：systems/weapons/WeaponTable.gd（FileAccess + get_csv_line，惰性只读一次；
+  number() 负责字符串→数值并带 fallback，缺列不会崩）
+· Player：新增当前武器整行数据 var weapon；射速 / MOA / 射程 / 伤害衰减 / 换弹时间 / 切枪时间
+  全部改为从武器表读（缺列才退回 GameConfig 常量）；新增 apply_weapon(id)；
+  apply_role 按 RoleTable.weapon_ids 装载「主武器 + 副武器」
+· 换枪：switch_weapon() 耗时 1.04 s（C3 基线），期间 can_fire() 为假，到点才真正换枪并重置弹匣；
+  Main 左侧新增「换枪」按钮，左上标签改显示当前武器名（不再是兵种固定标签）
+· 兵种绑定（3.1）：步枪兵 qbz191 + m17、侦察兵 qbu191 + m17、精确射手 qbu191 + m17
+· 取舍：官方表对半自动武器写「半自动」，RPM 列取点射上限近似值（QBU-191 220、M17 200）；
+  官方表没有备弹列，备弹按 7.2 口径折算；官方表无「消音步枪」条目，侦察兵改用 QBU-191
+· 测试：test/weapon_test.gd（表加载与字段 / apply_weapon 生效 / 兵种绑定 / 切枪耗时与禁止开火）
+· .gdlintrc：max-public-methods 30 → 40（Player 的公开 API 继续增长）
+· 修复（用户报 Player.gd 解析错误：Identifier "WeaponTable" not declared）：Player 里裸写了
+  WeaponTable.xxx，而 WeaponTable.gd 刻意不写 class_name ⇒ 名字不存在。已加
+  const WeaponTable := preload("res://systems/weapons/WeaponTable.gd")。并全项目扫了一遍
+  「裸引用无 class_name 的模块」——只有这一处；Cover / IndirectFire / IndirectOverlay 都规范走 preload。
+  规矩再强调一次：本项目「无 class_name 的模块」**引用方必须 preload 成常量**（Main/Player/test 皆然）。
+【第十三版 · 候选 H 间瞄带阻力正式模型（docx 7.4.2 定标 / 7.4.1 弹道碰撞检测）】
+· 换模型：BallisticsSystem 新增 trajectory()（任意仰角的数值积分：常数减速度阻力 −30 m/s²
+  持续 2 s、沿速度反方向作用、g_eff = 9.81×2.8、步长 0.01 s）+ solve_elevation_dragged()
+  （0~45° 二分反解，12 次迭代，落点误差 < 1.5 m 有测试守着）+ trajectory_range()；
+  7.4 的无阻力闭式解**保留为校验基准**（工具与测试互校，注释里写明分工）
+· 初速按射程反标定：105 → 180 m/s（g_eff 是 2.8 倍重力又叠加阻力，要打到 400 m 就得给足初速；
+  注释写明这不是现实值）
+· 撞地形提前炸（docx 7.4.1：弹道高度 h < 地形高 H 即命中）：弹丸每帧按**时间**在采样表插值
+  取当前位置与高度（时间与水平距离不同步，必须按 time 查），低于地形就立即在该点爆
+· 表现：IndirectOverlay 画弹丸 + 影子 —— 俯视看不出高度，用「影子随高度缩小 + 弹丸随高度变大
+  变亮」表达高抛（影子口径参考 12.3 Blob Shadow）；落点预警圈保留
+· 测试：test/indirect_test.gd 新增三组（带阻力 45° 射程更短且仍覆盖 400 m / 反解落点误差 < 1.5 m
+  且低伸解 ≤ 45° / 弹道形状：最高点 > 20 m、终点高度回到 0 附近）
+· 未做：7.4.1 的离线弹道表（tools/ 脚本 + .json/.tres 查表）与查表式弹道碰撞；地图上画完整弧线投影
+· 修复（用户真机反馈「只看到一个黑边黄心的圆飞过去，其他效果都看不到」）：根因是我把
+  弹丸与它的影子画在了**同一个世界位置** —— 俯视 2D 下弹丸与影子本来就在同一水平位置，
+  叠起来自然就是「黑边黄心的圆」，高度信息全丢。
+  修法：引入「高度视觉偏移」GameConfig.INDIRECT_HEIGHT_VISUAL = 0.15（1 m 高度换算成
+  0.15 m 的世界向上偏移）——弹丸按高度上抬画在「空中」，影子留在真实水平位置并随高度缩小，
+  并且**把整条弹道采样点按同一偏移画成折线**（draw_polyline）⇒ 俯视里终于能看出抛物线。
+  另外把间瞄落点画到小地图（橙圈 + 外环）：选远处的落点时主视图看不到预警圈，小地图至少给反馈。
+· 更正（2026-09-28 第二次修正）：上一轮把「废掉这个功能」理解成**整体废弃**是误判——
+  用户原意是「保留间瞄功能，只删掉弹道表现效果」。已按此纠正：
+  · 代码恢复（git revert 845e48d）：IndirectFire.gd / IndirectOverlay.gd / TacticalMap 的间瞄模式与
+	信号与按钮 / Main 的间瞄按钮与三个回调 / MiniMap 的间瞄落点 / GameConfig 的间瞄常量 / test
+  · 再单独删除「弹道表现」：IndirectOverlay 去掉整条弹道折线、弹丸飞行、影子与高度换算；
+	GameConfig 删掉 INDIRECT_HEIGHT_VISUAL。只留落点级反馈（爆炸范围圈 + 倒计时收缩 + 命中闪光）
+  · 功能全部保留：地图选落点、带阻力解算与飞行时间、撞地形提前炸、爆炸范围伤害、侦察兵标记吸附
+  · 文档：4.11 概述 / 4.11.3 / 4.11.4 / 4.11.5 / 7.4.2 / 8.2 六处**改回**，并在 4.11.3 与 7.4.2
+	标注「表现从简：不画弧线 / 弹丸 / 影子」；上一轮写成「已废弃」的措辞全部纠正
+  · 教训：用户说「废掉这个功能」时可能指**表现层**——先问清「删交互还是删表现」，别自己扩大删除范围
+【第十五版 · 候选 I 载具系统（docx 第八章 8.1 舱室与座位 / 8.2 装甲与武器）】
+· 数据：data/vehicles_data.txt —— 从官方「解域游戏载具数据表.csv」（19 列 / 18 辆）抽 2 辆：
+  · ifv_a 步兵战车（ZBD-04A）：7.2×3.2×2.5 m、75 km/h、乘员 3 + 载员 7、30mm 机炮 1200 m、
+	装甲 90@20 / 45@0 / 25@0 / 18@0（前/侧/后/顶）
+  · mbt_t1 主战坦克（Type 99A）：7.6×3.7×2.35 m、76 km/h、125mm 滑膛炮 1500 m、
+	装甲 700@30 / 260@0 / 130@0 / 50@0
+  （官方表的「装甲(法向厚度@倾角)」列拆成了独立列；结构值 hp 官方表没有，按类型内联估计）
+· systems/vehicles/VehicleTable.gd：读表 + 命中面判定（前/侧/后，按车体朝向与弹道夹角）+
+  有效装甲厚度 = 法向厚度 ÷ cos(入射偏角 + 该面基础倾角) + 击穿判定（穿深 ≥ 有效厚度）
+· entities/vehicle/Vehicle.gd：驾驶（摇杆驱动 + 缓慢转向）、上下车、装甲挨打（未击穿只吃 5%）、
+  主武器开火（复用 BallisticsSystem.resolve_shot）、车体与炮管自绘
+· 穿深来源：官方武器表没有穿深列 → GameConfig 内联 5.8mm 步枪弹 12 mm、9mm 手枪弹 3 mm
+  （公开近似值）；载具炮的穿深写在载具表里（30mm 机炮 60 mm、125mm 主炮 700 mm）
+· Main：出生点旁放一辆车 + 「上车/下车」按钮 + 在车上时摇杆驾驶、开火键打载具主武器 +
+  HUD 显示「载具名 ｜ 余弹 ｜ 车体 ｜ 首上等效装甲」
+· 未做：多座位（第一版只有驾驶位）、炮塔与车体分离及回正（8.2.6）、载具被摧毁的表现、载具 AI、
+  实际入射法线角（第一版只用该面的基础倾角）
+· 测试：test/vehicle_test.gd（表字段 / 装甲等效厚度随倾角 / 击穿判定——即验收那条「装甲能挡弹」）
+【第十六版 · 候选 J 任务系统深化（docx 4.10.10 奖励决策 / 4.10.11 模板池）】
+· 数据：data/quest_templates.txt —— 从官方「解域游戏任务模板表.csv」（11 列 / 8 条模板）抄出
+  第一版可发的 3 条：T-M1 主线占领节点（+40）、T-S4 侦察标记（+10 / 120 s）、
+  T-S1 歼灭穿插小队（+15 / 120 s）；其余 5 条暂不可发的理由写在 QuestTable.gd 头部
+  （无 FOB、无补给实体、无敌方载具、无通道判定、无防守阶段）
+· systems/quest/QuestTable.gd：读模板表 + is_main() + smeac() 生成 S / M / E 三行
+· QuestSystem 重构：任务从「单条」变为「列表」（1 主线 + ≤2 支线）；
+  AI 参谋 = 规则模板 + 权重表（4.10.10）：实际权重 = 基础权重 + Σ(战局变量修正)，
+  第一版三个战局变量——我方控制节点数（≤1 → 侦察 +10）、场上敌人数（≥2 → 歼灭 +10）、
+  玩家兵种（侦察兵 → 侦察标记 +15）；支线按权重降序取前 2 条、阈值 ≥ 15
+· 支线判定接现有信号：报点 → notify_mark_placed（侦察标记）、击倒 → notify_enemy_killed（歼灭）；
+  时限到点 → quest_failed（不扣分，4.10.10 口径）
+· QuestCard 改造成任务列表（主线/支线标签 + 进度 + 剩余时限 + 奖励），完成与失败各有提示；
+  卡片高度 64 → 96 px
+· Main：改接 quest_list_changed / quest_completed / quest_failed；报点与击倒两处喂事件
+· TacticalMap：主线高亮改读 main_quest()（原来是单条任务接口）
+· 未做：另 5 条模板及其前置系统、主动放弃按钮、SMEAC 详表卡片（目前只在模板表里存文本）
+· 测试：test/quest_test.gd 重写（模板字段 / SMEAC / 权重随战局变量 / 支线上限 / 事件推进 / 超时）
+【第十七版 · 候选 K 载具深化（docx 8.1 舱室与座位 / 8.2.6 炮塔手感）】
+· 多座位（8.1）：一辆车两个座位——驾驶位（drive）与武器位（aim/fire）；
+  seat_of() / switch_seat() 支持驾驶位 ⇄ 武器位切换；**只有武器位能开炮**（驾驶位点了提示换座）
+  · 下车时两个座位一起下来（第一版不做逐人下车）
+· 炮塔与车体分离（8.2.6）：turret_facing 独立于 hull_facing
+  · 武器位用准心操炮塔，转速受限 45°/s（TURRET_ROTATE_SPEED，不是瞬间对准）
+  · 没人操炮时按弹簧模型回正到车体朝向（刚度 1.8、阻尼 0.7）
+  · 开火有后坐视觉量（TURRET_RECOIL_OFFSET 1.2 m，4/s 衰减），炮口位置 = 车体 + 炮塔方向 × 半长
+  · 射击方向改为「炮口 → 炮塔朝向」，不再等于车体朝向
+· 敌方载具与 AI（候选 K 的第三条验收）：出生点旁是玩家的 IFV，节点 2 旁是 AI 的 T1 坦克
+  · AI：900 m 内 + 通视 → 车体慢慢转向（0.4 倍炮塔转速）+ 炮塔瞄准 → 对准到 5° 内才开火，
+	开火间隔 = 炮间隔 × 3（AI 打得更慢）
+  · 阵营用颜色区分（我方蓝绿 / 敌方暗红）
+· Main：新增「换座」按钮（16, 370）；_process 里武器位用准心操炮塔；
+  载具开火的目标列表加入敌方载具，命中载具走 take_hit 的装甲判定并提示「击穿 / 未击穿（某面）」
+· 未做：载具被摧毁的表现（只变暗）、载具视野盲区随座位而异（8.2 载具 UI 三原则第三条）、
+  多载具编队、AI 的规避与掩体利用
+· 测试：test/vehicle_test.gd 扩到 7 组（原 3 组 + 炮塔转速上限 / 回正收敛 / 座位与开炮权限 / AI 闸门）
+· 方案评估（2026-09-28，已否决并回退）：试过「弹着点＝准心处固定半径圆（指哪打哪）」——
+  圆不随距离放大，远距命中率与近距相同，与「2D 化的 Arma 3、保留估距/抬枪手艺」的本意冲突。
+  已 git revert（a2e6c56）回到 MOA 角散布；设计文档 7.3 保留一句否决附注，防止重复提案。
+· 修复（用户真机验收反馈）：触屏推摇杆时准心被带着动。根因＝Android 会把触摸「模拟」成鼠标事件，
+  set_input_as_handled 管不住模拟事件，于是摇杆消费了触摸、准心仍从鼠标分支拿到位移。
+  现在 AimCameraController 按「起手半屏」接管：触摸须在右半屏按下并跟踪该 touch index 才移动准心，
+  鼠标拖动同样只在右半屏生效（左半屏一律不管准心）；触摸拖拽期间屏蔽鼠标分支，避免模拟鼠标让位移翻倍
+
+【第十八版 · 真机体验修复与架构清理（2026-09-29，8 次提交）】
+· 修「不在载具里点换座，血量变 -300」：根因不是换座按钮——敌方坦克 mbt_t1 一炮 gun_damage 400
+  打在 100 血步兵身上，Player.take_damage 未夹下限 ⇒ HUD 直接显示 -300。修：改为
+  hp = maxf(hp - amount, 0.0)；并把 enemy_vehicle.weapon_fired 接到 _spawn_tracer
+  （原先敌方载具开炮没有曳光，玩家察觉不到被打，才会把锅甩给刚按的换座键）。
+· 修「摇杆被左侧按钮挡住」：摇杆底座圆心 (100,440)、半径 90、触摸判定 144 px，而功能键
+  原为一列排到 y=410。改两列（列1 x=16 / 列2 x=104，行 y=140/186/232，底界 272），
+  role_label → (192,148)，弹药标签 → (216,510)（它原先也压在摇杆圆里）。
+  硬约束：左侧新增 UI 不得进 y>300 区间（留给摇杆）。
+· 敌方伤害总开关 GameConfig.ENEMY_DAMAGE_SCALE：出口共 3 处（Enemy 打玩家 / Enemy 打掩体耐久 /
+  Vehicle 载具主炮），现为 0.0（调试态：敌人不掉血也不拆掩体；压制仍照常生效）。
+  跑图前须改回 1.0——数据表数值（mbt_t1 400、ifv_a 40）未动。
+· 地图预览补载具标记：原先预览只画节点/出生点/敌人点，而载具坐标硬编码在 Main._ready，
+  预览模式不建实体 ⇒ 坦克在图上看不见。修：抽出唯一数据源 MapGenerator.demo_vehicle_points()
+  （[0] 我方车＝出生点+35,0；[1] 敌方坦克＝DEMO_NODES[1]+40,20），Main 与 MapPreview 共用；
+  预览画 32×18 方块（我方蓝绿 / 敌方暗红 + 白描边 + 文字标签，字体用 ThemeDB.fallback_font）。
+· 修炮塔后坐「斜进」：turret_origin 原为 Vector2(-recoil, 0)（＝车体本地后方），炮塔与车体
+  有夹角时后坐方向与炮管轴线不一致 ⇒ 看着像横向滑。改为沿炮管轴线后退
+  （axis = Vector2.RIGHT.rotated(turret_local)）。
+· 修载具上准心箭头方向失灵：玩家上车后 global_position 冻结在上车点（enter 只改
+  visible / input_locked），而箭头用 crosshair_world − player.global_position 算 ⇒ 车开走后
+  得到假方向。改为：武器位取 turret_facing、驾驶位取 hull_facing。
+· 未击穿提示带数值：Vehicle.take_hit 返回值新增 armor_mm / penetration_mm，
+  VehicleTable 新增 side_label()，HUD 提示改为「未击穿：侧面等效 260 mm ＞ 我 60 mm 穿深」。
+· 架构清理：Main.gd 1002 行撞 gdlint 上限（曾临时放宽到 1200）。用 gd_analyze + gd_split 拆出
+  ui/HudTextureFactory.gd（crosshair_arrow / vignette 两个 static 纯函数）⇒ Main 968 行，
+  上限收回默认 1000。连带修 test/crosshair_test.gd 原先 load(Main.gd) 调私有静态函数的引用。
+  工具边界（已核实）：gd_split 只能搬无状态纯函数；Main 其余 50 个函数 uses_member=true 且吃
+  成员节点，抽 static 会丢状态、抽 autoload 语义不对（Main 是每场景一份的场景根节点）
+  ⇒ 要继续瘦身必须做「按职责拆节点」（HudBuilder / VehicleController / MarkController 各持 Main 引用）。
+· 其他：新增 architecture.html（离线架构分层图 + 路线图，纯内联 CSS 无外链）；
+  根 .gdlintrc 的 max-file-lines 1200 → 1000 收回；订正本文件三节旧数字。
+· 测试：本版以真机体验修复为主，未新增断言；当时记的是「16 个 @tool 测试脚本全绿，gdlint 全目录 0 问题」。
+  ⚠ 2026-09-30 复核：当时并不全绿——本版改了 VehicleTable（首上等效 808 mm）却没跟改 vehicle_test，
+  同批还有 indirect_test（初速标定 180）等共 5 个脚本 11 项红，详见第十九版。
+
+【第十九版 · 红基线归零（2026-09-30，DSH 接手后的第一件事）】
+· 为什么先做这个：接手第一步跑全量测试，16 个脚本里 5 个红（11 项断言）。测试不全绿，后面任何玩法改动
+  都没有可信的验收手段，所以先归零再开工。结论：1 处是真代码回归，10 项是测试没跟上代码的有意改动。
+· 代码回归（测试是对的、代码错）——1 处：
+  · entities/cover/Cover.gd segment_hit：原来按四条边的遍历顺序返回「第一个命中的边」，而边序是先底边、
+    再右边……于是横穿矩形时命中的是远端：从 (80,100) 打到 (120,100) 本该回左边缘 x=96，实际回了右边缘
+    x=104。通视截断、子弹截断、准心回退要的都是「先挡住视线的那一面」⇒ 改为按线段参数取最靠前的交点。
+    影响面：SightSystem.first_cover → BallisticsSystem.resolve_shot（子弹被掩体截断的位置）与
+    AimCameraController（准心被掩体挡回退的位置），修完两者都落在掩体近侧。
+· 测试过时（代码是有意改的、测试没跟）——10 项：
+  · indirect_test 5 项：无阻力闭合解那几组还停在初速 105 m/s 时代——300 m 飞行时间窗口 2.5~6 s
+    （180 m/s 下是 1.68 s）、弹道中段抬高 > 5 m（实测 80 m→0.68 / 200 m→4.27 / 350 m→13.28）、
+    「430 m 算超射程」（现无阻力上限 v0²/g_eff = 1179.6 m）。改法：越界点按当前 v0 现算，其余改守
+    物理关系（中段离地 + 随射程单调升高 + 飞行时间 = D/(v0·cosθ) + 带阻力顶点 300 m→14.20 m、
+    400 m→30.97 m 且越远越高），不再留与初速绑死的固定阈值。
+  · vehicle_test 1 项：原断言「125mm 主炮（700 mm）能打穿坦克首上」，而首上是 700 mm @ 30° ⇒ 等效
+    808 mm。这正是第七节「载具反装甲路径」待拍板的数据必然性，不是判定 bug ⇒ 改为「正面打不穿、
+    侧面 260 mm 能穿」。
+  · role_test 2 项：写死「精确射手 10 发」（第六版手工兵种表的数）；第十二版起弹匣以官方武器表为准
+    （QBU-191 官方就是 30 发）⇒ 改用副武器 M17（17 发 ≠ GameConfig 默认 30 发）测「换弹跟实例弹匣走」，
+    保留「再有人写死常量就会被抓出来」的判别力。
+  · height_image_test 1 项：要求中灰精确等于 75.0 m，但 8bit 灰度是 0.59 m/级（Color(0.5) 落到 127 级
+    ⇒ 74.71 m），要精确相等等于否定 8bit 管线本身 ⇒ 改为「一级以内」容差。
+  · cover_test 1 项：卧姿高度那条写成 PRONE < EYE_HEIGHT − SANDBAG（0.6 < 0.5）是笔误，那是「站姿越过
+    掩体后的余量」；改成真正的判据「卧姿视线 < 沙袋顶 < 站姿眼高」。
+· 已拍板并落地：GameConfig.ENEMY_DAMAGE_SCALE 0.0 → 1.0（撤掉调试态；实际出口三处：Enemy 打玩家 /
+  敌人打掩体耐久 / 载具主炮）。Enemy.detection_range 本次未动，仍为 20.0 m（见第七节）。
+· 新工具 tools/run_tests_headless.gd：无编辑器跑批器。测试都是 @tool + extends EditorScript，而
+  EditorScript 只能在编辑器里实例化，所以它读源码、把基类换成 RefCounted 再动态编译执行
+  （这些测试不用任何编辑器 API，结果与编辑器里「文件 → 运行」等价）。退出码 0/1，方便以后接 CI。
+· 复核时发现、本次未修（已进第六节）：高度图是按 res:// 原图读的，导出后 PNG 会被导入成 .tres，
+  WorldSetup._load_height_image（拆分前在 Main）在导出包里会读不到——Godot 自己就给了 WARNING
+  「Loaded resource as image file, this will not work on export」。
+· 环境备忘（DSH 这台机）：① 工作区没有 .git ⇒ 不能 revert/commit，所有改动只能靠本文件记录
+  ② gdlint 不可用（gdtoolkit 目录里只有一个 pickle，没有 linter 命令）⇒「gdlint 0 问题」只能在编辑器侧确认
+  ③ 子目录里 shell 既不能写也不能删（只有工作区根可写）⇒ 临时文件要建在根目录；Godot 编辑器模式写不了
+  .godot 缓存，所以跑测试走 headless + --log-file
+
+【第二十版 · 候选 N 完成：Main 职责拆分（2026-09-30）】
+· 结果：Main.gd 968 → 391 行（验收 ≤ 400 ✓），玩法零回归。
+· 拆成四个 Node 子模块（都刻意不写 class_name，Main 用 preload 引用；各自持 Main 引用走鸭子类型）：
+  · scenes/gameplay/WorldSetup.gd（133 行）：地形 / 高度图导入 / 地图预览 / 玩家 / 相机 / 占领节点 / 掩体 / 敌人。
+    建好的东西写回 Main 的公开字段（grid / sight / player / camera / camera_controller / terrain_texture /
+    capture_zones）。所有实体仍 add_child 到 Main（不是挂到模块下），场景树与绘制顺序与拆分前一致。
+  · scenes/gameplay/VehicleController.gd（122 行）：建车（我方 IFV + 敌方坦克 AI）、上车/下车、换座、
+    武器位操炮塔、驾驶、开炮与「击穿 / 未击穿 xx 等效」提示。
+  · systems/marks/MarkController.gd（63 行）：轮盘报点、地图选点报点、通视与 500 m 红线、喂事件给任务系统。
+  · ui/HudBuilder.gd（418 行）：HUD 整层（含战术地图图层 / 小地图 / 任务卡片 / 报点轮盘）、准心染色与朝向、
+    聚焦视觉、三条状态标签的节流刷新、提示行、胜负文字、战术地图开合（含开图期间的输入冻结）。
+· Main 只剩四件事：@export 配置 → 装配（new 出各系统与四个模块）→ _wire_signals() 信号接线表（控件/地图/
+  事件总线/玩家的回调全集中在一处）→ 战局流程（分数 / 任务结算 / 占领胜负 / 间瞄 / 输入）。
+  顺手把模块要读的私有字段改成公开：_score → score、_capture_zones → capture_zones、
+  _terrain_sprite.texture → terrain_texture、_indirect → indirect（文件头写明「子模块的接口就是这些字段」）。
+· 为什么比原计划多拆一个：只拆 HUD/载具/报点三块的话，Main 仍有约 500 行（世界建场 + 战斗结算 + 流程太重），
+  够不到 ≤400 的验收线，所以世界建场单独成 WorldSetup。
+· 踩坑记录（给以后拆的人）：模块里写 `var x := main.xxx` 一律编不过——main 是鸭子类型（Variant），
+  GDScript 推断不出类型，必须 `var x: float = main.xxx`。本轮共踩到 4 处（VehicleController 的 targets、
+  MarkController 的两个高度、HudBuilder 的 aim）。
+· 验收（三条全过）：
+  ① 16 个测试脚本 / 277 项断言全绿（tools/run_tests_headless.gd，退出码 0）
+  ② 新增集成冒烟 tools/run_integration_headless.gd：真实例化 Main.tscn，断言装配关系 + 五条交互链
+     —— 战术地图开合（含 2026-09-28「关图后摇杆锁死」回归点）/ 载具上下车换座操炮开炮 / 报点标记链
+     （含通视红线与 500 m 上限）/ 兵种·姿态·换枪·聚焦 / 开火曳光 / 血量与分数标签 / 提示 1.6 s 超时 /
+     三节点全占走真实 flag_state_changed 链路胜利结算 —— 38 项断言全绿
+  ③ 编辑器真跑一遍：HUD 与拆分前逐项一致（左侧两列功能键 / 任务卡片 / 准心 / 小地图 / 摇杆 / 弹药血量分数），
+     game 日志零脚本错误
+· 集成冒烟的两条环境约束（写进脚本文件头了，别踩）：`--script` 模式下本脚本的编译早于 autoload 注册 ⇒
+  ① 不能写 EventBus.xxx，也不能在编译期引用 CaptureZone / Player / Enemy / AimCameraController
+  （它们用了 EventBus 全局名，被拉进来编译失败还会被缓存，占领/任务链会跟着全废）
+  ② 手动实例化的场景不会自动成为 current_scene，必须自己设（否则 Enemy 开火画曳光会炸）
+· 顺带订正：demo_cover_points() 是 DEMO_NODES（5 个节点）× 每点 4 个 = 20 个沙袋；第八版写的
+  「12 个（3 个节点 × 4）」与代码不符（代码按全部 5 个节点铺）。
+· 复核时发现、本次未修（已进第六节）：战术地图的「主线任务高亮」从来没生效过——建 HUD 时 Main.quests
+  还没创建（传进去是 null），TacticalMap.gd:314 遇到 null 直接 return。这是拆分前就有的旧账
+  （原来 _build_hud 也在建 quests 之前），修法只是把 QuestSystem 的创建挪到 HUD 之前。
+
+【补记 · 2026-09-30：知识库与协作资产入库（本文件首次登记这些资产）】
+· docs/kb 知识库（从手机端 agent 迁来，共 1460 个文件）——用 MCP 工具 kb_search（定位，返回 文件:行号:内容）/
+  kb_read（按行读全文，可分页）/ kb_list（列目录）查，别靠记忆猜引擎行为：
+  · refs/godot-api/（1082 个）：每个 Godot 类一个 .md（继承链 / 属性 / 方法 / 信号 / 枚举），INDEX.md 是总索引
+  · refs/godot-guide/（34 个）：官方指南，含 GDScript 章节与配图
+  · 知识库/00-收件箱/：Agent持久记忆导出-2026-09-29.md（245 行，手机端 facts 66 条 + state 的只读快照；
+    开头「体检结论」直接点名了过期记忆——例如别再按 7.8 m 高程网格干活、「jieyu-1 是空骨架」已过时）+ assets
+  · 知识库/01-项目/猫捉耗子CMG/（3 个）：另一个项目（art-bible / 工作流），与 jieyu-1 无关
+  · 知识库/02-参考/Krita手册-en/（338 个）：历史资料，与本项目无关
+· docs/notes.md（14.6 KB）：从持久记忆筛出的「Godot 通用坑 + 《解域》设计定标 + 工程实现」条目
+· docs/第一版垂直切片.md（7 KB）：第一版切片说明
+· AGENTS.md（工作区根，3.8 KB）：给 AI 干活的规则（先读本文件再动手；改完必跑测试；无 class_name 的模块
+  引用方必须 preload；数行用 LF 口径；Godot / GUI 环境坑）。它不进 .gd 计数，但属于「开工前该知道」的东西。
+· 环境复测（2026-09-30）：受限沙箱仍然只放开工作区根目录——实测在 tools/ 里建文件被拒（「对路径的访问被
+  拒绝」），所以临时文件一律建在工作区根（根目录可写可删）；Godot 编辑器模式写不了 .godot 缓存，
+  跑脚本走 headless + --log-file。两个 MCP 通道：godot-ai（仅编辑器打开时可用，可 project_run / 截图 /
+  game_eval）、agent-tools（知识库，随时可用）。
+· 文档资产不计入三节规模：docs/ 共 1462 个文件（其中 1460 在 docs/kb 里）。
+
+四、接下来（候选 A~N 已全部完成；单元测试 277 项 + 集成冒烟 38 项全绿）
+
+候选 L · 支线模板的前置系统（4.10.11 剩下 5 条）
+  做什么：FOB 与补给实体、敌方载具、通道判定与敌军行进路径、防守阶段流程（T-M2 守住节点）
+  验收：T-S2 / T-S3 / T-S5 / T-S6 / T-M2 能各自发出来并结算
+候选 M · 表现与音频（12.7 动画 / 12.3 阴影）
+  做什么：角色动画帧（移动/开火/倒地）、枪口火光、命中特效、基础音效
+  验收：开火与命中在画面上有明确反馈
+候选 N · Main 职责拆分 —— ✅ 已完成（见第二十版，2026-09-30）
+  结果：Main.gd 968 → 391 行，拆成 WorldSetup / VehicleController / MarkController / HudBuilder 四个子模块
+  （原计划三块不够：世界建场不拆走的话 Main 仍有约 500 行）
+  验收三条全过：16 个脚本 277 项 + 集成冒烟 38 项全绿；编辑器真跑 HUD 与拆分前逐项一致
+
+六、其他待办（不阻塞，按需）
+· 【新，2026-09-30】战术地图「主线任务高亮」从未生效：建 HUD 时 Main.quests 还是 null，TacticalMap.gd:314
+  遇到 null 直接 return ⇒ 高亮一直没画。修法：把 QuestSystem.new() 挪到 HudBuilder.setup() 之前（位置调整），
+  已列入下一批（第二十版复核时发现，属拆分前旧账）。
+· 【新，2026-09-30】高度图的导出兼容：WorldSetup._load_height_image 直接按 res:// 读原图，导出后 PNG 会被
+  导入成 .tres ⇒ 导出包里读不到（Godot 有 WARNING「this will not work on export」）。要么改成读导入后的
+  Image/Texture2D 资源，要么把 PNG 加进导出过滤并用 FileAccess 读原始文件。
+· 【新，2026-09-30】双重数据源：RoleTable 的 mag_size / reserve 与 data/weapons_data.txt 重复
+  （玩家实际读武器表，兵种表那两项只是镜像）⇒ 建议删掉或改成从武器表取，避免再次对不上。
+· 【新，2026-09-30】architecture.html 的数字过期：还写着「66 个 .gd / 20 个 @tool EditorScript /
+  Main.gd 1002 行 / max-file-lines 1200 / 最后更新 2026-09-28」，需与第三节同步。
+· 【新，2026-09-30】本机工作区没有 .git：建议在 D:\Godot4.7_Proj\jieyu-1 初始化仓库并做一次基线提交，
+  否则「改坏了回不去」只能靠手工备份（本文件是目前唯一的改动记录）。
+· 地形笔刷编辑器（内置编辑 / 运行时雕刻）：已先落地灰度图导入（工具链 A），笔刷后置
+· 高度图 16bit 精度（8bit = 0.59 m/级，丘陵够用；掩体级精度再说）
+· 部位伤害（需给敌人加部位模型：头/身/腿）
+· 枪口火光、后坐视觉（12.7.3）
+· M320 枪榴弹 / 间瞄（需 simulate + 战术地图选落点）
+· 载具（LVT-2 等，需 8.2 载具数据字典）
+· 多兵种与武器切换
+
+七、已知待拍板
+· SIGHT_MARGIN：已拍板并落地（2026-09-28）——按用户要求恢复文档一样严格：
+  代码回到文档 12.2 的 0.3 m，准心侧的距离放宽（CROSSHAIR_SIGHT_MARGIN_PER_METER）
+  与近距豁免（CROSSHAIR_SIGHT_NEAR_EXEMPT）一并归零。两个开关保留，
+  真机若嫌太严可临时调回 0.02 / 10.0（不用改逻辑）。
+· 载具反装甲路径（2026-09-29 新提，待拍板）：玩家 IFV（ifv_a 穿深 60 mm）对敌方 MBT
+  （mbt_t1 正面 700@30° ⇒ 等效 808 mm、侧面 260、后部 130、顶部 50）任何一面都打不穿，
+  且第一版没有攻顶手段 ⇒ 真机上「只有未击穿效果」是数据必然，不是判定 bug。
+  选项 A：给 IFV 加炮射导弹 ATGM（推荐穿深 800 / 伤害 400 / 2 发，武器位一键切弹种）——
+  800 对正面 808 仍差 8 mm 打不穿、对侧后能穿，正好逼出「绕侧后」的战术梯度；
+  选项 B：不加，先用能打穿的目标做装甲测试，反装甲路径另立版本。
+· Enemy.detection_range（2026-09-29 提出，仍待拍板）：工作区当前值为 20.0 m，原为 120.0 m，
+  疑似与「敌人伤害归零」同一批调试值。保留 20（近视）还是退回 120，需拍板。
+  2026-09-30：本次未动，保持工作区现状；想在编辑器里看掩体/压制效果就临时调大。
+· GameConfig.ENEMY_DAMAGE_SCALE（2026-09-30 已拍板并落地）：改回 1.0（正式数值），调试态 0.0 已撤，
+  不会再被误判成「敌人 AI 坏了」。实际出口三处：Enemy 打玩家 / 敌人打掩体耐久 / 载具主炮。
+  另注：压制不随它归零（准心仍会抖、HUD 仍显示压制值），因为压制不是伤害。

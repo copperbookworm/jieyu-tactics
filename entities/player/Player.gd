@@ -16,6 +16,16 @@ enum Posture { STAND, CROUCH, PRONE }
 
 ## 武器表用 preload 常量引用（WeaponTable.gd 刻意不写 class_name，见其文件头说明）
 const WeaponTable := preload("res://systems/weapons/WeaponTable.gd")
+## 环境互动区查询（TerrainZones.gd 同样刻意不写 class_name）
+const TerrainZones := preload("res://systems/terrain/TerrainZones.gd")
+## 表现层特效（候选 M：12.7.3 枪口火光 / 12.7.4 命中特效）；无 class_name，preload 引用
+const EffectSpawner := preload("res://systems/effects/EffectSpawner.gd")
+## 12.3 阴影（EffectSpawner 已 preload 了另两个特效）
+const BlobShadowScript := preload("res://entities/effects/BlobShadow.gd")
+## 12.7.1 上下半身分离的角色图（无 class_name，preload 引用）
+const UnitFigureScript := preload("res://entities/visual/UnitFigure.gd")
+## 10 章音效入口（运行时找 autoload，调用点不依赖编译期全局名）
+const Sfx := preload("res://systems/audio/Sfx.gd")
 
 ## 兵种引用走全局 class_name（RoleTable.gd 自带 class_name）
 
@@ -25,6 +35,9 @@ const WeaponTable := preload("res://systems/weapons/WeaponTable.gd")
 
 var facing := Vector2.RIGHT
 var alive := true
+## 4.16 被击倒：血量归零不立刻阵亡 —— 先进倒地态，默认 60 s 无人扶起才转阵亡
+var downed := false
+var downed_time_left := 0.0
 
 # —— 散布与聚焦（第十八章 步兵武器操纵性 + 聚焦模式确认稿）——
 var is_moving := false    # 移动中散布放大，站定收紧（动静二分）
@@ -39,6 +52,12 @@ var role_id := RoleTable.Role.RIFLEMAN
 var posture := Posture.STAND
 ## 通视系统（由 Main 注入）：子弹挡掩体要用它与通视同一套口径
 var sight: SightSystem = null
+
+# —— 环境互动（docx 4.17，候选 O 第四轮）——
+## 环境互动区（泥泞 / 雪地 / 草丛）：由 WorldSetup 建好后注入；移速倍率与隐蔽度都从这里查
+var zones: Array = []
+## 本帧是否贴着掩体（影响暴露面积）；由 tick_timers 刷新，测试可以直接置位
+var hugging := false
 
 # —— 弹药与射击状态（7.2 确认稿）——
 var mag_size := GameConfig.WEAPON_MAG_SIZE  # 发，弹匣容量（按兵种覆盖）
@@ -62,8 +81,15 @@ var _weapon_index := 0                 # 携带武器里的当前索引
 var _switching := false                # 换枪中（C3：切枪 1.04 s，期间不能开火）
 var _switch_time_left := 0.0
 
-var _visual: Sprite2D = null
+var _visual = null            ## 12.7.1 起是 UnitFigure（Node2D），不再是 Sprite2D
 var _joystick: TouchJoystick = null
+## 12.3 Blob Shadow：脚底的扁椭圆（身体的子节点，show_behind_parent）
+var _shadow = null
+## 12.7.1 上半身（Upper）的朝向＝准星方向；由 HudBuilder 每帧推过来（它本来就算这个方向）
+var aim_direction := Vector2.RIGHT
+## 12.7.4 受击闪白剩余时间
+var _hit_flash_left := 0.0
+var _flash_drawn := false
 
 
 func _ready() -> void:
@@ -78,6 +104,8 @@ func set_joystick(joystick: TouchJoystick) -> void:
 
 ## 当前移动输入（载具驾驶要读它——人在车上时自己的移动被锁，但摇杆方向依然有效）
 func move_input() -> Vector2:
+	if not alive or downed:
+		return Vector2.ZERO
 	if _joystick == null:
 		return Vector2.ZERO
 	return _joystick.move_vector
@@ -104,6 +132,10 @@ func tick_timers(delta: float) -> void:
 		_posture_timer -= delta
 		if _posture_timer <= 0.0:
 			posture = _pending_posture
+			if _visual != null:
+				_visual.set_posture(posture)   # 12.7.1：姿态进角色图（站 / 蹲 / 卧三套身体形状）
+	# 环境互动（4.17）：每帧刷新「是否贴着掩体」——与姿态、连发计时在同一处推进
+	hugging = _compute_hugging()
 	# 换枪计时（C3：1.04 s，到点才把武器换过去）
 	if _switching:
 		_switch_time_left -= delta
@@ -111,6 +143,18 @@ func tick_timers(delta: float) -> void:
 			_switching = false
 			if _weapon_index < weapons.size():
 				apply_weapon(String(weapons[_weapon_index]))
+	# 12.7.4 受击闪白衰减：与压制橙弧同一个坑 —— 「从有到无」那一帧也要重绘，
+	# 否则白圈会永久留在屏幕上（_draw 的内容不会自己清）
+	if _hit_flash_left > 0.0:
+		_hit_flash_left = maxf(_hit_flash_left - delta, 0.0)
+	var flashing := _hit_flash_left > 0.0
+	if flashing or _flash_drawn:
+		queue_redraw()
+	_flash_drawn = flashing
+	# 12.7.1：把朝向与实际速度喂给角色图（腿的相位随速度推进，站住就冻住）。
+	# 用上一帧的 velocity 算相位，差一帧看不出来；好处是测试可以直接调 tick_timers 驱动。
+	if _visual != null:
+		_visual.set_move(facing.angle(), velocity.length() / maxf(move_speed, 0.001), delta)
 
 
 func _physics_process(delta: float) -> void:
@@ -129,6 +173,14 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		is_moving = false
 		return
+	# 4.16 倒地：无法行动，只推进倒地计时；到点转阵亡（die 会发 player_died → 失败结算）
+	if downed:
+		downed_time_left -= delta
+		if downed_time_left <= 0.0:
+			die()
+		velocity = Vector2.ZERO
+		is_moving = false
+		return
 	# 触屏摇杆输出 → 世界方向（俯视固定视角，不随相机旋转）
 	var input_vector := Vector2.ZERO
 	# 开图期间冻结移动（docx 4.11.7 ①：地图不暂停游戏，但玩家不能移动/开火）
@@ -136,7 +188,7 @@ func _physics_process(delta: float) -> void:
 		input_vector = _joystick.move_vector
 	if input_vector.length() > 0.05:
 		facing = input_vector.normalized()
-		velocity = facing * move_speed * posture_speed_scale()
+		velocity = facing * effective_move_speed()
 	else:
 		velocity = Vector2.ZERO
 	move_and_slide()
@@ -220,6 +272,43 @@ func posture_speed_scale() -> float:
 	return 1.0
 
 
+## 实际移动速度：基础速度 × 姿态档 × 地形档（4.17：泥泞 / 雪地减速）
+func effective_move_speed() -> float:
+	return move_speed * posture_speed_scale() * terrain_speed_scale()
+
+
+## 当前位置的地形移速倍率（4.17：泥 0.70 / 雪 0.55 / 其余 1.0；多片重叠取最慢的那片）
+func terrain_speed_scale() -> float:
+	return TerrainZones.speed_scale_at(zones, global_position)
+
+
+## 当前位置的隐蔽度（4.17：草丛 0.35、卧姿再 +0.20、封顶 0.60）——Enemy 据此缩短发现距离
+func terrain_concealment() -> float:
+	return TerrainZones.concealment_at(zones, global_position, posture == Posture.PRONE)
+
+
+## 4.17 掩体互动：贴着掩体但不聚焦＝缩在掩体后（命中面积打折）；
+## 按住聚焦＝探头（暴露回满，换来聚焦那档散布收紧）。第一版不做「探头的视野限制」。
+func exposure_scale() -> float:
+	if hugging and not focusing:
+		return GameConfig.COVER_HUG_EXPOSURE
+	return 1.0
+
+
+## 是否贴着掩体（与 is_supported 同一套组查询，半径不同；测试环境没有掩体则为假）
+func _compute_hugging() -> bool:
+	var loop := Engine.get_main_loop() as SceneTree
+	if loop == null:
+		return false
+	for node in loop.get_nodes_in_group(GameConfig.OCCLUDER_GROUP):
+		var cover = node
+		if cover == null or not cover.has_method("distance_to_edge"):
+			continue
+		if cover.distance_to_edge(global_position) <= GameConfig.COVER_HUG_RANGE:
+			return true
+	return false
+
+
 ## 命中面积系数（C2 确认值）：站 1.0、蹲 0.7、卧 0.5——敌人打卧姿的你更难中
 func hit_radius_scale() -> float:
 	if posture == Posture.CROUCH:
@@ -262,7 +351,7 @@ func add_suppression(amount: float) -> void:
 
 ## 当前能否开火（活着、没换弹、没换枪、冷却结束、有弹药）。
 func can_fire() -> bool:
-	return alive and not _reloading and not _switching \
+	return alive and not downed and not _reloading and not _switching \
 			and _fire_cooldown <= 0.0 and ammo_in_mag > 0
 
 
@@ -287,6 +376,15 @@ func shoot(direction: Vector2, enemies: Array) -> Dictionary:
 			global_position, dir, weapon_range(), enemies,
 			GameConfig.ENEMY_HIT_RADIUS, sight, sight_eye_height())
 	result["fired"] = true
+	# 12.7.3 / 12.7.4：枪口火光 + 弹着点特效 —— 由开枪的人自己放，Main 一行都不用加（≤400 是硬线）
+	EffectSpawner.muzzle_at(self, global_position + dir * GameConfig.MUZZLE_OFFSET, dir)
+	var impact_kind := EffectSpawner.IMPACT_GROUND
+	if result.get("hit", false):
+		impact_kind = EffectSpawner.IMPACT_UNIT
+	elif result.get("cover_hit", false):
+		impact_kind = EffectSpawner.IMPACT_COVER
+	EffectSpawner.impact_at(self, result.get("point", global_position), impact_kind)
+	Sfx.play("shot")            # 10 章：枪声
 	# 打空自动触发换弹。
 	if ammo_in_mag <= 0:
 		start_reload()
@@ -323,7 +421,7 @@ func apply_role(role: int) -> void:
 
 ## 换枪（C3 动作时间基线：切枪 1.04 s；切换期间不能开火，到点才真正换过去）
 func switch_weapon() -> void:
-	if weapons.size() <= 1 or _switching:
+	if downed or weapons.size() <= 1 or _switching:
 		return
 	_weapon_index = (_weapon_index + 1) % weapons.size()
 	_switching = true
@@ -359,13 +457,29 @@ func weapon_field(key: String, fallback: float) -> float:
 	return WeaponTable.number(weapon, key, fallback)
 
 
+## 伤害随距离线性衰减（7.2 / 武器表口径：起点内满伤、终点外最低伤）
+## 2026-10-01 从 Main.gd 搬来（候选 L2）：读的是本玩家的武器行，本来就该由玩家自己答。
+func damage_at(distance: float) -> float:
+	var base := weapon_field("dmg_base", GameConfig.WEAPON_DAMAGE_BASE)
+	var lowest := weapon_field("dmg_min", GameConfig.WEAPON_DAMAGE_MIN)
+	var start := weapon_field("falloff_start", GameConfig.WEAPON_DAMAGE_FALLOFF_START)
+	var end := weapon_field("falloff_end", GameConfig.WEAPON_DAMAGE_FALLOFF_END)
+	if distance <= start:
+		return base
+	if distance >= end:
+		return lowest
+	var t := (distance - start) / maxf(end - start, 0.001)
+	return lerpf(base, lowest, t)
+
+
 ## 换弹：有备弹且弹匣未满才开始。
 func start_reload() -> void:
-	if not alive or _reloading:
+	if not alive or downed or _reloading:
 		return
 	if reserve_ammo <= 0 or ammo_in_mag >= mag_size:
 		return
 	_reloading = true
+	Sfx.play("reload")          # 10 章：换弹
 	# 空仓换弹更久（7.5：战术 4.28 s / 空仓 4.85 s）。
 	_reload_time_left = (weapon_field("reload_empty", GameConfig.WEAPON_RELOAD_EMPTY)
 			if ammo_in_mag <= 0
@@ -386,15 +500,51 @@ func _finish_reload() -> void:
 
 ## 受伤与死亡（血量下限 0：单发伤害高于剩余血量时，HUD 不该出现负血量——
 ## 载具主炮一发 400、步兵满血 100，原先会直接显示 -300）
+## 4.16 起：血量归零进「倒地」而不是立刻阵亡。
 func take_damage(amount: float) -> void:
 	if not alive:
 		return
 	hp = maxf(hp - amount, 0.0)
+	# 12.7.4 受击反馈：闪白（本体画白圈）+ 广播给相机做轻微屏幕震动
+	_hit_flash_left = GameConfig.HIT_FLASH_TIME
+	queue_redraw()
+	Sfx.play("hit")             # 10 章：自己挨打的反馈音
+	if EventBus != null and EventBus.has_signal("player_hit"):
+		EventBus.emit_signal("player_hit", amount)
 	if hp <= 0.0:
-		die()
+		down()
+
+
+## 4.16 被击倒：血量归零 → 倒地。期间无法移动 / 开火 / 换弹 / 换枪，相机锁死在身体上，
+## 画面去色 + 暗角 + 倒计时；DOWNED_TIMEOUT 秒无人扶起才转阵亡。
+func down() -> void:
+	if downed or not alive:
+		return
+	downed = true
+	downed_time_left = GameConfig.DOWNED_TIMEOUT
+	velocity = Vector2.ZERO
+	is_moving = false
+	focusing = false
+	release_joystick()   # 丢掉还按在摇杆上的触点，倒地瞬间不会卡住
+	if EventBus != null and EventBus.has_signal("player_downed"):
+		EventBus.emit_signal("player_downed")
+
+
+## 被扶起（4.16 的队友救援路径：医疗兵优先）。第一版单机没有队友，
+## 这个接口留给后续的小队系统与测试；扶起后的血量取 GameConfig.DOWNED_REVIVE_HP。
+func revive() -> void:
+	if not downed:
+		return
+	downed = false
+	downed_time_left = 0.0
+	hp = maxf(hp, GameConfig.DOWNED_REVIVE_HP)
 
 
 func die() -> void:
+	if not alive:
+		return
+	downed = false
+	downed_time_left = 0.0
 	alive = false
 	# @tool 测试环境 autoload 信号可能未注册，防御式发信号（同 CaptureZone）。
 	if EventBus != null and EventBus.has_signal("player_died"):
@@ -409,26 +559,36 @@ func _build_collision() -> void:
 	add_child(shape)
 
 
+## 12.7.4 受击闪白：受击后短暂叠一圈白（12.3 的阴影挂在 z_index -1，白圈画在本体上）
+func _draw() -> void:
+	if _hit_flash_left <= 0.0:
+		return
+	draw_circle(Vector2.ZERO, body_radius * 1.15,
+			Color(1.0, 1.0, 1.0, GameConfig.HIT_FLASH_ALPHA
+					* (_hit_flash_left / GameConfig.HIT_FLASH_TIME)))
+
+
 func _build_visual() -> void:
-	_visual = Sprite2D.new()
-	_visual.texture = _make_dot_texture()
-	# 贴图 16 px，1 px = 1 世界单位，要缩到人形直径（1 m 网格下约 0.8 m）
-	_visual.scale = Vector2.ONE * (body_radius * 2.0 / 16.0)
+	# 12.3：阴影先建（show_behind_parent + z_index -1），永远压在身体下面
+	_shadow = BlobShadowScript.new()
+	_shadow.name = "BlobShadow"
+	_shadow.fit_body(body_radius)
+	add_child(_shadow)
+	# 12.7.1：上下半身分离（第一版用程序绘制替代帧资源）。
+	# 图是子节点：让它画在父节点（受击闪白那一圈白）之下，闪白才能盖在图上。
+	_visual = UnitFigureScript.new()
+	_visual.name = "Figure"
+	_visual.show_behind_parent = true
 	add_child(_visual)
+	_visual.setup_figure(body_radius, GameConfig.UNIT_COLOR_PLAYER)
+	_visual.set_posture(posture)
+	_visual.set_aim(aim_direction.angle())
 
 
-## 程序生成的圆点贴图（蓝＝我方），等比占位用
-static func _make_dot_texture() -> ImageTexture:
-	var texture_size := 16
-	var image := Image.create(texture_size, texture_size, false, Image.FORMAT_RGBA8)
-	var center := Vector2(texture_size, texture_size) * 0.5
-	for y in texture_size:
-		for x in texture_size:
-			var distance := Vector2(x + 0.5, y + 0.5).distance_to(center)
-			if distance <= 6.0:
-				image.set_pixel(x, y, Color("4f9de0"))
-			elif distance <= 7.5:
-				image.set_pixel(x, y, Color(0.0, 0.0, 0.0, 0.6))
-			else:
-				image.set_pixel(x, y, Color(0.0, 0.0, 0.0, 0.0))
-	return ImageTexture.create_from_image(image)
+## 12.7.1：上半身（Upper）随准星方向 —— 方向由 HudBuilder 每帧算好推过来，Main 不必插一行
+func set_aim_direction(direction: Vector2) -> void:
+	if direction.length_squared() <= 0.000001:
+		return
+	aim_direction = direction.normalized()
+	if _visual != null:
+		_visual.set_aim(aim_direction.angle())

@@ -9,6 +9,10 @@ extends Node
 ## 刻意不写 class_name：引用方 preload（见 Cover.gd 头部说明）
 
 const CoverScript := preload("res://entities/cover/Cover.gd")
+## 敌方 FOB（候选 L2）：同样无 class_name，preload 引用
+const FobScript := preload("res://entities/fob/Fob.gd")
+## 环境互动区（docx 4.17）：同样无 class_name，preload 引用
+const TerrainZoneScript := preload("res://entities/zone/TerrainZone.gd")
 
 var terrain_sprite: Sprite2D = null
 
@@ -27,6 +31,8 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	_build_camera(main)
 	main.capture_zones = _build_capture_zones(main)
 	_build_covers(main)
+	_build_terrain_zones(main)   # 4.17：泥泞 / 雪地减速、草丛隐蔽（要在玩家之后、敌人之前）
+	_build_enemy_fob(main)
 	_spawn_enemies(main, enemy_count)
 
 
@@ -46,7 +52,19 @@ func _load_grid(height_image_path: String, map_seed: int) -> HeightGrid:
 	return MapGenerator.build_demo_grid(map_seed)
 
 
+## 高度图读取（工具链 A）。
+## 【2026-10-01 候选 T ①】优先走「导入后的资源」：导出后 PNG 会被打成 .ctex 封进包里，
+## 这时 Image.load_from_file("res://…png") 读不到原图，Godot 会 WARNING「this will not work on export」。
+## 顺序：① ResourceLoader 取 Texture2D → get_image()（编辑器与导出包都走这条路）
+##       ② 退回 Image.load_from_file（绝对路径 / 没进导入管线的裸文件 / 刚放进项目还没导入的图）
 static func _load_height_image(path: String) -> Image:
+	if ResourceLoader.exists(path, "Texture2D"):
+		var texture := ResourceLoader.load(path, "Texture2D") as Texture2D
+		if texture != null:
+			var imported := texture.get_image()
+			if imported != null and imported.get_width() > 0:
+				return imported
+			push_warning("[地形] 高度图资源没有像素数据，退回直接读文件：%s" % path)
 	var image := Image.load_from_file(path)
 	if image == null:
 		push_error("[地形] 高度图读取失败：%s" % path)
@@ -118,6 +136,31 @@ func _build_covers(main) -> void:
 		cover.name = "Cover%d" % (i + 1)
 		cover.global_position = points[i]
 		main.add_child(cover)
+
+
+## 环境互动区（docx 4.17，候选 O 第四轮）：泥泞 / 雪地 / 草丛。摆位来自 MapGenerator（单一数据源）。
+## 建好后把区域数组注入玩家——Player 每帧用它算移速倍率与隐蔽度（Enemy 反过来读玩家的隐蔽度）。
+func _build_terrain_zones(main) -> void:
+	var zones: Array = []
+	for entry in MapGenerator.demo_terrain_zones():
+		var zone = TerrainZoneScript.new()
+		zone.name = "TerrainZone%d" % (zones.size() + 1)
+		zone.global_position = entry["position"]
+		main.add_child(zone)
+		zone.setup(int(entry["kind"]), float(entry["radius"]))
+		zones.append(zone)
+	if main.player != null:
+		main.player.zones = zones
+
+
+## 敌方 FOB（候选 L2，docx 4.10.11 T-S2）：一座敌方后方工事。
+## 位置来自 MapGenerator.demo_enemy_fob_point()（单一数据源，地图预览共用）。
+## 「必须先报点暴露才发得出摧毁任务」这条在 QuestSystem 里判，本函数只负责把它摆到世界上。
+func _build_enemy_fob(main) -> void:
+	var fob = FobScript.new()
+	fob.name = "EnemyFob"
+	fob.global_position = MapGenerator.demo_enemy_fob_point()
+	main.add_child(fob)
 
 
 ## 白旗点：第一版用 DEMO_NODES 前 3 个节点（全占即胜，验证 L5/L6 循环）

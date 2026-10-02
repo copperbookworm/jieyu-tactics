@@ -3,15 +3,31 @@ extends Node
 ## 报点 / 标记链（2026-09-30 候选 N：从 Main.gd 拆出）
 ## 负责：轮盘报点（落点＝准心）、地图选点报点、通视与距离红线（4.11.2）、把事件喂给任务系统。
 ## 提示文字统一走 main.hud.show_hint()（HUD 归 HudBuilder）；标记存在于 main.marks。
+##
+## 2026-10-01 候选 O 第二轮：本模块同时是「局内沟通链」的宿主 —— 快捷指令（docx 4.13）的执行体
+## commands 由这里创建（4.13 原文里「报点标记」与「快捷指令」本来就是并列的两条沟通路径），
+## 这样 Main 不必再多一个子模块（Main 的 ≤400 行是硬验收线）。
 ## 刻意不写 class_name：引用方 preload（见 Cover.gd 头部说明）
+
+const CommandControllerScript := preload("res://systems/comm/CommandController.gd")
 
 var main = null
 var marks: MarkSystem = null
+var commands = null     ## CommandController（4.13 快捷指令）
 
 
 func setup(main_node, marks_system: MarkSystem) -> void:
 	main = main_node
 	marks = marks_system
+	commands = CommandControllerScript.new()
+	commands.name = "CommandController"
+	add_child(commands)
+	commands.setup(main_node)
+
+
+## 快捷指令入口（Main._wire_signals 把 CommandWheel.command_requested 接到这里）
+func send_command(id: String) -> bool:
+	return commands != null and commands.send(id)
 
 
 ## 轮盘报点：落点＝准心世界坐标（准心已被地形钳制，天然满足 4.11.2 的「通视前提」）

@@ -1,6 +1,8 @@
 extends Node
 
 signal player_died
+signal player_downed                      ## 4.16 被击倒（血量归零进倒地态，未必立刻阵亡）
+signal player_hit(damage)                 ## 12.7.4 玩家受击（相机侧订阅它做轻微屏幕震动）
 signal enemy_killed(enemy)
 signal item_collected(item)
 signal quest_updated(quest_id)

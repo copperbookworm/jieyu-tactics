@@ -16,6 +16,13 @@ var crosshair_world := Vector2.ZERO
 ## 本帧准心是否被地形挡住（供 HUD 染色提示，区分于「拖拽上限」）
 var blocked_by_terrain := false
 
+## 4.16：被控单位倒地后，相机锁定在倒地身体上方（俯视固定、不可拖动）
+var locked_on_unit := false
+
+## 12.7.4 轻微屏幕震动：受击时叠一个瞬态偏移（不参与准心 / 弹道，只是「画面晃一下」）
+var _shake_time := 0.0
+var _shake_strength := 0.0
+
 ## 右半屏接管瞄准：记录发起拖拽的触点编号，-1 表示当前没有瞄准手指。
 var _aim_touch_index := -1
 
@@ -32,18 +39,63 @@ func setup(unit: Node2D, camera: Camera2D, sight: SightSystem) -> void:
 	_grid = sight.grid if sight != null else null
 	crosshair_world = unit.global_position
 	camera.zoom = Vector2.ONE * GameConfig.ZOOM_LEVELS[zoom_index]
+	# 12.7.4：受击震动由这里订阅（Player 只广播，不反向依赖相机；Main 因此一行都不用加）
+	if EventBus != null and EventBus.has_signal("player_hit") \
+			and not EventBus.is_connected("player_hit", _on_player_hit):
+		EventBus.connect("player_hit", _on_player_hit)
 
 
 func _process(delta: float) -> void:
 	if _unit == null or _camera == null:
 		return
-	_resolve_crosshair()
+	locked_on_unit = unit_is_downed()
+	if locked_on_unit:
+		# 4.16：倒地后锁在身体上——俯视固定、不做遮挡回退（人都倒了，没有「瞄准」这回事）
+		crosshair_world = _unit.global_position
+		blocked_by_terrain = false
+	else:
+		_resolve_crosshair()
 	var weight := clampf(smooth_speed * delta, 0.0, 1.0)
-	_camera.global_position = _camera.global_position.lerp(crosshair_world, weight)
+	_camera.global_position = _camera.global_position.lerp(crosshair_world, weight) \
+			+ advance_shake(delta)
+
+
+## 12.7.4 受击震动：叠一个短促的随机偏移（幅度随时间线性归零）
+func add_shake(strength: float = GameConfig.SCREEN_SHAKE_STRENGTH,
+		time: float = GameConfig.SCREEN_SHAKE_TIME) -> void:
+	_shake_strength = maxf(_shake_strength, strength)
+	_shake_time = maxf(_shake_time, time)
+
+
+func shake_active() -> bool:
+	return _shake_time > 0.0
+
+
+## 每帧推进并给出偏移；纯计算，测试可以直接驱动（不必进场景树）
+func advance_shake(delta: float) -> Vector2:
+	if _shake_time <= 0.0:
+		_shake_strength = 0.0
+		return Vector2.ZERO
+	_shake_time = maxf(_shake_time - delta, 0.0)
+	var amplitude := _shake_strength * (_shake_time / GameConfig.SCREEN_SHAKE_TIME)
+	if amplitude <= 0.0:
+		return Vector2.ZERO
+	return Vector2(randf_range(-amplitude, amplitude), randf_range(-amplitude, amplitude))
+
+
+func _on_player_hit(_damage) -> void:
+	add_shake()
+
+
+## 被控单位是否已倒地（鸭子类型：PlayerUnit 有 downed 属性；别的单位没有就算没倒地）
+func unit_is_downed() -> bool:
+	return _unit != null and ("downed" in _unit) and bool(_unit.downed)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	# 只有「右半屏起手」的触摸才接管瞄准：左手在左下推摇杆时不抢准心。
+	if unit_is_downed():
+		return   # 4.16：倒地后不允许拖动瞄准
 	var screen_delta := Vector2.ZERO
 	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
@@ -108,6 +160,21 @@ func _resolve_crosshair() -> void:
 			var cover_hit := _sight.first_cover_hit(unit_pos, crosshair_world)
 			if cover_hit != Vector2.INF:
 				var keep := unit_pos.distance_to(cover_hit) - GameConfig.CROSSHAIR_CLAMP_OFFSET
+				crosshair_world = unit_pos + direction * maxf(keep, 0.0)
+				clamped = true
+				blocked_by_terrain = true
+		elif _sight.smoke_blocks(unit_pos, origin_height, crosshair_world, target_height):
+			# 被烟幕挡住：退到烟前（docx 4.12.4「准心拖进烟雾区时按遮挡处理，停在烟前或回退」）
+			# blocked_by_terrain 这个名字保留（历史）：地形 / 掩体 / 烟任一挡住它都为 true，
+			# 报点红线（4.11.2）因此也一并挡住「隔着烟报点」。
+			var smoke_hit := _sight.first_smoke_hit(unit_pos, crosshair_world)
+			# 2026-10-02 真机修：**自己站在烟里不能钳**。segment_circle_entry 对「起点在圆内」
+			# 返回起点本身 ⇒ keep = 0 - offset ⇒ 准心被钳到脚下，真机表现就是「准心锁死在烟里、拖不动」
+			# （载具发烟器必踩：烟就放在自己脚下）。口径：烟挡「从外往里看」，不挡「从烟里往外看」，
+			# 隔着烟的远距离判定仍由 smoke_blocks 负责。
+			var inside_smoke := smoke_hit == Vector2.INF 					or unit_pos.distance_to(smoke_hit) <= GameConfig.CROSSHAIR_CLAMP_OFFSET
+			if not inside_smoke:
+				var keep := unit_pos.distance_to(smoke_hit) - GameConfig.CROSSHAIR_CLAMP_OFFSET
 				crosshair_world = unit_pos + direction * maxf(keep, 0.0)
 				clamped = true
 				blocked_by_terrain = true

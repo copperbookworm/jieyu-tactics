@@ -44,6 +44,9 @@ var advisor = null
 var _panel_theme: Theme = null
 var _cjk_font: Font = null
 var _theme_cache: Dictionary = {}
+var _scroll: ScrollContainer = null
+var _dragging := false
+var _drag_last_y := 0.0
 
 var _button: Button = null
 var _modal: Control = null
@@ -184,6 +187,7 @@ func _build_modal() -> void:
 	scroll.size = WINDOW_SIZE - Vector2(20.0, 20.0)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_modal.add_child(scroll)
+	_scroll = scroll
 
 	var box := VBoxContainer.new()
 	box.name = "Body"
@@ -340,6 +344,29 @@ func _make_line_edit(placeholder: String) -> LineEdit:
 ## InputEventMouseButton 上取焦点、**不认 InputEventScreenTouch**；BaseButton 自己处理触摸，
 ## 所以按钮／复选框一直是好的，只有输入框坏（实机 dumpsys：mShowRequested=false，即从未请求 IME）。
 ## 这里给每个 LineEdit 补一次「触摸按下就 grab_focus()」，聚焦后 Godot 自己会弹软键盘。
+## 真机实测（2026-10-03）：**触摸滑动不能滚面板** —— 于是 ③ 本局复盘 / ④ 用量账单 / 导出 CSV / 清空
+## 全在屏幕外、手机上根本够不着。根因与输入框同一个：工程关了 emulate_mouse_from_touch，
+## 而 ScrollContainer 的拖动滚动走鼠标事件那条路（BaseButton 自己处理触摸，所以按钮仍好使）。
+##
+## 修法：自己在 _input 里接管 ScreenTouch / ScreenDrag 来驱动 scroll_vertical。
+## 为什么放 _input 而不是给 ScrollContainer 挂 gui_input：挂在 ScrollContainer 上时，
+## 只要这一拖是从 SpinBox / CheckBox / Button 上起手的，事件就被那个控件吃掉了（真机实测：
+## 从正文区起拖能动、从数字框起拖不动）。_input 在 GUI 之前，起点在哪都能滚；
+## 只吞掉 ScreenDrag，按下/抬起照旧走 GUI，所以按钮与输入框不受影响。
+func _input(event: InputEvent) -> void:
+	if _modal == null or not _modal.visible or _scroll == null:
+		return
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		_dragging = touch.pressed
+		_drag_last_y = touch.position.y
+	elif event is InputEventScreenDrag and _dragging:
+		var drag := event as InputEventScreenDrag
+		_scroll.scroll_vertical -= int(drag.position.y - _drag_last_y)
+		_drag_last_y = drag.position.y
+		get_viewport().set_input_as_handled()
+
+
 func _wire_touch_focus(field: Control) -> void:
 	field.gui_input.connect(_on_field_gui_input.bind(field))
 

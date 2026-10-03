@@ -370,6 +370,9 @@ func can_request() -> String:
 		return "还没填 API key"
 	if _busy:
 		return "上一次请求还没回来"
+	# 没有战局快照就发 = 发一份空战报（真机上踩到：面板写着「先打完一局」，按钮却可点）
+	if not has_snapshot():
+		return "还没有可复盘的战局 —— 先打完一局再回来"
 	if resolved_model() == "":
 		return "没填模型名"
 	var provider := CatalogScript.resolve(provider_id)

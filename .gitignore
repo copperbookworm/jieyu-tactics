@@ -11,5 +11,10 @@ gdtoolkit/
 # 用「根锚定 + 通配」一次盖住，不动 addons/ 与 docs/kb/ 下那些合法的 _ 开头文件。
 /_*.log
 /_*.txt
+/_*.png
+/_*.png.import
+/_*.jpg
+/_*.webp
 /tmp_*.log
 /tmp_*.json
+/tmp_*.png

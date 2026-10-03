@@ -65,12 +65,12 @@
 
 <h2>一、体检卡（全部本轮真跑 / 真数）</h2>
 <div class="grid g6">
-  <div class="kpi"><div class="n">150</div><div class="l">个 .gd / <b>25395 行</b>（LF 字节口径）</div></div>
+  <div class="kpi"><div class="n">155</div><div class="l">个 .gd / <b>25986 行</b>（LF 字节口径）</div></div>
   <div class="kpi"><div class="n">398</div><div class="l">Main.gd 行数（硬线 ≤400，守住）</div></div>
   <div class="kpi"><div class="n">39 / 1337</div><div class="l">测试脚本 / 断言（全绿，退出码 0）</div></div>
   <div class="kpi"><div class="n blue">5 + 25</div><div class="l">几何门禁：HUD 5 + 外壳五屏 25</div></div>
   <div class="kpi"><div class="n blue">230</div><div class="l">集成冒烟项（真实例化 Main.tscn）</div></div>
-  <div class="kpi"><div class="n new">48</div><div class="l">版本轮次（本页随版本同步）</div></div>
+  <div class="kpi"><div class="n new">50</div><div class="l">版本轮次（本页随版本同步）</div></div>
 </div>
 <div class="note">
   <b>口径（别用别的数）</b>：行数一律 <b>LF 字节数</b>（pwsh 的 <code>Get-Content</code> 在中文 UTF-8 上会少数约 6%，
@@ -198,6 +198,9 @@
   「刻意不设每模式敌人数」的处置（当时的理由是 docx 没有人数口径 —— 现在口径由使用者给定）。
   <b>人数已接线（第四十九版）</b>：模式定义人数 → MatchHost / WorldSetup 按模式建场（PVP 20+19 / PVEVP 30+3；
   单跑 Main.tscn 仍回落 2+3）。队友编队已铺开（旧实现取模 3 个角度 ⇒ 19 人会叠成 3 堆）。
+  <b>编成（第五十版）</b>：systems/match/Organization.gd 算出「组 4 人 / 一小队 ≥ 2 组」并逐人发到 Ally ——
+  PVP 20 人 = <b>5 组 / 2 小队</b>（2+3）、PVEVP 4 人 = <b>1 组 / 0 小队</b>；端到端已被网关断言。
+  <b>行为层未做</b>（主线下发小队长 + 队内子任务），等 ㊸ 定。
   <b>性能</b>：桌面脚本侧 20v20 <b>9.79 ms/帧</b>（一帧预算 59~61%，debug、不含渲染），瓶颈 <b>has_sight ≈ 256 µs/次</b>；
   真机（PCE-W30）**FPS 60 稳定、物理 3.7 ms**，但 gfxinfo 与 vsync 都取不到，真机「余量」口径仍未拿到。
   ⚠ 真机暴露：队友 DPS ≈ 2400 vs 敌人总血 2000 ⇒ 开局 10 s 就打光，20v20 打不成对抗（待拍板）。详见 docs/性能预算.md。

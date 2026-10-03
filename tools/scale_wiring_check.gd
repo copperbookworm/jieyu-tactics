@@ -14,9 +14,9 @@ const ModeTableScript := preload("res://data/config/ModeTable.gd")
 
 ## [模式, 期望敌人, 期望队友]
 const CASES := [
-	[ModeTableScript.Mode.PVEVP, 30, 3],
-	[ModeTableScript.Mode.PVP_RANKED, 20, 19],
-	[ModeTableScript.Mode.PVP_CASUAL, 20, 19],
+	[ModeTableScript.Mode.PVEVP, 30, 3, 1, 0],
+	[ModeTableScript.Mode.PVP_RANKED, 20, 19, 5, 2],
+	[ModeTableScript.Mode.PVP_CASUAL, 20, 19, 5, 2],
 ]
 const SETTLE_FRAMES := 24
 const BOOT_FRAMES := 4
@@ -77,6 +77,15 @@ func _check_case(i: int) -> void:
 	_check("模式 %s 建出 %d 个敌人" % [label, want_e], enemies, want_e)
 	_check("模式 %s 建出 %d 名队友（1 + %d = %d 人）" % [label, want_a, want_a, want_a + 1],
 			friendlies, want_a)
+	# 编成（docx 4.10.8 / 5.8）：组 4 人 · 一小队至少 2 组
+	var want_g: int = int(CASES[i][3])
+	var want_s: int = int(CASES[i][4])
+	var org: Dictionary = {}
+	if _app.match_host != null and _app.match_host.main != null \
+			and _app.match_host.main.world != null:
+		org = _app.match_host.main.world.organization
+	_check("模式 %s 的编成：%d 组 / %d 小队" % [label, want_g, want_s],
+			[int(org.get("group_count", -99)), int(org.get("squad_count", -99))], [want_g, want_s])
 
 
 func _check(title: String, actual: Variant, expected: Variant) -> void:

@@ -25,6 +25,12 @@ var body_radius := 0.4
 var facing := Vector2.RIGHT
 var is_moving := false
 var index := 0                  ## 编队位（0/1/2）
+## 编成（docx 4.10.8 / 5.8 · 2026-10-03 拍板：组 4 人 · 一小队至少 2 组）
+## 由 WorldSetup 按 Organization 的结果写入；-1 = 不在任何组 / 小队
+var group_index := -1
+var squad_index := -1
+var is_group_leader := false
+var is_squad_leader := false
 
 var _fire_cooldown := 0.0
 var _sight = null

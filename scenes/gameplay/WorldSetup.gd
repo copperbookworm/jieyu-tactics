@@ -17,8 +17,12 @@ const FobScript := preload("res://entities/fob/Fob.gd")
 const TerrainZoneScript := preload("res://entities/zone/TerrainZone.gd")
 ## 本局模式规则（人数口径：docx 5.8）—— 队友数从这里取
 const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
+## 编成（docx 4.10.8 / 5.8）：组 4 人 · 一小队至少 2 组
+const OrganizationScript := preload("res://systems/match/Organization.gd")
 
 var terrain_sprite: Sprite2D = null
+## 本局友好方编成（组 / 小队 / 队长）—— 由 _spawn_allies 建好后写回，供 HUD / 任务链读
+var organization: Dictionary = {}
 
 
 ## 建场。map_preview_mode 时只建地形 + 预览层（游戏循环一行都不动）
@@ -136,10 +140,18 @@ func _ally_target() -> int:
 
 
 func _spawn_allies(main, count: int) -> void:
+	# 编成（docx 4.10.8 / 5.8）：玩家是名册第 0 位，队友从 1 起 —— 把每人的组 / 小队 / 组长身份发下去
+	organization = OrganizationScript.of_friendly_total(1 + count)
+	var member_of: Dictionary = organization["member_of"]
 	for i in count:
 		var ally := AllyScript.new()
 		ally.name = "Ally%d" % i
 		ally.setup(main, main.player, main.sight, main.grid, i)
+		var m: Dictionary = member_of.get(i + 1, {})
+		ally.group_index = int(m.get("group", -1))
+		ally.squad_index = int(m.get("squad", -1))
+		ally.is_group_leader = bool(m.get("is_group_leader", false))
+		ally.is_squad_leader = bool(m.get("is_squad_leader", false))
 		main.add_child(ally)
 
 

@@ -13,6 +13,7 @@ extends "res://ui/screens/ScreenBase.gd"
 
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
 const RoleTableScript := preload("res://data/config/RoleTable.gd")
+const OrganizationScript := preload("res://systems/match/Organization.gd")
 
 var _config_box: VBoxContainer = null
 var _hint: Label = null
@@ -96,6 +97,8 @@ func _refresh_config() -> void:
 	_config_box.add_child(UiKit.row("敌人数",
 		("%d（模式）" % mode_enemies) if mode_enemies > 0 else ("%d（设置）" % s.default_enemy_count)))
 	_config_box.add_child(UiKit.row("地图种子", str(s.default_map_seed)))
+	_config_box.add_child(UiKit.row("编成",
+		OrganizationScript.summary_text(OrganizationScript.of_mode(mode_id))))
 	_config_box.add_child(UiKit.divider())
 	_config_box.add_child(UiKit.row("操作提示",
 			"开" if s.tips_enabled else "关"))

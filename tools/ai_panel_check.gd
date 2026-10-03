@@ -83,6 +83,7 @@ func _process(delta: float) -> bool:
 		return false
 	_check_open()
 	_check_model_row()
+	_check_pager_reachability()
 	_report()
 	_done = true
 	quit(0 if _failed == 0 else 1)
@@ -162,6 +163,54 @@ func _check_model_row() -> void:
 			(_panel._available_ids as Array).has("我自己填的-不在名单里"))
 	_advisor.model = ""
 	_panel._refill_model_box()
+
+	# 价格表那一段（④）：文案必须说清「现在按哪一版价算」，否则玩家对不上账
+	var price_text := String((_panel._price_note as Label).text)
+	_check_true("价格表状态行有内容", price_text.contains("价格表"))
+	_check_true("价格表状态行写了内置版本", price_text.contains("内置 VERSION"))
+	_check_true("没配清单地址时说清了「未配置在线清单」", price_text.contains("未配置在线清单"))
+	_check_true("价格清单 URL 输入框在（玩家/维护者不用重新打包就能填）", _panel._manifest_edit != null)
+	_advisor.price_manifest_url = "https://example.com/price.json"
+	_panel._refresh()
+	_check_true("配了地址后状态行不再说「未配置」",
+			not String((_panel._price_note as Label).text).contains("未配置在线清单"))
+	_advisor.price_manifest_url = ""
+
+
+## 翻页可达性（这条是**真机踩过的坑**的钉子）：
+## ▲▼ 只能放在滚动内容里（挂在 _modal 外的按钮收不到点击，见 AiAdvisorPanel 的注释），
+## 于是它一定会被滚走。若两组翻页按钮的间距大于一屏，就存在「两组都够不着」的死区 ⇒ 卡住。
+## 这里断言：① 每组间距 ≤ 滚动视口高；② 步长 ≤ 最小间距（否则也会跳进死区）。
+func _check_pager_reachability() -> void:
+	var scroll: ScrollContainer = _panel._scroll
+	_check_true("滚动视口存在", scroll != null)
+	if scroll == null:
+		return
+	var view_h := scroll.size.y
+	var ys: Array[float] = []
+	_collect_pager_ys(_panel, ys)
+	ys.sort()
+	_check_true("至少有两组翻页按钮（首尾）", ys.size() >= 2)
+	if ys.size() < 2:
+		return
+	# 第一组不能离顶部太远（否则从顶部一进去就已经够不着了）
+	_check_true("第一组翻页按钮在首屏可达范围内（y=%.0f）" % ys[0], ys[0] <= view_h)
+	var worst := ys[0]
+	for i in range(1, ys.size()):
+		worst = maxf(worst, ys[i] - ys[i - 1])
+	print("— 翻页按钮共 %d 组，y = %s；最大间距 = %.0f，视口高 = %.0f" % [
+			ys.size(), str(ys), worst, view_h])
+	_check_true("相邻翻页按钮间距 ≤ 一屏（无够不着的死区）", worst <= view_h)
+	_check_true("步长 ≤ 最大间距（%d ≤ %.0f）" % [PanelScript.SCROLL_STEP, worst],
+			float(PanelScript.SCROLL_STEP) <= worst)
+
+
+func _collect_pager_ys(node: Node, out: Array) -> void:
+	if node is Button and (node as Button).name.begins_with("Pager"):
+		# 只有 ▼ 参与统计（▲ 与它同排，计一次即可）
+		out.append((node as Control).get_global_rect().position.y)
+	for child in node.get_children():
+		_collect_pager_ys(child, out)
 
 
 func _collect(node: Node, out: Array) -> void:

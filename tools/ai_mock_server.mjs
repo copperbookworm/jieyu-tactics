@@ -33,6 +33,29 @@ const server = http.createServer((req, res) => {
         messages: body.messages || [],
       }, null, 2));
     }
+    // 维护者发布的「价格清单」（静态文件）。故意把 deepseek-flash 的价改成好认的数字：
+    // 空闲输入 7 元/百万 ⇒ 1M 未命中输入应算 7_000_000 微元（内置是 1 元 ⇒ 1_000_000），
+    // 这样自检能断言「金额真的按在线清单算了」，而不是只断言「拉到了」。
+    // peak 故意填成与 offpeak 相同：否则断言会随「跑测试的时刻是不是高峰」而变。
+    if (String(req.url).includes("price_manifest")) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        schema: 1,
+        version: 3,
+        updated: "2026-10-05",
+        source: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+        note: "mock 清单（自检用）",
+        models: {
+          "deepseek-flash": {
+            currency: "CNY",
+            note: "mock 改过的价",
+            offpeak: { in: 7000000, cached_in: 0, out: 10000000 },
+            peak: { in: 7000000, cached_in: 0, out: 10000000 },
+          },
+        },
+      }));
+      return;
+    }
     // 供应商官方的「列出模型」接口（OpenAI 兼容形状）。故意混一个 embedding 进去，
     // 好让自检能断言「非对话模型会被过滤」，而不是只断言「拿到列表」。
     if (req.method === "GET" && String(req.url).includes("models")) {

@@ -27,6 +27,7 @@ const KeyVault := preload("res://systems/ai/AiKeyVault.gd")
 const DigestScript := preload("res://systems/ai/AiBattleDigest.gd")
 const PromptScript := preload("res://systems/ai/AiPrompt.gd")
 const ModelParser := preload("res://systems/ai/AiModelListParser.gd")
+const PriceManifest := preload("res://systems/ai/AiPriceManifest.gd")
 const PanelScript := preload("res://ui/AiAdvisorPanel.gd")
 
 const CONFIG_PATH := "user://ai_advisor.cfg"
@@ -40,6 +41,12 @@ const MODELS_CACHE_DIR := "user://ai_usage"
 ## 缓存多久算过期：24 小时。模型名变动频繁（2026-10-03 DeepSeek 刚从 chat 换成 flash），
 ## 所以换供应商时若缓存过期就自动同步一次；没过期就用缓存，省一次网络往返。
 const MODELS_CACHE_TTL := 24 * 3600
+const PRICE_MANIFEST_PATH := "user://ai_usage/price_manifest.json"
+const PRICE_MANIFEST_TTL := 24 * 3600
+## 价格清单地址。**默认为空 = 这个功能默认完全不联网**：
+## 维护者（使用者）把清单发布到某个静态地址后，在这里填上，或让玩家在面板里填。
+## 为什么不做个猜的默认值：填一个还没发布的地址只会让每次启动都白拉一次 404。
+const DEFAULT_PRICE_MANIFEST_URL := ""
 
 ## 默认值只此一份：_load_config 与「恢复默认」共用
 const DEFAULTS := {
@@ -52,6 +59,7 @@ const DEFAULTS := {
 	"budget_tokens_per_day": 20000,
 	"auto_debrief": false,
 	"competitive": false,
+	"price_manifest_url": DEFAULT_PRICE_MANIFEST_URL,
 }
 
 signal debrief_started()
@@ -59,6 +67,8 @@ signal debrief_finished(ok: bool, text: String, entry: Dictionary)
 signal usage_changed()
 ## 在线同步「可用模型」的结果。error 为空 = 成功；models 是 [{id,label,context,max_out}]
 signal models_synced(provider: String, models: Array, error: String)
+## 在线更新价格表的结果。ok=false 时 error 是可读原因（表本身保持原样，不会半采纳）
+signal prices_synced(ok: bool, version: int, error: String)
 
 var enabled := false
 var provider_id := "deepseek"
@@ -81,6 +91,12 @@ var config_path := CONFIG_PATH
 var key_path := KEY_PATH
 ## 模型列表缓存目录同样可注入：否则自检会把 mock 的模型名写进真实的 user://ai_usage
 var models_cache_dir := MODELS_CACHE_DIR
+## 价格清单地址与缓存路径（缓存路径可注入，便于自检隔离）
+var price_manifest_url := DEFAULT_PRICE_MANIFEST_URL
+var price_manifest_path := PRICE_MANIFEST_PATH
+var _http_manifest: HTTPRequest = null
+var _manifest_busy := false
+var _manifest_started_usec := 0
 
 var _http: HTTPRequest = null
 var _vault = null
@@ -126,6 +142,13 @@ func _ready() -> void:
 	_http_models.timeout = REQUEST_TIMEOUT
 	add_child(_http_models)
 	_http_models.request_completed.connect(_on_models_completed)
+	_http_manifest = HTTPRequest.new()
+	_http_manifest.name = "AiManifestHttp"
+	_http_manifest.timeout = REQUEST_TIMEOUT
+	add_child(_http_manifest)
+	_http_manifest.request_completed.connect(_on_manifest_completed)
+	# 先把手上的缓存用起来（离线也要有更新过的价），再去 _load_config 之后视情况联网
+	apply_cached_price_manifest()
 	_wire_bus()
 	# headless 下不建 UI：跑批环境不需要按钮（几何门禁只扫 Main.tscn，但少一层更干净）
 	_ui_allowed = DisplayServer.get_name() != "headless"
@@ -552,8 +575,14 @@ func _entry_for(parsed: Dictionary, response_code: int, latency_ms: int) -> Dict
 		# 费用与时段用同一个时间戳算，避免正好卡在时段边界上时「金额按高峰、时段记空闲」
 		"est_cost_micros": PriceTable.cost_micros(model_id, prompt, completion, cached, _entry_now),
 		"currency": PriceTable.currency_of(model_id),
-		"price_version": PriceTable.VERSION,
+		# ⚠ 必须是 effective_version() 而不是 const VERSION：远程清单改价后，
+		# 账目要写「这一笔是按哪一版价算的」，写内置版本就等于把审计线索写错
+		# （2026-10-03 端到端自检抓到过这一条：期望 3 实际 2）
+		"price_version": PriceTable.effective_version(),
 		"price_tier": PriceTable.tier_at(_entry_now),
+		# 这一笔是按内置价还是按在线清单的价算的：不记清楚，
+		# 以后玩家拿着旧账对不上新价时就说不明白
+		"price_source": PriceTable.source_of(model_id),
 		"latency_ms": latency_ms,
 		"http_status": response_code,
 		"status": "ok" if bool(parsed.get("ok", false)) else "error",
@@ -635,7 +664,7 @@ func _on_models_completed(result: int, response_code: int, _headers: PackedStrin
 		"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0,
 		"reasoning_tokens": 0, "total_tokens": 0,
 		"est_cost_micros": 0, "currency": "",
-		"price_version": PriceTable.VERSION, "price_tier": PriceTable.tier_at(),
+		"price_version": PriceTable.effective_version(), "price_tier": PriceTable.tier_at(),
 		"latency_ms": latency, "http_status": response_code,
 		"status": "ok" if error_text == "" else "error",
 		"error_code": error_code, "error_message": error_text,
@@ -718,6 +747,161 @@ func models_cache_age_seconds(provider: String = "") -> int:
 	if at <= 0:
 		return 1 << 30
 	return maxi(int(Time.get_unix_time_from_system()) - at, 0)
+
+# ────────────────────────── 在线更新价格表（不发版也能改价） ──────────────────────────
+
+## 拉一次维护者发布的价格清单。**不涉密**：只发一个 GET，不带 key、不带任何玩家标识。
+## 为什么要求「已开开关 + 已填 key」才拉：面板上明写着「不填 key 就完全不联网」，
+## 不能自己破这条承诺；而没有 key 时玩家本来也用不到估算。
+## 返回 "" = 已发出（结果走 prices_synced）；非空 = 拒绝原因（直接给玩家看）。
+func sync_price_manifest() -> String:
+	if not enabled:
+		return "AI 参谋未开启 —— 不开启时本游戏绝不联网"
+	if _key == "":
+		return "还没填 API key —— 按面板上的承诺，不填 key 就完全不联网"
+	var url := price_manifest_url.strip_edges()
+	if url == "":
+		return "还没配置价格清单地址"
+	# https 是硬要求，唯一例外是回环地址：那是本机自测 / 自建网关用的，不出网卡，
+	# 也没有中间人能碰（端到端自检就靠这个例外打到本地 mock）。
+	var is_loopback := url.begins_with("http://127.0.0.1") or url.begins_with("http://localhost")
+	if not url.begins_with("https://") and not is_loopback:
+		return "价格清单地址必须是 https（明文清单能被中间人换成任意价格）"
+	if _manifest_busy:
+		return "正在更新，稍等一下"
+	_manifest_busy = true
+	_manifest_started_usec = Time.get_ticks_usec()
+	# 公开静态文件：不带任何认证头
+	var headers := PackedStringArray(["Accept: application/json"])
+	var err := _http_manifest.request(url, headers, HTTPClient.METHOD_GET, "")
+	if err != OK:
+		_manifest_busy = false
+		prices_synced.emit(false, PriceTable.effective_version(),
+				"请求发不出去（HTTPRequest 错误码 %d）" % err)
+	return ""
+
+
+func _on_manifest_completed(result: int, response_code: int, _headers: PackedStringArray,
+		body: PackedByteArray) -> void:
+	if not _manifest_busy:
+		return
+	_manifest_busy = false
+	if result != HTTPRequest.RESULT_SUCCESS:
+		var nf := Parser.network_failure(result)
+		prices_synced.emit(false, PriceTable.effective_version(),
+				"网络没通：" + Parser.error_text(String(nf.get("error_code", "network_error"))))
+		return
+	if response_code != 200:
+		prices_synced.emit(false, PriceTable.effective_version(), "服务器回了 HTTP %d" % response_code)
+		return
+	_apply_manifest_text(body.get_string_from_utf8(), true)
+
+
+## 解析 + 校验 + 采纳。cache=true 时把原文先落到本地（离线启动也能用上更新过的价）。
+## 返回被采纳的版本号（0 = 没采纳）。校验不过就保持原样，绝不半采纳。
+func _apply_manifest_text(text: String, cache: bool) -> int:
+	var parsed: Dictionary = PriceManifest.parse(text, PriceTable.VERSION)
+	if not bool(parsed.get("ok", false)):
+		var why := PriceManifest.error_text(String(parsed.get("error", "")))
+		var detail := String(parsed.get("error_detail", ""))
+		prices_synced.emit(false, PriceTable.effective_version(),
+				why if detail == "" else "%s（%s）" % [why, detail])
+		return 0
+	var version := int(parsed.get("version", 0))
+	var ok := PriceTable.apply_remote(parsed.get("models", {}), version,
+			String(parsed.get("updated", "")), String(parsed.get("source", "")))
+	if not ok:
+		prices_synced.emit(false, PriceTable.effective_version(), "清单版本比内置旧 —— 不采纳")
+		return 0
+	if cache:
+		_write_manifest_cache(text)
+	prices_synced.emit(true, PriceTable.effective_version(), "")
+	usage_changed.emit()
+	return version
+
+
+## 面板打开 / 启动时调用：地址配好、开关开着、有 key、缓存又过期 ⇒ 自动拉一次
+func maybe_auto_sync_prices() -> String:
+	if not enabled or _key == "":
+		return ""
+	if price_manifest_url.strip_edges() == "":
+		return ""
+	if _manifest_cache_age_seconds() <= PRICE_MANIFEST_TTL:
+		return ""
+	return sync_price_manifest()
+
+
+## 把本地缓存的价格清单用起来。返回是否采纳成功（离线启动也能用上更新过的价）。
+## 缓存比内置旧时会被版本闸门挡住 ⇒ 自然回退到内置，不用额外判断。
+func apply_cached_price_manifest() -> bool:
+	var text := _read_manifest_cache()
+	if text == "":
+		return false
+	var parsed: Dictionary = PriceManifest.parse(text, PriceTable.VERSION)
+	if not bool(parsed.get("ok", false)):
+		return false
+	return PriceTable.apply_remote(parsed.get("models", {}), int(parsed.get("version", 0)),
+			String(parsed.get("updated", "")), String(parsed.get("source", "")))
+
+
+func _read_manifest_cache() -> String:
+	var d := _read_manifest_cache_dict()
+	return String(d.get("text", ""))
+
+
+func _read_manifest_cache_dict() -> Dictionary:
+	if not FileAccess.file_exists(price_manifest_path):
+		return {}
+	var f := FileAccess.open(price_manifest_path, FileAccess.READ)
+	if f == null:
+		return {}
+	var raw := f.get_as_text()
+	f.close()
+	var json := JSON.new()
+	if json.parse(raw) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return {}
+	return json.data
+
+
+func _write_manifest_cache(text: String) -> void:
+	DirAccess.make_dir_recursive_absolute(models_cache_dir)
+	var f := FileAccess.open(price_manifest_path, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify({
+		"fetched_unix": int(Time.get_unix_time_from_system()),
+		"fetched_iso": Time.get_datetime_string_from_system(false, false),
+		"text": text,
+	}))
+	f.close()
+
+
+## 缓存年龄（秒）。没缓存返回一个很大的数（语义 = 永远过期）。
+func _manifest_cache_age_seconds() -> int:
+	var d := _read_manifest_cache_dict()
+	var at := int(d.get("fetched_unix", 0))
+	if at <= 0:
+		return 1 << 30
+	return maxi(int(Time.get_unix_time_from_system()) - at, 0)
+
+
+func manifest_cached_at() -> String:
+	return String(_read_manifest_cache_dict().get("fetched_iso", ""))
+
+
+func is_syncing_prices() -> bool:
+	return _manifest_busy
+
+
+## 面板 ④ 区那一行：价格表现在是按内置还是按在线清单算的
+func price_table_status_text() -> String:
+	var base := "价格表：%s" % PriceTable.source_text()
+	if price_manifest_url.strip_edges() == "":
+		return base + "（未配置在线清单）"
+	var at := manifest_cached_at()
+	if at == "":
+		return base + "（还没更新过）"
+	return base + "（上次更新 %s）" % at
 
 # ────────────────────────────── 用量查询 / 导出 ──────────────────────────────
 
@@ -830,6 +1014,7 @@ func save_config() -> bool:
 	cfg.set_value("advisor", "budget_tokens_per_day", budget_tokens_per_day)
 	cfg.set_value("advisor", "auto_debrief", auto_debrief)
 	cfg.set_value("advisor", "competitive", competitive)
+	cfg.set_value("advisor", "price_manifest_url", price_manifest_url)
 	# ⚠ key 不进这个文件（分文件混淆存放，见 AiKeyVault 头部说明）
 	return cfg.save(config_path) == OK
 
@@ -844,6 +1029,7 @@ func _load_config() -> void:
 	budget_tokens_per_day = int(DEFAULTS["budget_tokens_per_day"])
 	auto_debrief = bool(DEFAULTS["auto_debrief"])
 	competitive = bool(DEFAULTS["competitive"])
+	price_manifest_url = String(DEFAULTS["price_manifest_url"])
 	var cfg := ConfigFile.new()
 	if cfg.load(config_path) != OK:
 		return
@@ -856,3 +1042,4 @@ func _load_config() -> void:
 	budget_tokens_per_day = int(cfg.get_value("advisor", "budget_tokens_per_day", budget_tokens_per_day))
 	auto_debrief = bool(cfg.get_value("advisor", "auto_debrief", auto_debrief))
 	competitive = bool(cfg.get_value("advisor", "competitive", competitive))
+	price_manifest_url = String(cfg.get_value("advisor", "price_manifest_url", price_manifest_url))

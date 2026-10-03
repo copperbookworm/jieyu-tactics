@@ -36,6 +36,9 @@ const BUTTON_SIZE := Vector2(80.0, 44.0)
 const WINDOW_POS := Vector2(48.0, 16.0)
 const WINDOW_SIZE := Vector2(864.0, 508.0)
 const VIEW := Vector2(960.0, 540.0)
+## 翻页步长。必须 ≤ 「相邻两组翻页按钮在内容里的间距」，否则会出现「翻过一屏后两组都够不着」
+## 的死区（真机实测踩到过，所以 ai_panel_check 里有一条断言钉住这个关系）。
+const SCROLL_STEP := 300
 
 var advisor = null
 var _panel_theme: Theme = null
@@ -77,6 +80,11 @@ var _available_ids: Array = []
 var _available_desc: Dictionary = {}
 ## 当前供应商的官方入口（价格页优先），空串 = 这家没内置
 var _official_url := ""
+## 价格表（成本估算）那一块：来源说明 + 更新按钮 + 可编辑的清单地址
+var _price_note: Label = null
+var _manifest_edit: LineEdit = null
+## 固定的翻页条（不跟内容滚，见 _build_pager 的说明）
+var _pager: Control = null   # 已弃用：固定翻页条在真机上收不到点击（见 _heading_with_pager 注释）
 
 
 func setup(owner_advisor) -> void:
@@ -90,6 +98,7 @@ func setup(owner_advisor) -> void:
 	advisor.debrief_finished.connect(_on_debrief_finished)
 	advisor.usage_changed.connect(_on_usage_changed)
 	advisor.models_synced.connect(_on_models_synced)
+	advisor.prices_synced.connect(_on_prices_synced)
 	# 面板一打开就刷一遍候选，并在缓存过期时自动同步一次（静默，失败只写提示行）
 	_modal.visibility_changed.connect(_on_modal_visibility)
 	_refill_model_box()
@@ -133,27 +142,51 @@ func _theme_of(size: int) -> Theme:
 ##     而 ScrollContainer 箱体里的控件一直好使（勾选框、清除 key 都是这样被点到的）。
 ## 所以翻页按钮放在箱体内部，并且**顶部一行 + 底部一行**：滚到哪边都有一个够得着。
 ## BaseButton 走触摸本身，不依赖拖拽，也不依赖鼠标模拟。
+## 带翻页按钮的分节标题。
+## ⚠ 为什么翻页按钮藏在标题行里、而不是固定在窗口底部（真机实测 2026-10-03，别改回去）：
+##   · 「挂在 CanvasLayer 上、排在 _modal 之后的按钮」**收不到点击**（矩形/层级/绘制全对，就是点不到）；
+##     把 _modal 的 mouse_filter 设成 IGNORE 也一样收不到。而**塞进 ScrollContainer 内容里的控件一直好使**。
+##   · 既然只能放在内容里，它就一定会被滚走 ⇒ 解法是**多放几处**：每个分节标题带一对 ▲▼，
+##     再加首尾各一行。滚动步长 300 px，相邻两组之间都小于一屏（432 px），所以任何位置附近都有得点。
+func _heading_with_pager(text: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var lab := _heading(text)
+	# 默认 800 px 最小宽度（竖排用），这里在横排里要塞下两个按钮，收窄它
+	lab.custom_minimum_size = Vector2(560.0, 0.0)
+	row.add_child(lab)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
+	row.add_child(_pager_button("▲", _on_scroll_up))
+	row.add_child(_pager_button("▼", _on_scroll_down))
+	return row
+
+
 func _pager_row() -> HBoxContainer:
 	var row := HBoxContainer.new()
-	row.name = "Pager"
 	row.add_theme_constant_override("separation", 8)
-	var up := _action("▲ 上一页", _on_scroll_up)
-	up.custom_minimum_size = Vector2(120.0, 36.0)
-	row.add_child(up)
-	var down := _action("▼ 下一页", _on_scroll_down)
-	down.custom_minimum_size = Vector2(120.0, 36.0)
-	row.add_child(down)
+	row.add_child(_pager_button("▲ 上一页", _on_scroll_up))
+	row.add_child(_pager_button("▼ 下一页", _on_scroll_down))
 	return row
+
+
+func _pager_button(text: String, handler: Callable) -> Button:
+	var b := _action(text, handler)
+	# 带名字：ai_panel_check 靠名字前缀找翻页按钮，做「可达性」断言
+	b.name = "PagerUp" if text.contains("▲") else "PagerDown"
+	b.custom_minimum_size = Vector2(56.0, 34.0)
+	return b
 
 
 func _on_scroll_up() -> void:
 	if _scroll != null:
-		_scroll.scroll_vertical = maxi(_scroll.scroll_vertical - 300, 0)
+		_scroll.scroll_vertical = maxi(_scroll.scroll_vertical - SCROLL_STEP, 0)
 
 
 func _on_scroll_down() -> void:
 	if _scroll != null:
-		_scroll.scroll_vertical += 300
+		_scroll.scroll_vertical += SCROLL_STEP
 
 
 func _build_button() -> void:
@@ -170,6 +203,7 @@ func _build_button() -> void:
 
 func _on_button_pressed() -> void:
 	_modal.visible = not _modal.visible
+	# 翻页按钮在滚动内容里，跟着面板一起显隐，不用单独管
 	if _modal.visible:
 		_refresh()
 
@@ -183,7 +217,9 @@ func _build_modal() -> void:
 	_modal.visible = false
 	_modal.position = Vector2.ZERO
 	_modal.size = VIEW
+	# 全屏拦截游戏输入由下面的 Dim（STOP）负责
 	add_child(_modal)
+	# 翻页按钮一律放在滚动内容里（原因见 _heading_with_pager 的注释），这里不再挂 _modal 外
 
 	# 遮罩：STOP 吃掉触屏事件。这一条同时解决「结束画面点哪都重开一局」的冲突 ——
 	# 面板开着时触摸被这里消费，走不到 Main._unhandled_input 的重开分支。
@@ -231,7 +267,7 @@ func _build_modal() -> void:
 			"所有调用记录只存在这台手机上，不会上传到任何服务器。"))
 
 	box.add_child(_separator())
-	box.add_child(_heading("① 开关与供应商"))
+	box.add_child(_heading_with_pager("① 开关与供应商"))
 	_enable_box = CheckBox.new()
 	_enable_box.text = "启用 AI 参谋（不勾选时本游戏绝不发起网络请求）"
 	_enable_box.custom_minimum_size = Vector2(0.0, 32.0)
@@ -266,7 +302,7 @@ func _build_modal() -> void:
 	box.add_child(key_row)
 
 	box.add_child(_separator())
-	box.add_child(_heading("② 预算闸门（超了就拒绝，绝不悄悄花你的钱）"))
+	box.add_child(_heading_with_pager("② 预算闸门（超了就拒绝，绝不悄悄花你的钱）"))
 	_max_tokens_box = _make_spin(16, 8192, 16, advisor.max_tokens_per_call)
 	_max_tokens_box.value_changed.connect(_on_max_tokens_changed)
 	box.add_child(_field("单次输出上限 token", _max_tokens_box))
@@ -284,7 +320,7 @@ func _build_modal() -> void:
 	box.add_child(_auto_box)
 
 	box.add_child(_separator())
-	box.add_child(_heading("③ 本局复盘"))
+	box.add_child(_heading_with_pager("③ 本局复盘"))
 	var run_row := HBoxContainer.new()
 	run_row.add_theme_constant_override("separation", 8)
 	_request_button = _action("请求本局复盘", _on_request_debrief)
@@ -303,7 +339,16 @@ func _build_modal() -> void:
 	box.add_child(_output)
 
 	box.add_child(_separator())
-	box.add_child(_heading("④ 用量账单（存在本机）"))
+	box.add_child(_heading_with_pager("④ 用量账单（存在本机）"))
+	_price_note = _note("")
+	box.add_child(_price_note)
+	var price_row := HBoxContainer.new()
+	price_row.add_theme_constant_override("separation", 8)
+	price_row.add_child(_action("更新价格表", _on_update_prices))
+	_manifest_edit = _make_line_edit("价格清单 URL（维护者发布的静态 json，必须 https）")
+	_manifest_edit.text_changed.connect(_on_manifest_url_changed)
+	price_row.add_child(_manifest_edit)
+	box.add_child(price_row)
 	_usage_label = _body("")
 	box.add_child(_usage_label)
 	var usage_row := HBoxContainer.new()
@@ -435,6 +480,10 @@ func _on_modal_visibility() -> void:
 	if _modal == null or not _modal.visible or advisor == null:
 		return
 	_refill_model_box()
+	# 价格表也顺手看一眼（缓存过期才真去拉；地址没配 / 没 key 就什么都不做）
+	var price_refused: String = advisor.maybe_auto_sync_prices()
+	if price_refused != "" and _price_note != null:
+		_price_note.text = price_refused
 	var refused: String = advisor.maybe_auto_sync_models()
 	if refused != "":
 		_model_sync_note.text = refused
@@ -478,6 +527,38 @@ func _on_available_model_selected(index: int) -> void:
 	if _model_sync_note != null:
 		var desc := String(_available_desc.get(picked, ""))
 		_model_sync_note.text = "已选 %s%s" % [picked, ("：" + desc) if desc != "" else ""]
+
+
+## 手动更新价格表。这条路是「不发版也能改价」的入口：维护者把静态 json 发布到某个 https 地址，
+## 游戏拉下来校验通过就换表；校验不过一律保持原样（见 AiPriceManifest 的边界说明）。
+func _on_update_prices() -> void:
+	if advisor == null:
+		return
+	var refused: String = advisor.sync_price_manifest()
+	if refused != "":
+		if _price_note != null:
+			_price_note.text = refused
+		return
+	if _price_note != null:
+		_price_note.text = "正在更新价格表……"
+
+
+func _on_prices_synced(ok: bool, version: int, error: String) -> void:
+	if _price_note == null or advisor == null:
+		return
+	if ok:
+		_price_note.text = "价格表已更新到 VERSION %d（%s）" % [version, advisor.price_table_status_text()]
+		# 金额变了就要重刷账单区，别让玩家看着旧数字
+		_usage_label.text = advisor.usage_text()
+	else:
+		_price_note.text = "价格表更新失败：%s（继续用%s）" % [error, advisor.price_table_status_text()]
+
+
+func _on_manifest_url_changed(text: String) -> void:
+	advisor.price_manifest_url = text.strip_edges()
+	advisor.save_config()
+	if _price_note != null:
+		_price_note.text = advisor.price_table_status_text()
 
 
 func _on_open_official() -> void:
@@ -764,6 +845,10 @@ func _refresh() -> void:
 	_key_state.text = "当前 key：%s" % advisor.key_display()
 	_refresh_status()
 	_usage_label.text = advisor.usage_text()
+	if _manifest_edit != null and not _manifest_edit.has_focus():
+		_manifest_edit.text = advisor.price_manifest_url
+	if _price_note != null:
+		_price_note.text = advisor.price_table_status_text()
 	if _output.text == "":
 		if not advisor.has_snapshot():
 			_output.text = "还没有可复盘的战局 —— 先打完一局再回来。"

@@ -89,20 +89,102 @@ const MODELS := {
 }
 
 
+# ────────────────────── 远程清单覆盖（可不发版改价） ──────────────────────
+#
+# MODELS 是**内置兜底**，永远都在；远程清单只做「覆盖某些模型」，没提到的继续用内置。
+# 为什么要另存一份而不是直接改 MODELS：MODELS 是 const，而且「内置基准」必须留着 ——
+# 万一远程清单被撤回 / 拉不到 / 校验不过，行为要能干净地退回内置，不留半截状态。
+
+## 远程清单覆盖的模型（模型 id -> 条目），空 = 纯内置
+static var _remote_models: Dictionary = {}
+static var _remote_version := 0
+static var _remote_updated := ""
+static var _remote_source := ""
+
+
+## 采纳一份远程清单。version 比内置旧 ⇒ 拒绝（绝不用旧价覆盖新价）。
+## 返回是否真的采纳了。校验由 AiPriceManifest 负责，这里只做版本闸门。
+static func apply_remote(models: Dictionary, version: int, updated: String, source: String) -> bool:
+	if version < VERSION:
+		return false
+	if models.is_empty():
+		return false
+	_remote_models = models.duplicate(true)
+	_remote_version = version
+	_remote_updated = updated
+	_remote_source = source
+	return true
+
+
+static func clear_remote() -> void:
+	_remote_models = {}
+	_remote_version = 0
+	_remote_updated = ""
+	_remote_source = ""
+
+
+static func has_remote() -> bool:
+	return not _remote_models.is_empty()
+
+
+## 生效的版本号：采纳了远程就是远程的，否则内置
+static func effective_version() -> int:
+	return _remote_version if has_remote() else VERSION
+
+
+static func remote_version() -> int:
+	return _remote_version
+
+
+static func remote_updated() -> String:
+	return _remote_updated
+
+
+static func remote_source() -> String:
+	return _remote_source
+
+
+static func remote_model_count() -> int:
+	return _remote_models.size()
+
+
+## 这个模型的价格是从哪来的："remote" / "bundled" / ""（表外，未知价）
+static func source_of(model_id: String) -> String:
+	if _remote_models.has(model_id):
+		return "remote"
+	if MODELS.has(model_id):
+		return "bundled"
+	return ""
+
+
+## 合并后的条目：远程优先，否则内置；表外返回 {}
+static func entry_of(model_id: String) -> Dictionary:
+	if _remote_models.has(model_id):
+		return _remote_models[model_id]
+	if MODELS.has(model_id):
+		return MODELS[model_id]
+	return {}
+
+
+## 给玩家看的一行说明，例如「在线 VERSION 3（2026-10-05，12 个模型）｜内置 VERSION 2」
+static func source_text() -> String:
+	var bundled := "内置 VERSION %d（%s）" % [VERSION, UPDATED]
+	if not has_remote():
+		return bundled
+	return "在线 VERSION %d（%s，%d 个模型）｜%s" % [
+		_remote_version, _remote_updated, _remote_models.size(), bundled]
+
+
 static func has_model(model_id: String) -> bool:
-	return MODELS.has(model_id)
+	return _remote_models.has(model_id) or MODELS.has(model_id)
 
 
 static func currency_of(model_id: String) -> String:
-	if not MODELS.has(model_id):
-		return ""
-	return String((MODELS[model_id] as Dictionary).get("currency", ""))
+	return String(entry_of(model_id).get("currency", ""))
 
 
 static func note_of(model_id: String) -> String:
-	if not MODELS.has(model_id):
-		return ""
-	return String((MODELS[model_id] as Dictionary).get("note", ""))
+	return String(entry_of(model_id).get("note", ""))
 
 
 ## 某个时刻属于高峰还是空闲（按北京时间算）。at_unix <= 0 表示「现在」。
@@ -122,9 +204,9 @@ static func tier_at(at_unix: int = 0) -> String:
 ## 返回微元；表里没有这个模型 → UNKNOWN(-1)，调用方据此记「未知价」
 static func cost_micros(model_id: String, prompt_tokens: int, completion_tokens: int,
 		cached_tokens: int, at_unix: int = 0) -> int:
-	if not MODELS.has(model_id):
+	var entry := entry_of(model_id)
+	if entry.is_empty():
 		return UNKNOWN
-	var entry: Dictionary = MODELS[model_id]
 	var tier: Dictionary = entry.get(tier_at(at_unix), entry.get(TIER_OFFPEAK, {}))
 	if tier.is_empty():
 		return UNKNOWN

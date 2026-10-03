@@ -14,6 +14,7 @@ extends SceneTree
 
 const AdvisorScript := preload("res://systems/ai/AiAdvisor.gd")
 const LedgerScript := preload("res://systems/ai/AiUsageLedger.gd")
+const PriceTable := preload("res://systems/ai/AiPriceTable.gd")
 
 const MOCK_LOG := "res://tmp_ai_mock_last.json"
 const E2E_LEDGER_DIR := "user://ai_usage_e2e"
@@ -44,6 +45,7 @@ func _initialize() -> void:
 	_advisor.config_path = "user://ai_advisor_e2e.cfg"
 	_advisor.key_path = "user://ai_advisor_e2e.key"
 	_advisor.models_cache_dir = E2E_LEDGER_DIR
+	_advisor.price_manifest_path = "user://ai_usage_e2e/price_manifest.json"
 	root.add_child(_advisor)
 	var main = _fake_main()
 	root.add_child(main)
@@ -125,6 +127,50 @@ func _on_finished(ok: bool, text: String, entry: Dictionary) -> void:
 		_stage = 4
 		_check("同步请求放行（已开开关 + 有 key）", _advisor.sync_models(), "")
 		return
+	if _stage == 8:
+		_stage = 9
+		_check_true("用在线价的那次复盘成功", ok)
+		_check("账本写明了价格来源 = remote", String(entry.get("price_source", "")), "remote")
+		_check("账本写明了生效版本 = 3", int(entry.get("price_version", 0)), 3)
+		# mock 用量 prompt 123 / 命中 100 / completion 45；在线价 输入 7 元、命中 0 元、输出 10 元
+		# ⇒ 未命中 23×7_000_000 + 命中 100×0 + 输出 45×10_000_000 = 611_000_000 微元 ⇒ 611
+		_check("金额按在线清单算出来", int(entry.get("est_cost_micros", -1)), 611)
+		var all2: Array = _ledger.load_all()
+		_check("账本累计四条（含在线价那一笔）", all2.size(), 4)
+		_report()
+		_ledger.clear()
+		PriceTable.clear_remote()   # 静态状态绝不外泄
+		_done = true
+		quit(0 if _failed == 0 else 1)
+		return
+
+
+func _on_prices_synced(ok: bool, version: int, error: String) -> void:
+	if _stage != 6:
+		return
+	_stage = 7
+	_check_true("价格表更新成功", ok)
+	_check("更新没报错", error, "")
+	_check("生效版本升到清单的 3", version, 3)
+	_check("来源标 remote", PriceTable.source_of("deepseek-flash"), "remote")
+	_check("清单没提到的模型仍是内置来源", PriceTable.source_of("deepseek-reasoner"), "bundled")
+	_check("金额确实按在线清单算（1M 未命中输入 = 7 元）",
+			PriceTable.cost_micros("deepseek-flash", 1000000, 0, 0, _sunday_offpeak()), 7000000)
+	_check_true("清单原文进了本地缓存", FileAccess.file_exists(_advisor.price_manifest_path))
+	# 模拟「下次启动」：清掉内存里的覆盖，再只用缓存重建 —— 离线也要能吃到更新过的价
+	PriceTable.clear_remote()
+	_check_true("从本地缓存重新采纳成功", _advisor.apply_cached_price_manifest())
+	_check("缓存采纳后版本仍是 3", PriceTable.effective_version(), 3)
+	# 最后再打一次真请求：验证账本按在线价算钱、并写明 price_source
+	_advisor.model = "deepseek-flash"
+	_stage = 8
+	_check("用在线价的第二次复盘放行", _advisor.request_debrief(), "")
+
+
+## 2026-10-04 是周日 ⇒ 全天空闲时段（与其它自检同一套时间口径）
+func _sunday_offpeak() -> int:
+	return int(Time.get_unix_time_from_datetime_dict(
+			{"year": 2026, "month": 10, "day": 4, "hour": 2, "minute": 0, "second": 0}))
 
 
 func _on_models_synced(provider: String, models: Array, error: String) -> void:
@@ -155,10 +201,14 @@ func _on_models_synced(provider: String, models: Array, error: String) -> void:
 	_check("同步不花 token（total_tokens = 0）", int(last.get("total_tokens", -1)), 0)
 	_check("同步费用记 0，而不是「未知」", int(last.get("est_cost_micros", -2)), 0)
 	_verify_models_request_against_mock()
-	_report()
-	_ledger.clear()
-	_done = true
-	quit(0 if _failed == 0 else 1)
+	# 第四次：在线更新价格表（「不发版也能改价」那条链）。清单地址走回环例外，打到 mock。
+	PriceTable.clear_remote()
+	_check("更新前 `生效版本` 是内置的", PriceTable.effective_version(), PriceTable.VERSION)
+	_advisor.price_manifest_url = "http://127.0.0.1:%d/price_manifest.json" % _port
+	_advisor.prices_synced.connect(_on_prices_synced)
+	_stage = 6
+	_check("价格表更新请求放行", _advisor.sync_price_manifest(), "")
+	return
 
 
 ## 反查 mock 留档：证明同步真的走的是 GET .../models，而不是又发了一次对话请求

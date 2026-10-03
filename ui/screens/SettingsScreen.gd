@@ -153,6 +153,7 @@ func _build_content(body: VBoxContainer) -> void:
 	col3.add_child(UiKit.control_row("载具", _vehicle_option))
 
 	_enemy_spin = UiKit.spin(1, SettingsScript.ENEMY_MAX, s.default_enemy_count if s != null else 2)
+	# 模式已规定人数时（PVP 20 / PVEVP 30）这里只是回退值 —— 兵棋等未定模式才用它
 	_enemy_spin.name = "EnemySpin"
 	_enemy_spin.value_changed.connect(_on_enemy_changed)
 	col3.add_child(UiKit.control_row("敌人数", _enemy_spin))

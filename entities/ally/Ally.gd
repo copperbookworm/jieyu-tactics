@@ -46,10 +46,21 @@ func setup(main_node, player, sight, grid, formation_index: int = 0) -> void:
 		global_position = player.global_position + formation_offset(index, follow_distance)
 
 
-## 编队偏移（纯函数，测试直接调）：三人分布在玩家后方的左右与正后，间距 follow_distance
+## 编队偏移（纯函数，测试直接调）：前 3 人分布在玩家后方的左右与正后（与旧实现逐字一致），
+## 第 4 名之后挂到「后方的同心弧」上 —— 原来是把角度取模 3，于是 19 名队友会叠成 3 堆：
+## 既难看，也让性能采样失真（叠在一起的单位通视距离几乎为零）。
+## PVP 20 v 20 要 19 名队友（docx 5.8），所以必须铺开。
 static func formation_offset(formation_index: int, distance: float) -> Vector2:
 	var angles := [PI * 0.75, PI * 1.25, PI]      # 左后 / 右后 / 正后
-	return Vector2.RIGHT.rotated(float(angles[posmod(formation_index, angles.size())])) * distance
+	if formation_index < angles.size():
+		return Vector2.RIGHT.rotated(float(angles[formation_index])) * distance
+	var k := formation_index - angles.size()
+	var per_ring := 8
+	var ring := k / per_ring
+	var slot := k % per_ring
+	var t := (float(slot) + 0.5) / float(per_ring)        # 0..1
+	var angle := PI + (t - 0.5) * 1.6                     # 正后方 ±0.8 rad
+	return Vector2.RIGHT.rotated(angle) * (distance + 5.0 * float(ring + 1))
 
 
 func _build_visual() -> void:

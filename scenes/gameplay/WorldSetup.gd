@@ -15,6 +15,8 @@ const AllyScript := preload("res://entities/ally/Ally.gd")
 const FobScript := preload("res://entities/fob/Fob.gd")
 ## 环境互动区（docx 4.17）：同样无 class_name，preload 引用
 const TerrainZoneScript := preload("res://entities/zone/TerrainZone.gd")
+## 本局模式规则（人数口径：docx 5.8）—— 队友数从这里取
+const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
 
 var terrain_sprite: Sprite2D = null
 
@@ -38,7 +40,7 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	_spawn_enemies(main, enemy_count)
 	# 队友（2026-10-02）：3 名强力队友进 friendly 组。集成冒烟已订正过「敌人 2 个」那条过期断言 ——
 	# 队友会先击毙开局步兵，事件驱动的穿插兵也会进 enemy 组，所以那条不再用等值。
-	_spawn_allies(main, GameConfig.ALLY_SQUAD_SIZE)
+	_spawn_allies(main, _ally_target())
 
 
 ## 地形来源（工具链 A）：填了高度图就优先导入；导入失败或没填 → 退回噪声地形
@@ -125,6 +127,14 @@ func _build_camera(main) -> void:
 
 
 ## 玩家的队友（3 名，强力版）：进 friendly 组 —— MatchFlow 的重生预算＝进攻方人数×2 会把他们算进去
+## 队友数：模式定义了就用模式的（PVP 20 v 20 要 19 名 / PVEVP 4P 要 3 名），
+## 没有模式（单独跑 Main.tscn 的测试、兵棋模式）就退回 GameConfig.ALLY_SQUAD_SIZE = 3
+## —— 这条回落保证「单跑 Main.tscn」的集成冒烟与几何门禁一行都不用改。
+func _ally_target() -> int:
+	var n := MatchRulesScript.ally_count()
+	return n if n > 0 else GameConfig.ALLY_SQUAD_SIZE
+
+
 func _spawn_allies(main, count: int) -> void:
 	for i in count:
 		var ally := AllyScript.new()

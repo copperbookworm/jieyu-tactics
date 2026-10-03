@@ -15,6 +15,9 @@ extends Node
 ## 刻意不写 class_name：引用方 preload。
 
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
+const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
+## 真机帧率 / 帧时间读数（**仅调试包**：gfxinfo 在本项目真机上取不到数，见 PerfOverlay.gd 头部）
+const PerfOverlayScript := preload("res://ui/PerfOverlay.gd")
 
 const BUS_PATH := "/root/EventBus"
 
@@ -43,11 +46,15 @@ func start(main_scene_path: String, options: Dictionary) -> bool:
 	# 这几个 @export 必须在 add_child 之前赋值 —— 之后世界已经按旧值建好了
 	main.player_role = int(options.get("role", main.player_role))
 	main.vehicle_id = String(options.get("vehicle", main.vehicle_id))
-	main.enemy_count = int(options.get("enemy_count", main.enemy_count))
+	# 人数优先取模式（docx 5.8：PVP 20 v 20 / PVEVP 4P v 30E）；模式没定（兵棋）才回落到玩家设置
+	var mode_enemies := MatchRulesScript.enemy_count()
+	main.enemy_count = mode_enemies if mode_enemies > 0 \
+			else int(options.get("enemy_count", main.enemy_count))
 	main.map_seed = int(options.get("map_seed", main.map_seed))
 	main.map_preview_mode = false
 	add_child(main)
 	_apply_mode_rules()
+	_attach_perf_overlay()
 	_wire_pause_button()
 	_wire_match_finished()
 	return true
@@ -66,6 +73,16 @@ func _apply_mode_rules() -> void:
 
 
 ## 暂停键由 HudBuilder 建、由这里接线 —— Main.gd 因此一行都不用加（它守着 400 行硬线）
+## 仅在调试包里挂帧率读数（正式包连节点都不建 —— 与「立刻结束本局」同一条纪律）
+func _attach_perf_overlay() -> void:
+	if not OS.is_debug_build() or main == null:
+		return
+	var overlay = PerfOverlayScript.new()
+	overlay.name = "PerfOverlay"
+	main.add_child(overlay)
+	overlay.setup(main)
+
+
 func _wire_pause_button() -> void:
 	if main == null or main.hud == null:
 		return

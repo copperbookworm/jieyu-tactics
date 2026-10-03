@@ -17,10 +17,20 @@ const ModeTableScript := preload("res://data/config/ModeTable.gd")
 
 ## -1 = 未设定，按 ModeTable 的默认模式解释（避免静态初始化期就去读 preload 的枚举）
 static var _mode_id: int = -1
+## 人数随模式一起 latch（-1 = 模式没定义人数 ⇒ 调用方回落到玩家设置 / 引擎默认）
+static var _enemy_count: int = -1
+static var _ally_count: int = -1
 
 
 static func set_mode(mode_id: int) -> void:
 	_mode_id = mode_id
+	# 人数跟着一起定（docx 5.8）：PVP 20 v 20 / PVEVP 4P v 30E；模式没定（兵棋 = 0）就退回「未定义」
+	_enemy_count = ModeTableScript.enemy_count(mode_id)
+	_ally_count = ModeTableScript.ally_count(mode_id)
+	if _enemy_count <= 0:
+		_enemy_count = -1
+	if _ally_count <= 0:
+		_ally_count = -1
 
 
 static func mode_id() -> int:
@@ -34,6 +44,8 @@ static func is_default() -> bool:
 
 static func reset() -> void:
 	_mode_id = -1
+	_enemy_count = -1
+	_ally_count = -1
 
 
 static func mode() -> Dictionary:
@@ -42,6 +54,15 @@ static func mode() -> Dictionary:
 
 static func name_of_mode() -> String:
 	return ModeTableScript.name_of(mode_id())
+
+
+## 本局敌人 / 队友数；-1 = 未定义（调用方回落到玩家设置 / GameConfig.ALLY_SQUAD_SIZE）
+static func enemy_count() -> int:
+	return _enemy_count
+
+
+static func ally_count() -> int:
+	return _ally_count
 
 
 static func friendly_fire() -> bool:

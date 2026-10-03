@@ -91,7 +91,10 @@ func _refresh_config() -> void:
 	_config_box.add_child(UiKit.divider())
 	_config_box.add_child(UiKit.row("兵种", RoleTableScript.role_name(s.default_role)))
 	_config_box.add_child(UiKit.row("载具", ctx.vehicle_name(s.default_vehicle)))
-	_config_box.add_child(UiKit.row("敌人数", str(s.default_enemy_count)))
+	# 模式已规定人数时显示模式值（2026-10-03 口径：PVP 20 / PVEVP 30），否则显示玩家设置
+	var mode_enemies := ModeTableScript.enemy_count(mode_id)
+	_config_box.add_child(UiKit.row("敌人数",
+		("%d（模式）" % mode_enemies) if mode_enemies > 0 else ("%d（设置）" % s.default_enemy_count)))
 	_config_box.add_child(UiKit.row("地图种子", str(s.default_map_seed)))
 	_config_box.add_child(UiKit.divider())
 	_config_box.add_child(UiKit.row("操作提示",

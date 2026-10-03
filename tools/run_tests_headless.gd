@@ -80,6 +80,7 @@ func _initialize() -> void:
 		var gates := [
 			["res://tools/geom_assertions.gd", "geom_gate.log"],
 			["res://tools/screen_geom_check.gd", "screen_geom_gate.log"],
+			["res://tools/scale_wiring_check.gd", "scale_wiring_gate.log"],
 		]
 		for gate in gates:
 			var script_path := String(gate[0])

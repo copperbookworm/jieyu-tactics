@@ -72,10 +72,13 @@ func _build_content(body: VBoxContainer) -> void:
 	line.add_theme_constant_override("separation", 12)
 	foot.add_child(line)
 	var s = ctx.settings if ctx != null else null
-	var summary := "兵种：%s ｜ 载具：%s ｜ 敌人数：%d ｜ 时长：%d 分钟" % [
+	var mode_enemies := ModeTableScript.enemy_count(_mode_id)
+	var enemy_text := ("%d（模式）" % mode_enemies) if mode_enemies > 0 \
+			else str(s.default_enemy_count if s != null else 0)
+	var summary := "兵种：%s ｜ 载具：%s ｜ 敌人数：%s ｜ 时长：%d 分钟" % [
 		RoleTableScript.role_name(s.default_role if s != null else RoleTableScript.Role.RIFLEMAN),
 		ctx.vehicle_name(s.default_vehicle) if (ctx != null and s != null) else "默认",
-		s.default_enemy_count if s != null else 2,
+		enemy_text,
 		int(round(ModeTableScript.duration_s(_mode_id) / 60.0))]
 	var info := UiKit.label(summary, UiKit.BODY_SIZE, UiKit.COLOR_DIM)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL

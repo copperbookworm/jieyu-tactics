@@ -11,8 +11,6 @@ config_version=5
 [application]
 
 config/name="JIEYU1"
-; 2026-10-03 游戏外壳：启动先进大厅（App 负责路由；Main.tscn 仍是「一局」的场景，
-; 由 MatchHost 在点「开始对局」时实例化 —— 单跑 Main.tscn 的测试因此完全不受影响）
 run/main_scene="res://scenes/app/App.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
@@ -21,8 +19,8 @@ config/icon="res://icon.svg"
 
 EventBus="*uid://be81kybtb6pc"
 Audio="*res://systems/audio/AudioSystem.gd"
-_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 AiAdvisor="*res://systems/ai/AiAdvisor.gd"
+_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [display]
 

@@ -10,6 +10,12 @@ extends EditorScript
 ##       校验器（能造出 ERROR 也能造出全绿）/ 审阅图尺寸
 
 const GRID_N := 160
+## 面板自测用的地图 id（跑完就删，不留产物）
+const UI_MAP_ID := "unit_ui_map"
+
+## 面板代码引用的脚本（无头下也能实例化 Control；不依赖任何编辑器 API）
+const DOCK_SCRIPT := preload("res://addons/jieyu_map/editor/JieyuMapDock.gd")
+const CANVAS_SCRIPT := preload("res://addons/jieyu_map/editor/JieyuMapCanvas.gd")
 
 
 func _run() -> void:
@@ -20,6 +26,7 @@ func _run() -> void:
 	_test_editing()
 	_test_checks()
 	_test_save_and_load()
+	_test_panel()
 
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
@@ -498,6 +505,120 @@ func _cleanup_map(map_id: String) -> void:
 			JieyuMapSpec.DEFAULT_MAP_ROOT + map_id + "_height.png"))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(
 			JieyuMapSpec.DEFAULT_MAP_ROOT + map_id + "_height.png.import"))
+
+
+# ────────────── 8. 插件面板（画布 + dock）──────────────
+
+## 无头冒烟：面板的 UI 组装与「点一下会发生什么」。
+## 为什么值得单独测：插件代码在 --headless 下不会加载，编辑器里加载失败只会静默少一个 dock；
+## 这里直接把 dock 挂进场景树跑一遍真实调用链（换工具 / 生成 / 落笔 / 保存 / 校验 / 撤销），
+## 把「类型写错、信号连错、字段名拼错」这类问题在无头就抓出来。
+func _test_panel() -> void:
+	var canvas: Control = CANVAS_SCRIPT.new()
+	_check("画布可实例化", canvas != null, true)
+	canvas.map_size = Vector2i(200, 200)
+	canvas.size = Vector2(200.0, 200.0)
+	canvas.zoom = 1.0
+	canvas.pan = Vector2.ZERO
+	_check("画布坐标换算（屏幕 → 格）", canvas.screen_to_cell(Vector2(50.0, 60.0)), Vector2i(50, 60))
+	_check("画布格 → 屏幕中点", canvas.cell_to_screen(Vector2i(50, 60)), Vector2(50.5, 60.5))
+	canvas.zoom = 2.0
+	_check("缩放后坐标换算跟着变", canvas.screen_to_cell(Vector2(50.0, 60.0)), Vector2i(25, 30))
+	canvas.zoom = 1.0
+	_check("画布越界判定", canvas.is_inside(Vector2i(300, 10)), false)
+
+	var dock: Control = DOCK_SCRIPT.new()
+	_check("面板可实例化", dock != null, true)
+	if dock == null:
+		return
+	dock.set("recipe_path", "res://addons/jieyu_map/recipe_demo.json")
+	dock.set("brush_radius", 20.0)
+	dock.set("brush_delta", 4.0)
+	dock.set("plateau_height", 90.0)
+	dock.set("_canvas", canvas)   # 无头下没有编辑器 dock 容器，手工接管画布
+	# 测试是 SceneTree 入口（跑批器把 EditorScript 换成 RefCounted），所以从 main loop 拿根节点。
+	# ⚠ _ready 是**下一帧**才触发（headless 下实测 get_child_count() 当场还是 0），
+	#   而测试是同步函数、不能 await —— 所以显式调一次 _ready（它就是普通方法）。
+	#   这也顺带钉住「面板的 UI 组装自己就能跑通，不依赖编辑器容器」。
+	var loop := Engine.get_main_loop()
+	if loop is SceneTree:
+		(loop as SceneTree).root.add_child(dock)
+	dock.call("_ready")
+	_check_true("子控件已建出来（_ready 没炸）", dock.get_child_count() > 0)
+
+	# 工具编号与面板按钮一致：0 抬升 / 1 下挖 / 2 压平 / 3 平滑 / 4 台地 / 5 放节点 / 6 放建筑 / 7 删建筑
+	dock.call("_set_tool", 1)
+	_check("换工具生效", int(dock.get("tool")), 1)
+	dock.call("_set_tool", 0)
+	_check("工具切回抬升", int(dock.get("tool")), 0)
+
+	# 面板参数生成草稿（走 JieyuMapGen.from_recipe）
+	(dock.get("_grid_spin") as SpinBox).value = 128.0
+	(dock.get("_seed_spin") as SpinBox).value = 4242.0
+	(dock.get("_nodes_spin") as SpinBox).value = 3.0
+	dock.call("_on_regenerate_pressed")
+	var doc: JieyuMapDoc = dock.get("doc")
+	_check_true("面板生成出了文档", doc != null)
+	if doc == null:
+		dock.queue_free()
+		canvas.queue_free()
+		return
+	# ⚠ 面板的「生成」默认沿用**当前打开地图的 id**（免得一按就把产物换个地方），
+	#   而 _ready 会自动载入 assets/maps 里的第一张图。测试里必须把它钉到测试专用 id 上，
+	#   否则后面的「保存 + 清理」会把真实的示例地图删掉（本轮真踩过）。
+	doc.map_id = UI_MAP_ID
+	_check("面板生成的尺寸", [doc.width, doc.height_px], [128, 128])
+	_check("面板按面板参数取种子", int(doc.meta["recipe"]["seed"]), 4242)
+
+	# 落笔：抬升 → 下挖 → 压平 → 平滑 → 台地，五种都要能动一次
+	var canvas_ref: Control = dock.get("_canvas")
+	var before_gray := doc.gray_at(64, 64)
+	canvas_ref.emit_signal("stroke_started", Vector2i(64, 64))
+	var raised := doc.gray_at(64, 64)
+	_check_true("抬升落笔把该格抬高了（%d → %d）" % [before_gray, raised], raised > before_gray)
+	canvas_ref.emit_signal("stroke_moved", Vector2i(64, 64), Vector2i(70, 64))
+	_check_true("拖拽也改了中间格", doc.gray_at(70, 64) > before_gray)
+	canvas_ref.emit_signal("stroke_ended")
+	for tool_index in [1, 2, 3, 4]:
+		dock.call("_set_tool", tool_index)
+		canvas_ref.emit_signal("stroke_started", Vector2i(40, 40))
+		canvas_ref.emit_signal("stroke_ended")
+	_check_true("换过五种工具都没崩", true)
+
+	# 放节点 + 加建筑 + 删建筑
+	dock.call("_set_tool", 5)
+	canvas_ref.emit_signal("stroke_started", Vector2i(30, 30))
+	canvas_ref.emit_signal("stroke_ended")
+	_check_true("放节点工具加进了节点", (doc.zones["raas_nodes"] as Array).size() >= 1)
+	dock.call("_set_tool", 6)
+	canvas_ref.emit_signal("stroke_started", Vector2i(90, 90))
+	canvas_ref.emit_signal("stroke_ended")
+	dock.call("_set_tool", 7)
+	canvas_ref.emit_signal("stroke_started", Vector2i(90, 90))
+	canvas_ref.emit_signal("stroke_ended")
+
+	# 撤销 / 重做 / 压平节点 / 重画五结构 / 刷新叠加层
+	dock.call("_on_undo_pressed")
+	dock.call("_on_redo_pressed")
+	dock.call("_apply_flatten_nodes")
+	dock.call("_apply_rebuild_zones")
+	dock.call("_refresh_overlay", true)
+	_check_true("五结构重建后 flags 与节点数对齐",
+			(doc.zones["flags"] as Array).size() == (doc.zones["raas_nodes"] as Array).size())
+
+	# 保存 / 校验 / 重画审阅图：真的落一份盘，再删掉
+	dock.call("_on_save_pressed")
+	_check_true("面板保存写出了 heightmap.png",
+			FileAccess.file_exists(JieyuMapSpec.file_path(str(doc.map_id),
+					JieyuMapSpec.FILE_HEIGHTMAP)))
+	dock.call("_on_validate_pressed")
+	dock.call("_on_render_pressed")
+	var report_text: TextEdit = dock.get("_report_text")
+	_check_true("校验报告写进了面板", report_text.text.length() > 0)
+	_cleanup_map(str(doc.map_id))
+
+	dock.queue_free()
+	canvas.queue_free()
 
 
 var _passed := 0

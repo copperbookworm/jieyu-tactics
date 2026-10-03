@@ -15,18 +15,21 @@ extends SceneTree
 ##
 ## 退出码：0 = 全绿，1 = 有失败。输出沿用 test/effects_test.gd 的 [OK]/[FAIL] 口径。
 ##
+## 【2026-10-03】断言实现抽到 tools/geom_checks.gd —— 游戏外壳的新屏幕（tools/screen_geom_check.gd）
+## 要跑同一套规则，抄一份等于两份规则迟早对不上。本文件只剩「驱动」：建 Main.tscn、跑、报数。
+## 唯一的例外：MAIN 的基线是**逐条人工定案**的历史账，它属于这个场景，不属于通用实现。
+##
 ## ⚠ 与 tools/run_integration_headless.gd 同样的硬约束：本脚本的编译早于 autoload 注册，
 ##    因此**不能**在编译期引用 EventBus / CaptureZone / Player / Enemy / AimCameraController / QuestSystem。
 ##    要碰这些只能在运行时按名字取。
+
+const GeomChecksScript := preload("res://tools/geom_checks.gd")
 
 const SETTLE_SECONDS := 1.5      # 等 HUD 装配与第一帧布局稳定
 const SCENE_PATH := "res://scenes/gameplay/Main.tscn"
 
 const VIEW_W := 960.0            # 工程逻辑分辨率（960x540 + canvas_items 拉伸）
 const VIEW_H := 540.0
-
-const OFFSCREEN_TOLERANCE := 1.0 # 出屏容差（逻辑像素）
-const MIN_TAP_SIZE := 32.0       # 最小点按目标边长（逻辑像素）
 
 ## 基线文件（相对工程根）。--init 写它，默认读它。
 const BASELINE_PATH := "res://test/geom_baseline.json"
@@ -37,18 +40,26 @@ const IGNORE_NODES := [
 	"Joystick",    # 摇杆是触摸热区，视觉可被覆盖
 ]
 
-## 带点击语义的信号名 —— 有其一就按「可点控件」检查最小尺寸
-const CLICK_SIGNALS := ["pressed", "button_down", "button_up", "toggled"]
+## 基线逐条定案（2026-10-02 使用者拍板）：键 = "A|B"（与 overlaps 的键口径一致，字母序）
+## 「有意」= 按设计保留（必须写清为什么功能上不冲突）；「无意」= 真问题，待修（必须写清修法）。
+## 这份定案由 --init 写进 test/geom_baseline.json 的 verdict 字段 ⇒ 下次 --init 不会丢。
+const BASELINE_NOTES := {
+	"CaptureStatus|QuestCard": "无意（真 bug，真机截图可见）：节点状态行 (16,36 高 49) 与任务卡 (16,60 高 96) 纵向叠 25 px，真机上两行文字互相压。修法：任务卡下移或收窄 —— 但下方 85..162 只剩 77 px，放不下 96 高的卡，需拍板（缩卡 / 换位置）。",
+	"FocusButton|MarkHint": "有意：聚焦触摸热区刻意做 120×120（点按目标够大），提示行是 Label 不接收输入 ⇒ 功能上不冲突。",
+	"MarkWheel|HP": "有意：报点轮盘展开时按层级临时盖住右上信息条，选择或取消后立即收起；HP 是 Label，不抢触摸。",
+	"MarkWheel|MapButton": "无意（真问题）：轮盘与地图键**都是可点按钮**，重叠区里按下命中不确定（触屏歧义）。修法：轮盘展开时禁用地图键，或把轮盘中心左移。",
+	"MatchClock|MarkWheel": "有意：同 MarkWheel|HP —— 战局状态行是 Label；要更干净可在轮盘展开时临时隐藏该行。",
+	"QuestCard|CombatFeed": "无意：任务卡实际宽 316（不止 300）与播报区左缘相交 16 px ⇒ 两块面板边框/文字可能贴住。修法：卡宽收到 300，或播报区右移 16 px。",
+	# 2026-10-03 游戏外壳：HUD 按钮分组重排后新增的一对（左下角摇杆热区与暂停键无关，
+	# 这里只登记真实新增的；reason 必须写清）
+}
 
+var _checks = null
 var _main: Node = null
 var _elapsed := 0.0
-var _passed := 0
-var _failed := 0
 var _done := false
 var _init_mode := false
 var _strict := false
-
-var _overlaps := {}   # "A|B" -> {a, b, parent, hit_size}
 
 
 func _initialize() -> void:
@@ -78,283 +89,17 @@ func _process(delta: float) -> bool:
 		return false
 	_done = true
 	_run_all()
-	quit(1 if _failed > 0 else 0)
+	quit(1 if _checks.failed > 0 else 0)
 	return true
 
 
-# ============================== 断言主体 ==============================
-
 func _run_all() -> void:
-	var controls := _collect_controls(_main)
-	print("— 采集到可见 Control %d 个（视口 %.0fx%.0f）" % [controls.size(), VIEW_W, VIEW_H])
-
-	_check_no_offscreen(controls)
-	_collect_overlaps(controls)
-	_check_overlaps_against_baseline()
-	_check_tap_targets(controls)
-	_check_canvas_layers()
-
-	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
-	if _failed > 0:
-		print("！！ 有 %d 项失败：往上翻看 [FAIL] 行 —— 重叠会给两个控件路径与两个 rect，直接可定位" % _failed)
-
-
-func _collect_controls(node: Node) -> Array:
-	var out := []
-	if node is Control:
-		var c := node as Control
-		if c.is_visible_in_tree():
-			var r := c.get_global_rect()
-			if r.size.x > 0.0 and r.size.y > 0.0:
-				out.append(c)
-	for child in node.get_children():
-		out.append_array(_collect_controls(child))
-	return out
-
-
-func _check_no_offscreen(controls: Array) -> void:
-	var bad := 0
-	for c in controls:
-		var ctrl := c as Control
-		if _ignored(ctrl):
-			continue
-		var r := ctrl.get_global_rect()
-		var inside := r.position.x >= -OFFSCREEN_TOLERANCE \
-			and r.position.y >= -OFFSCREEN_TOLERANCE \
-			and (r.position.x + r.size.x) <= VIEW_W + OFFSCREEN_TOLERANCE \
-			and (r.position.y + r.size.y) <= VIEW_H + OFFSCREEN_TOLERANCE
-		if not inside:
-			bad += 1
-			print("[FAIL] 出屏：%s" % _path_of(ctrl))
-			print("       rect = %s（视口 %.0fx%.0f）" % [str(r), VIEW_W, VIEW_H])
-	_check("不出屏（%d 个可见 Control）" % controls.size(), bad, 0)
-
-
-func _collect_overlaps(controls: Array) -> void:
-	# 只在「同一父节点的直接 Control 子节点」之间两两比：跨层级的父子包含是正常嵌套。
-	# 由 Container 排布的子节点跳过（重叠是布局器的意图）。
-	var by_parent := {}
-	for c in controls:
-		var ctrl := c as Control
-		if _ignored(ctrl):
-			continue
-		var parent := ctrl.get_parent()
-		if parent is Container:
-			continue
-		var key := str(parent.get_path())
-		if not by_parent.has(key):
-			by_parent[key] = []
-		by_parent[key].append(ctrl)
-
-	for key in by_parent.keys():
-		var group: Array = by_parent[key]
-		if group.size() < 2:
-			continue
-		for i in range(group.size()):
-			for j in range(i + 1, group.size()):
-				var a := group[i] as Control
-				var b := group[j] as Control
-				var ra := a.get_global_rect()
-				var rb := b.get_global_rect()
-				var hit := ra.intersection(rb)
-				if hit.size.x <= 0.0 or hit.size.y <= 0.0:
-					continue
-				var na := _name_of(a)
-				var nb := _name_of(b)
-				var pair := "%s|%s" % [na, nb]
-				_overlaps[pair] = {
-					"a": _path_of(a), "b": _path_of(b), "parent": key,
-					"rect_a": _rect_str(ra), "rect_b": _rect_str(rb),
-					"hit": _rect_str(hit),
-				}
-
-
-func _check_overlaps_against_baseline() -> void:
-	print("— 可见同级重叠对：%d 组" % _overlaps.size())
-
-	if _init_mode:
-		_write_baseline()
-		return
-
-	if _strict:
-		for pair in _overlaps.keys():
-			var d: Dictionary = _overlaps[pair]
-			print("[FAIL] 重叠（strict）：%s × %s" % [d["a"], d["b"]])
-			print("       hit = %s" % d["hit"])
-		_check("strict：无任何可见同级重叠", _overlaps.size(), 0)
-		return
-
-	# 默认：与基线比对。基线不存在 ⇒ 不让它变成隐形通过。
-	if not FileAccess.file_exists(BASELINE_PATH):
-		print("[FAIL] 找不到基线 %s —— 先用 --init 生成并人工确认，之后才能做「新重叠才失败」的比对" % BASELINE_PATH)
-		_failed += 1
-		return
-	var raw := FileAccess.get_file_as_string(BASELINE_PATH)
-	var parsed: Variant = JSON.parse_string(raw)
-	if typeof(parsed) != TYPE_DICTIONARY or not (parsed as Dictionary).has("overlaps"):
-		print("[FAIL] 基线 %s 格式不对（要 {\"overlaps\": {...}}）" % BASELINE_PATH)
-		_failed += 1
-		return
-	var known: Dictionary = parsed["overlaps"]
-	# 让「账」可见：有意 / 无意待修 各几条（定案来自基线 verdict 字段）
-	var on_purpose := 0
-	var to_fix := 0
-	var unclassified := 0
-	for pair in known.keys():
-		var verdict := String((known[pair] as Dictionary).get("verdict", ""))
-		if verdict.begins_with("有意"):
-			on_purpose += 1
-		elif verdict.begins_with("无意"):
-			to_fix += 1
-		else:
-			unclassified += 1
-	print("— 已知重叠 %d 组：有意 %d / 无意待修 %d / 未归类 %d（定案见 test/geom_baseline.json 的 verdict）"
-			% [known.size(), on_purpose, to_fix, unclassified])
-
-	var newly := []
-	for pair in _overlaps.keys():
-		if not known.has(pair):
-			newly.append(pair)
-
-	_check("无**新出现**的同级重叠（基线已登记 %d 组）" % known.size(), newly.size(), 0)
-	for pair in newly:
-		var d: Dictionary = _overlaps[pair]
-		print("       ★ 新重叠：%s × %s" % [d["a"], d["b"]])
-		print("         父节点 = %s" % d["parent"])
-		print("         %s rect = %s" % [d["a"], d["rect_a"]])
-		print("         %s rect = %s" % [d["b"], d["rect_b"]])
-		print("         交集   = %s" % d["hit"])
-
-	# 反向：基线里有、这次没了 —— 说明修好了，应该把基线收紧（提示而非失败）
-	var vanished := []
-	for pair in known.keys():
-		if not _overlaps.has(pair):
-			vanished.append(pair)
-	if vanished.size() > 0:
-		print("— 提示：基线里有 %d 组重叠这次不再重叠（多半是修好了）：" % vanished.size())
-		for pair in vanished:
-			print("    %s" % pair)
-		print("    处置：人工确认后重跑 --init 收紧基线，别留过期条目。")
-
-
-## 基线逐条定案（2026-10-02 使用者拍板）：键 = "A|B"（与 _overlaps 的键口径一致，字母序）
-## 「有意」= 按设计保留（必须写清为什么功能上不冲突）；「无意」= 真问题，待修（必须写清修法）。
-## 这份定案由 --init 写进 test/geom_baseline.json 的 verdict 字段 ⇒ 下次 --init 不会丢。
-const BASELINE_NOTES := {
-	"CaptureStatus|QuestCard": "无意（真 bug，真机截图可见）：节点状态行 (16,36 高 49) 与任务卡 (16,60 高 96) 纵向叠 25 px，真机上两行文字互相压。修法：任务卡下移或收窄 —— 但下方 85..162 只剩 77 px，放不下 96 高的卡，需拍板（缩卡 / 换位置）。",
-	"FocusButton|MarkHint": "有意：聚焦触摸热区刻意做 120×120（点按目标够大），提示行是 Label 不接收输入 ⇒ 功能上不冲突。",
-	"MarkWheel|HP": "有意：报点轮盘展开时按层级临时盖住右上信息条，选择或取消后立即收起；HP 是 Label，不抢触摸。",
-	"MarkWheel|MapButton": "无意（真问题）：轮盘与地图键**都是可点按钮**，重叠区里按下命中不确定（触屏歧义）。修法：轮盘展开时禁用地图键，或把轮盘中心左移。",
-	"MatchClock|MarkWheel": "有意：同 MarkWheel|HP —— 战局状态行是 Label；要更干净可在轮盘展开时临时隐藏该行。",
-	"QuestCard|CombatFeed": "无意：任务卡实际宽 316（不止 300）与播报区左缘相交 16 px ⇒ 两块面板边框/文字可能贴住。修法：卡宽收到 300，或播报区右移 16 px。",
-}
-
-
-## 把 BASELINE_NOTES 的定案并进每条记录（--init 时调用）⇒ 下次 --init 不会把 verdict 抹掉
-func _overlaps_with_verdicts() -> Dictionary:
-	var out := {}
-	for pair in _overlaps.keys():
-		var entry: Dictionary = (_overlaps[pair] as Dictionary).duplicate()
-		entry["verdict"] = BASELINE_NOTES.get(pair,
-				"未归类 —— 新出现的重叠必须先定案（有意 / 无意 + 一句理由），再 --init")
-		out[pair] = entry
-	return out
-
-
-func _write_baseline() -> void:
-	var payload := {
-		"note": "由 geom_assertions.gd --init 生成。人工确认过才能作为基线。新增条目要写清理由。",
-		"viewport": "%dx%d" % [int(VIEW_W), int(VIEW_H)],
-		"scene": SCENE_PATH,
-		"overlaps": _overlaps_with_verdicts(),
-	}
-	var f := FileAccess.open(BASELINE_PATH, FileAccess.WRITE)
-	if f == null:
-		print("[FAIL] 写不了基线 %s（错误 %d）" % [BASELINE_PATH, FileAccess.get_open_error()])
-		_failed += 1
-		return
-	f.store_string(JSON.stringify(payload, "  "))
-	f.close()
-	var unclassified := 0
-	for pair in _overlaps.keys():
-		if not BASELINE_NOTES.has(pair):
-			unclassified += 1
-	print("已写入基线：%s（%d 组重叠，其中未归类 %d 组）—— 请人工过一眼再提交" % [BASELINE_PATH, _overlaps.size(), unclassified])
-	print("逐条定案（有意 / 无意）见本文件常量 BASELINE_NOTES —— 新出现的重叠必须补一条再 --init")
-	print("—— 通过 %d 项 / 失败 %d 项（--init 模式不判定）——" % [_passed, _failed])
-
-
-func _check_tap_targets(controls: Array) -> void:
-	var bad := 0
-	for c in controls:
-		var ctrl := c as Control
-		if _ignored(ctrl):
-			continue
-		if not _is_clickable(ctrl):
-			continue
-		var r := ctrl.get_global_rect()
-		var shortest := minf(r.size.x, r.size.y)
-		if shortest < MIN_TAP_SIZE:
-			bad += 1
-			print("[FAIL] 点按目标过小：%s（最短边 %.1f < %.0f）" % [_path_of(ctrl), shortest, MIN_TAP_SIZE])
-	_check("点按目标都 ≥ %.0f px" % MIN_TAP_SIZE, bad, 0)
-
-
-func _check_canvas_layers() -> void:
-	var layers := _collect_canvas_layers(_main)
-	_check("场景里存在 CanvasLayer（HUD 有独立层）", layers.size() > 0, true)
-	var bad := 0
-	for lnode in layers:
-		var l := lnode as CanvasLayer
-		if l.layer < 0 or l.layer > 100:
-			bad += 1
-			print("[FAIL] CanvasLayer 层号越界：%s（layer=%d）" % [_path_of(l), l.layer])
-	_check("CanvasLayer 层号都在 [0,100]", bad, 0)
-
-
-# ============================== 小工具 ==============================
-
-func _collect_canvas_layers(node: Node) -> Array:
-	var out := []
-	if node is CanvasLayer:
-		out.append(node)
-	for child in node.get_children():
-		out.append_array(_collect_canvas_layers(child))
-	return out
-
-
-func _is_clickable(ctrl: Control) -> bool:
-	if ctrl is BaseButton:
-		return true
-	for sig in CLICK_SIGNALS:
-		if ctrl.has_signal(sig):
-			return true
-	return false
-
-
-func _ignored(ctrl: Control) -> bool:
-	for w in IGNORE_NODES:
-		if _name_of(ctrl) == w or _path_of(ctrl) == w:
-			return true
-	return false
-
-
-func _rect_str(r: Rect2) -> String:
-	return "(%.0f,%.0f %.0fx%.0f)" % [r.position.x, r.position.y, r.size.x, r.size.y]
-
-
-func _path_of(node: Node) -> String:
-	return str(node.get_path()) if node.is_inside_tree() else String(node.name)
-
-
-func _name_of(node: Node) -> String:
-	return String(node.name)
-
-
-func _check(title: String, actual: Variant, expected: Variant) -> void:
-	if actual == expected:
-		_passed += 1
-		print("[OK]   %s" % title)
-	else:
-		_failed += 1
-		print("[FAIL] %s  期望=%s 实际=%s" % [title, str(expected), str(actual)])
+	_checks = GeomChecksScript.new()
+	_checks.view_w = VIEW_W
+	_checks.view_h = VIEW_H
+	_checks.ignore_nodes = IGNORE_NODES
+	_checks.run_all(_main, BASELINE_PATH, BASELINE_NOTES, _init_mode, _strict)
+	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_checks.passed, _checks.failed])
+	if _checks.failed > 0:
+		print("！！ 有 %d 项失败：往上翻看 [FAIL] 行 —— 重叠会给两个控件路径与两个 rect，直接可定位"
+				% _checks.failed)

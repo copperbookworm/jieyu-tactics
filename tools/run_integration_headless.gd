@@ -186,8 +186,14 @@ func _check_structure() -> void:
 			and _main.hud.map_button != null and _main.hud.role_button != null \
 			and _main.hud.posture_button != null and _main.hud.indirect_button != null \
 			and _main.hud.weapon_button != null and _main.hud.vehicle_button != null \
-			and _main.hud.seat_button != null and _main.hud.smoke_button != null
-	_check_true("HUD 控件齐全（16 个）", controls_ok)
+			and _main.hud.seat_button != null and _main.hud.smoke_button != null \
+			and _main.hud.pause_button != null
+	_check_true("HUD 控件齐全（17 个：16 个既有 + 游戏外壳的暂停键）", controls_ok)
+	# 暂停键由 ui/screens/MatchHost.gd 接线（Main.gd 守着 400 行硬线，不加这一行）——
+	# 单独跑 Main.tscn 时它就是个没接线的按钮，这里钉住「它自己不做事」这一点
+	_check_true("暂停键自己不带接线（接线在外壳的 MatchHost）",
+			_main.hud.pause_button.pressed.get_connections().is_empty()
+			and _main.hud.has_method("set_shell_visible"))
 	_check_true("候选 O：播报 / 提示两个面板在 HUD 层上（4.14 / 4.15）",
 			_main.hud.feed != null and _main.hud.tips != null
 			and _main.hud.has_method("push_feed"))

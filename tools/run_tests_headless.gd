@@ -14,15 +14,16 @@ extends SceneTree
 ## 此时加 --log-file <工作区内可写路径> 即可。
 
 ## 跑几何门禁子进程，解析它的「—— 通过 N 项 / 失败 M 项 ——」汇总行；拿不到就返回 {}
-func _run_geometry_gate() -> Dictionary:
+## script_path 与 log_name 都是参数：现在有两条门禁（Main.tscn 的 HUD + App.tscn 的外壳五屏）
+func _run_geometry_gate(script_path: String, log_name: String) -> Dictionary:
 	var exe := OS.get_executable_path()
 	var project := ProjectSettings.globalize_path("res://")
 	var output: Array = []
-	var log_path := "user://geom_gate.log"
+	var log_path := "user://%s" % log_name
 	# 用 --log-file 而不是管道捕获：受限环境里 OS.execute 的 stdout 管道拿不到东西（实测「跳过」）。
 	OS.execute(exe, ["--headless", "--path", project, "--log-file",
 			ProjectSettings.globalize_path(log_path), "--script",
-			"res://tools/geom_assertions.gd"], output, false)
+			script_path], output, false)
 	var text := ""
 	var f := FileAccess.open(log_path, FileAccess.READ)
 	if f != null:
@@ -69,18 +70,29 @@ func _initialize() -> void:
 		print("<<<<< %s 通过=%s 失败=%s" % [name, str(passed), str(failed)])
 		if failed == null or int(failed) != 0:
 			bad.append("%s（通过 %s / 失败 %s）" % [name, str(passed), str(failed)])
-	# 几何门禁（visual-regression 技能）：HUD 控件不出屏 / 同级不新增重叠 / 点按目标够大 / 层号合法。
-	# 为什么用子进程：geom_assertions.gd 与本源文件一样是 SceneTree 入口（自己 quit），
-	# 进程内没法把它当普通测试实例化 —— 所以另起一个 headless 进程跑，把它的汇总行并进来。
+	# 几何门禁（visual-regression 技能）：控件不出屏 / 同级不新增重叠 / 点按目标够大 / 层号合法。
+	# 为什么用子进程：两条门禁都跟本源文件一样是 SceneTree 入口（自己 quit），
+	# 进程内没法把它们当普通测试实例化 —— 所以各起一个 headless 进程，把汇总行并进来。
+	#   ① geom_assertions.gd   Main.tscn 的对局内 HUD
+	#   ② screen_geom_check.gd App.tscn 的外壳五屏（大厅 / 模式 / 设置 / 暂停 / 结算）
+	# ⚠ 「子进程没起来」= 门禁没跑，**必须算失败**。历史教训：把跳过的红当成绿提交过。
 	if wanted.is_empty():
-		var geom := _run_geometry_gate()
-		if geom.has("passed"):
-			names.append("geom_assertions.gd")
-			print("<<<<< geom_assertions.gd 通过=%d 失败=%d" % [int(geom["passed"]), int(geom["failed"])])
-			if int(geom["failed"]) != 0:
-				bad.append("geom_assertions.gd（通过 %d / 失败 %d）" % [int(geom["passed"]), int(geom["failed"])])
-		else:
-			print("<<<<< geom_assertions.gd 跳过（子进程没起来 / 输出里没有汇总行）")
+		var gates := [
+			["res://tools/geom_assertions.gd", "geom_gate.log"],
+			["res://tools/screen_geom_check.gd", "screen_geom_gate.log"],
+		]
+		for gate in gates:
+			var script_path := String(gate[0])
+			var label := script_path.get_file()
+			var geom := _run_geometry_gate(script_path, String(gate[1]))
+			names.append(label)
+			if geom.has("passed"):
+				print("<<<<< %s 通过=%d 失败=%d" % [label, int(geom["passed"]), int(geom["failed"])])
+				if int(geom["failed"]) != 0:
+					bad.append("%s（通过 %d / 失败 %d）" % [label, int(geom["passed"]), int(geom["failed"])])
+			else:
+				print("！！ %s 跳过（子进程没起来 / 输出里没有汇总行）—— 门禁没跑不等于通过" % label)
+				bad.append("%s（跳过：门禁没跑起来）" % label)
 	print("\n#### 汇总：脚本 %d 个，未全绿 %d 个" % [names.size(), bad.size()])
 	for entry in bad:
 		print("#### 未全绿：%s" % entry)

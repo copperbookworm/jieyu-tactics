@@ -57,6 +57,11 @@ var vehicle_button: Button = null
 var seat_button: Button = null
 ## 弹种键（ATGM 落地后加的）：武器位一键切「主炮 ⇄ 反坦克导弹」
 var ammo_type_button: Button = null
+## 暂停键（2026-10-03 游戏外壳）：本文件只负责**建**，接线在 ui/screens/MatchHost.gd
+## —— Main.gd 守着 398/400 的硬线，加不了这一行
+var pause_button: Button = null
+## 战术地图层（原来只是 setup 里的局部变量）：外壳暂停时要连它一起收起来
+var map_layer: CanvasLayer = null
 var fire_button: FireButton = null
 var focus_button: FocusButton = null
 var joystick: TouchJoystick = null
@@ -71,6 +76,22 @@ var downed_overlay = null
 var _hint_timer := 0.0
 var _focusing := false
 var _capture_timer := 0.0
+
+
+## 分组色（2026-10-03）：九宫格三列各管一件事，用颜色把「这是哪一组」显出来。
+## 手机上认色比认字快，而且比加分组标题省地方（y=138 那一带被任务卡占着，放不下标题）。
+const GROUP_INFANTRY := Color(0.55, 0.78, 1.00)   # 列1 步兵自身
+const GROUP_VEHICLE := Color(0.60, 0.88, 0.62)    # 列2 载具
+const GROUP_FIRE := Color(1.00, 0.80, 0.50)       # 列3 火力与沟通
+
+
+## 给 HUD 按钮上分组色 + 一句 tooltip（桌面上鼠标悬停看得到）
+func _tint(button: Button, group: Color, tip: String) -> void:
+	button.add_theme_color_override("font_color", group)
+	button.add_theme_color_override("font_hover_color", Color.WHITE)
+	button.add_theme_color_override("font_focus_color", group)
+	if tip != "":
+		button.tooltip_text = tip
 
 
 ## 建 HUD。terrain_texture 由 Main 从 WorldSetup 中转过来（小地图与战术地图都要它）
@@ -151,6 +172,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	# 指令键（docx 4.13 快捷指令轮盘）：左侧第三列的空位；展开只走左半圈（与报点轮盘同一套几何）
 	command_wheel = CommandWheelScript.new()
 	command_wheel.name = "CommandWheel"
+	command_wheel.tooltip_text = "列3 火力·沟通：快捷指令轮盘（4.13）"
 	layer.add_child(command_wheel)
 
 	mark_hint = Label.new()
@@ -170,31 +192,52 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	layer.add_child(tips)
 	tips.setup(main)
 
+	# 暂停键（2026-10-03 游戏外壳）：放右上角 (878,8)。
+	# 这个矩形是拿 tools/hud_rects.gd 的实测输出挑的：右上角 y<162 的整片区域是空的
+	# （右列从 Score 的 y=162 才开始占），所以 878..958 × 8..52 与全部 HUD 控件无交集。
+	pause_button = Button.new()
+	pause_button.name = "PauseButton"
+	_tint(pause_button, Color(0.86, 0.86, 0.90), "暂停 / 设置 / 返回大厅")
+	pause_button.text = "暂停"
+	pause_button.size = Vector2(80.0, 44.0)
+	pause_button.position = Vector2(GameConfig.VIEWPORT_WIDTH - 82.0, 8.0)
+	layer.add_child(pause_button)
+
 	# 战术地图：M 键或这个按钮开图；单独一层盖在 HUD 之上（docx 4.11.3）
 	map_button = Button.new()
 	map_button.name = "MapButton"
+	_tint(map_button, GROUP_FIRE, "战术地图（4.11.3）；桌面按 M")
 	map_button.text = "地图"
 	map_button.size = Vector2(80.0, 44.0)
 	map_button.position = Vector2(GameConfig.VIEWPORT_WIDTH - 158.0, 8.0 + 150.0 + 76.0)
 
-	# 左侧功能键排成两列（列1 x=16 / 列2 x=104，行 y=140/186/232）＋第三列的单颗（烟雾 x=192,y=232）：
-	# 底界 272，给左下角摇杆（圆心 100,440、半径 90、触摸判定 144）留出空间不受遮挡
-	# ⚠ 第四十一版补丁9 收尾：整个 3×3 集群再下移 HUD_BUTTON_CLUSTER_DY ——
-	#   任务卡占 (16,60)-(316,156)，原先第一行 y=140 会被卡片盖住 16 px（几何回归实测）。
-	#   下移后第一行 y=162、底界 294，仍不碰摇杆触摸区。
+	# 左侧功能键：3 列 × 3 行（列 x = 16 / 104 / 192，行 y = 140/186/232 + _dy）。
+	# 底界 294，给左下角摇杆（圆心 100,440、半径 90、触摸判定 144 ⇒ 上沿 296）留出空间。
+	# ⚠ 第四十一版补丁9：整个集群下移 HUD_BUTTON_CLUSTER_DY —— 任务卡占 (16,60)-(316,156)，
+	#   原先第一行 y=140 会被卡片盖住 16 px（几何回归实测）。
+	#
+	# 【2026-10-03 游戏外壳 · 按用途归位】使用者反馈「按钮越来越多」。这次不动九宫格的几何
+	# （位置集合一个都没变，几何基线因此仍然成立），只把**谁坐哪个格子**按用途摆正：
+	#   列1「步兵自身」兵种 / 姿势 / 换枪
+	#   列2「载具」    弹种 / 上车 / 换座
+	#   列3「火力·沟通」间瞄 / 烟雾 / 指令
+	# 原先是散着的（换枪在列2、弹种在列3、间瞄在列1），三列各管一件事之后才找得着。
+	# 每列再加一个颜色（下方 _tint），手机上认色比认字快。
 	var _dy: float = GameConfig.HUD_BUTTON_CLUSTER_DY
 	# 2026-10-02 真机修：CommandWheel 的 _ready 用的是 GameConfig 常量（不含 _dy），
 	# 真机实测它落在 (272,186)：既比集群高 22 px，又正好被角色文字框（280,170 宽 500）压住 ⇒
 	# 「指令」键点不开、轮盘在手机上根本看不到（几何基线里记为 CommandWheel|Role）。
 	# 这里在 _dy 之后显式对齐到第三列（同 弹种 192,162 / 烟雾 192,254）。
-	command_wheel.position = Vector2(192.0, GameConfig.COMMAND_BUTTON_Y + _dy)
+	# 指令挪到列3 行3：口头/落点指令与火力支援同属「对外输出」
+	command_wheel.position = Vector2(192.0, 232.0 + _dy)
 	# 兵种按钮放左侧（右侧已被小地图/分数/地图按钮占满），点一下循环切兵种
 	role_button = Button.new()
 	role_button.name = "RoleButton"
 	role_button.text = "兵种"
 	role_button.size = Vector2(80.0, 40.0)
-	role_button.position = Vector2(16.0, 140.0 + _dy)
+	role_button.position = Vector2(16.0, 140.0 + _dy)      # 列1 行1 步兵
 	layer.add_child(role_button)
+	_tint(role_button, GROUP_INFANTRY, "列1 步兵：切换兵种（docx 3.1）")
 
 	role_label = Label.new()
 	role_label.name = "Role"
@@ -211,16 +254,19 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	posture_button.name = "PostureButton"
 	posture_button.text = "姿势"
 	posture_button.size = Vector2(80.0, 40.0)
-	posture_button.position = Vector2(16.0, 186.0 + _dy)
+	posture_button.position = Vector2(16.0, 186.0 + _dy)   # 列1 行2
 	layer.add_child(posture_button)
+	_tint(posture_button, GROUP_INFANTRY, "列1 步兵：站 / 蹲 / 卧（C2）")
 
 	# 间瞄按钮：直接开图并切到选点模式（省得玩家先开图再切开关）
 	indirect_button = Button.new()
 	indirect_button.name = "IndirectButton"
 	indirect_button.text = "间瞄"
 	indirect_button.size = Vector2(80.0, 40.0)
-	indirect_button.position = Vector2(16.0, 232.0 + _dy)
+	# 间瞄从列1 挪到列3 行1：它是火力链的一环（7.4.2）
+	indirect_button.position = Vector2(192.0, 140.0 + _dy)
 	layer.add_child(indirect_button)
+	_tint(indirect_button, GROUP_FIRE, "列3 火力：开图选间瞄落点（7.4.2）")
 
 	# 烟雾（候选 P，docx 4.12）：步兵按下＝朝准心投一发烟雾弹；人在车里按下＝载具发烟器。
 	# 放左侧第三列（x=192）的 y=232 行：右侧那一列被小地图 / 血量 / 地图键 / 报点轮盘占满，
@@ -229,16 +275,20 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	smoke_button.name = "SmokeButton"
 	smoke_button.text = "烟雾"
 	smoke_button.size = Vector2(80.0, 40.0)
-	smoke_button.position = Vector2(192.0, 232.0 + _dy)
+	# 烟雾挪到列3 行2：与间瞄同一列（都是火力/视野手段）
+	smoke_button.position = Vector2(192.0, 186.0 + _dy)
 	layer.add_child(smoke_button)
+	_tint(smoke_button, GROUP_FIRE, "列3 火力：烟雾弹 / 载具发烟器（4.12）")
 
 	# 换枪按钮（C3：切枪 1.04 s，期间不能开火）
 	weapon_button = Button.new()
 	weapon_button.name = "WeaponButton"
 	weapon_button.text = "换枪"
 	weapon_button.size = Vector2(80.0, 40.0)
-	weapon_button.position = Vector2(104.0, 140.0 + _dy)
+	# 换枪从列2 挪到列1 行3：它管的是步兵自己的枪，不该和载具挤在一列
+	weapon_button.position = Vector2(16.0, 232.0 + _dy)
 	layer.add_child(weapon_button)
+	_tint(weapon_button, GROUP_INFANTRY, "列1 步兵：换枪（C3，切枪期间不能开火）")
 
 	# 上车 / 下车（8.1 舱室与座位）
 	vehicle_button = Button.new()
@@ -247,6 +297,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	vehicle_button.size = Vector2(80.0, 40.0)
 	vehicle_button.position = Vector2(104.0, 186.0 + _dy)
 	layer.add_child(vehicle_button)
+	_tint(vehicle_button, GROUP_VEHICLE, "列2 载具：上 / 下车（8.1）")
 
 	# 换座位（8.1：驾驶位 ⇄ 武器位；只有武器位能开炮）
 	seat_button = Button.new()
@@ -255,17 +306,20 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	seat_button.size = Vector2(80.0, 40.0)
 	seat_button.position = Vector2(104.0, 232.0 + _dy)
 	layer.add_child(seat_button)
+	_tint(seat_button, GROUP_VEHICLE, "列2 载具：驾驶位 ⇄ 武器位")
 
 	# 弹种键：左侧第三列唯一剩下的空位 (192,140)。非载具状态下按它只会得到一句提示。
 	ammo_type_button = Button.new()
 	ammo_type_button.name = "AmmoTypeButton"
 	ammo_type_button.text = "弹种"
 	ammo_type_button.size = Vector2(80.0, 40.0)
-	ammo_type_button.position = Vector2(192.0, 140.0 + _dy)
+	# 弹种从列3 挪到列2 行1：主炮 ⇄ 导弹是载具的事
+	ammo_type_button.position = Vector2(104.0, 140.0 + _dy)
 	layer.add_child(ammo_type_button)
+	_tint(ammo_type_button, GROUP_VEHICLE, "列2 载具：主炮 ⇄ 反坦克导弹")
 	layer.add_child(map_button)
 
-	var map_layer := CanvasLayer.new()
+	map_layer = CanvasLayer.new()
 	map_layer.name = "MapLayer"
 	map_layer.layer = 10
 	add_child(map_layer)
@@ -511,6 +565,17 @@ func show_defeat(reason: String) -> void:
 func set_vehicle_button_text(text: String) -> void:
 	if vehicle_button != null:
 		vehicle_button.text = text
+
+
+## 游戏外壳（暂停菜单 / 结算屏）用：HUD 与战术地图两层一起收 / 放。
+## 为什么收而不是叠：HUD 的控件平铺在同一层，暂停面板压上去会产生一堆「真实存在但没法修」
+## 的重叠（几何门禁照样会报），而暂停时本来也不该点战斗键。世界仍渲染 ——
+## 地形 / 单位是 Main 这个 Node2D 的子节点，不是 HUD 层的子节点。
+func set_shell_visible(value: bool) -> void:
+	if layer != null:
+		layer.visible = value
+	if map_layer != null:
+		map_layer.visible = value
 
 
 ## 开关战术地图（docx 4.11.7 ①：地图不暂停游戏，但开图期间玩家不能移动 / 开火）

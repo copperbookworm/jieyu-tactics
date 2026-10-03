@@ -25,6 +25,12 @@ var hold_diff := 0                 ## 加时的基准占领差（突然死亡要
 var _our := 0
 var _their := 0
 
+## 模式规则（由 MatchHost 按模式表灌进来；不灌就保持 5.7 的占领口径）
+var win_rule := "occupy"                             ## "occupy" 占领数 / "objective" 战术目标
+var base_duration := GameConfig.MATCH_DURATION
+var overtime_duration := GameConfig.OVERTIME_DURATION
+var _objective := ""
+
 
 func setup(main_node, attacker_count: int = -1) -> void:
 	main = main_node
@@ -83,17 +89,61 @@ func _process(delta: float) -> void:
 
 func _on_clock_zero() -> void:
 	if phase == Phase.PLAYING:
+		# 22.6 PVEVP：只看战术目标，无平局、无加时 —— 到点没达成就是败
+		if win_rule == "objective":
+			_finish("enemy", "时间到：%s未达成" % objective_text())
+			return
 		var decided := decide_at_timeout(_our, _their)
 		if decided == "":
+			if overtime_duration <= 0.0:
+				_finish("draw", "时间到：占领数持平（本模式无加时）")
+				return
 			phase = Phase.OVERTIME
-			time_left = GameConfig.OVERTIME_DURATION
+			time_left = overtime_duration
 			hold_diff = _our - _their
-			_hint("超时仍未分胜负 —— 进入加时 3 分钟（突然死亡）")
+			_hint("超时仍未分胜负 —— 进入加时 %d 分钟（突然死亡）"
+					% int(round(overtime_duration / 60.0)))
 			_refresh()
 			return
 		_finish(decided, "时间到：占领数 %d : %d" % [_our, _their])
 		return
 	_finish("draw", "加时结束仍未分胜负")
+
+
+## 模式规则入口（外壳在 Main 装好之后调用）。objective 模式额外订阅主线任务完成。
+func apply_mode(rule: String, duration_s: float, overtime_s: float, objective: String) -> void:
+	win_rule = rule
+	base_duration = maxf(duration_s, 1.0)
+	overtime_duration = maxf(overtime_s, 0.0)
+	_objective = objective
+	time_left = base_duration
+	if phase == Phase.OVERTIME:
+		phase = Phase.PLAYING
+	if win_rule == "objective" and main != null and main.quests != null \
+			and not main.quests.quest_completed.is_connected(_on_objective_quest):
+		main.quests.quest_completed.connect(_on_objective_quest)
+	_refresh()
+
+
+## 22.6 PVEVP：主线任务完成 = 战术目标达成
+func _on_objective_quest(quest_data: Dictionary) -> void:
+	if win_rule != "objective" or phase == Phase.FINISHED:
+		return
+	if not bool(quest_data.get("main", false)):
+		return
+	_finish("player", "战术目标达成：%s" % String(quest_data.get("name", "主线任务")))
+
+
+func objective_text() -> String:
+	return _objective if _objective != "" else "完成主线任务"
+
+
+func clock_text() -> String:
+	return time_text(time_left, phase == Phase.OVERTIME)
+
+
+func holds_text() -> String:
+	return "我方 %d : 敌方 %d" % [_our, _their]
 
 
 func _sync_holds() -> void:

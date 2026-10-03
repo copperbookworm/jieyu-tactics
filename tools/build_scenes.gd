@@ -6,17 +6,21 @@ extends EditorScript
 ## 生成物：
 ##   res://entities/player/Player.tscn —— CharacterBody2D + Player.gd（子节点运行时创建）
 ##   res://scenes/gameplay/Main.tscn   —— Node2D + Main.gd（地形/玩家/相机/敌人/HUD 运行时创建）
-## 并把 Main.tscn 设为主场景，省去手点项目设置
+##   res://scenes/app/App.tscn          —— Node + App.gd（游戏外壳：大厅/模式/设置/对局宿主）
+## 并把 App.tscn 设为主场景（2026-10-03 游戏外壳：启动先进大厅），省去手点项目设置
 
 const PLAYER_SCENE_PATH := "res://entities/player/Player.tscn"
 const MAIN_SCENE_PATH := "res://scenes/gameplay/Main.tscn"
+const APP_SCENE_PATH := "res://scenes/app/App.tscn"
 const PLAYER_SCRIPT_PATH := "res://entities/player/Player.gd"
 const MAIN_SCRIPT_PATH := "res://scenes/gameplay/Main.gd"
+const APP_SCRIPT_PATH := "res://ui/app/App.gd"
 
 
 func _run() -> void:
 	_save_scene(PLAYER_SCENE_PATH, _make_player_root())
 	_save_scene(MAIN_SCENE_PATH, _make_main_root())
+	_save_scene(APP_SCENE_PATH, _make_app_root())
 
 	_apply_project_settings()
 	var save_error := ProjectSettings.save()
@@ -36,7 +40,7 @@ func _apply_project_settings() -> void:
 	ProjectSettings.set_setting(
 			"rendering/textures/canvas_textures/default_texture_filter",
 			Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
-	ProjectSettings.set_setting("application/run/main_scene", MAIN_SCENE_PATH)
+	ProjectSettings.set_setting("application/run/main_scene", APP_SCENE_PATH)
 
 	# 读回验证
 	var orientation := int(ProjectSettings.get_setting("display/window/handheld/orientation"))
@@ -61,6 +65,14 @@ func _make_main_root() -> Node:
 	var root := Node2D.new()
 	root.name = "Main"
 	root.set_script(load(MAIN_SCRIPT_PATH))
+	return root
+
+
+## 游戏外壳的根：一个空 Node + App.gd —— 大厅 / 模式 / 设置 / 对局宿主全在代码里建
+func _make_app_root() -> Node:
+	var root := Node.new()
+	root.name = "App"
+	root.set_script(load(APP_SCRIPT_PATH))
 	return root
 
 

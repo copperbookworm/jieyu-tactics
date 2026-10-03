@@ -202,10 +202,27 @@ func _build_button() -> void:
 
 
 func _on_button_pressed() -> void:
-	_modal.visible = not _modal.visible
-	# 翻页按钮在滚动内容里，跟着面板一起显隐，不用单独管
-	if _modal.visible:
-		_refresh()
+	if is_open():
+		close_panel()
+	else:
+		open_panel()
+
+
+## 游戏外壳（设置屏）要从别的界面打开参谋面板 —— 给公开入口，外面就别去戳 _modal 了
+func open_panel() -> void:
+	if _modal == null:
+		return
+	_modal.visible = true
+	_refresh()
+
+
+func close_panel() -> void:
+	if _modal != null:
+		_modal.visible = false
+
+
+func is_open() -> bool:
+	return _modal != null and _modal.visible
 
 
 # ────────────────────────────── 面板骨架 ──────────────────────────────

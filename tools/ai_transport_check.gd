@@ -40,6 +40,10 @@ func _initialize() -> void:
 	_advisor = AdvisorScript.new()
 	_advisor.name = "AiAdvisorE2E"
 	_advisor.ledger_dir = E2E_LEDGER_DIR
+	# 配置与密钥也隔离：同步成功会 save_config()，绝不能让自检写玩家真实的 ai_advisor.cfg
+	_advisor.config_path = "user://ai_advisor_e2e.cfg"
+	_advisor.key_path = "user://ai_advisor_e2e.key"
+	_advisor.models_cache_dir = E2E_LEDGER_DIR
 	root.add_child(_advisor)
 	var main = _fake_main()
 	root.add_child(main)
@@ -113,10 +117,68 @@ func _on_finished(ok: bool, text: String, entry: Dictionary) -> void:
 		_check("账本落了两条", all.size(), 2)
 		_check("账本按币种分装（未知价不入金额）", _ledger.aggregate(all)["cost"], {})
 		_check("账本汇总识别出 1 次带 usage 的调用", int(_ledger.aggregate(all)["prompt_tokens"]), 123)
-		_report()
-		_ledger.clear()
-		_done = true
-		quit(0 if _failed == 0 else 1)
+		# 第三次：在线同步「可用模型」。走真 DeepSeek 的 models_path（/models），
+		# 用 base_url 覆盖打到 mock —— 这样既验了目录里的路径拼得对，又不花一分钱。
+		_advisor.provider_id = "deepseek"
+		_advisor.model = "mock-model"
+		_advisor.models_synced.connect(_on_models_synced)
+		_stage = 4
+		_check("同步请求放行（已开开关 + 有 key）", _advisor.sync_models(), "")
+		return
+
+
+func _on_models_synced(provider: String, models: Array, error: String) -> void:
+	if _stage != 4:
+		return
+	_stage = 5
+	_check("同步的供应商对得上", provider, "deepseek")
+	_check("同步没报错", error, "")
+	_check("mock 给了 3 个模型、滤掉 embedding 后剩 2 个", models.size(), 2)
+	var ids: Array[String] = []
+	for m in models:
+		ids.append(String((m as Dictionary).get("id", "")))
+	_check_true("mock-chat 在列表里", ids.has("mock-chat"))
+	_check_true("mock-embedding 被滤掉", not ids.has("mock-embedding"))
+	_check("显示名被解析出来", String((models[0] as Dictionary).get("label", "")), "Mock Chat")
+	_check("上下文长度被解析出来", int((models[0] as Dictionary).get("context", 0)), 100000)
+	# 选名策略：原来填的 mock-model 与 deepseek 的默认名都不在列表里 ⇒ 落到第一个
+	_check("自动选了列表第一个当模型名", _advisor.model, "mock-chat")
+	# 缓存落盘且能回读
+	_check("模型列表进了本地缓存", _advisor.cached_models("deepseek").size(), 2)
+	_check_true("缓存带了同步时间", _advisor.models_synced_at("deepseek") != "")
+	_check_true("刚同步完不算过期（不会立刻再发一次）", _advisor.models_cache_age_seconds("deepseek") < 60)
+	# 账本：不花 token 也要留痕
+	var all: Array = _ledger.load_all()
+	_check("账本落了三条（含一条 models_sync）", all.size(), 3)
+	var last: Dictionary = all[all.size() - 1]
+	_check("最后一条的 purpose", String(last.get("purpose", "")), "models_sync")
+	_check("同步不花 token（total_tokens = 0）", int(last.get("total_tokens", -1)), 0)
+	_check("同步费用记 0，而不是「未知」", int(last.get("est_cost_micros", -2)), 0)
+	_verify_models_request_against_mock()
+	_report()
+	_ledger.clear()
+	_done = true
+	quit(0 if _failed == 0 else 1)
+
+
+## 反查 mock 留档：证明同步真的走的是 GET .../models，而不是又发了一次对话请求
+func _verify_models_request_against_mock() -> void:
+	var f := FileAccess.open(MOCK_LOG, FileAccess.READ)
+	if f == null:
+		_check_true("mock 侧写了同步请求留档", false)
+		return
+	var raw := f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(raw)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		_check_true("同步请求留档是 JSON", false)
+		return
+	var d: Dictionary = parsed
+	_check("同步用的是 GET", String(d.get("method", "")), "GET")
+	_check("同步打到了 /models", String(d.get("path", "")), "/models")
+	_check_true("同步也带 Authorization 头（key 只在头里，不进 URL）",
+			String(d.get("auth", "")).begins_with("Bearer "))
+	_check("同步的请求体是空的（GET 不带 model）", String(d.get("model", "")), "")
 
 
 ## 反查 mock 留档：证明请求真的发对了地方、带对了头与体、prompt 里真有战报

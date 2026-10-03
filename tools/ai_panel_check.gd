@@ -61,6 +61,7 @@ func _initialize() -> void:
 	print("===== AI 参谋面板 · 几何自检 =====")
 	_advisor = AdvisorScript.new()
 	_advisor.name = "AiAdvisorGeom"
+	_advisor.models_cache_dir = "user://ai_usage_geom"
 	root.add_child(_advisor)
 	_panel = PanelScript.new()
 	_panel.name = "AiAdvisorPanel"
@@ -81,6 +82,7 @@ func _process(delta: float) -> bool:
 		_panel._on_button_pressed()   # 打开面板
 		return false
 	_check_open()
+	_check_model_row()
 	_report()
 	_done = true
 	quit(0 if _failed == 0 else 1)
@@ -127,6 +129,39 @@ func _check_open() -> void:
 	var window: Control = _panel._modal.get_node("Window")
 	_check_true("面板窗口不出屏（%s）" % _rect_str(window.get_global_rect()),
 			_inside(window.get_global_rect()))
+
+
+## 「可用模型」这一行的**行为**（几何之外）：按钮可用性必须跟着供应商走 ——
+## 「选完供应商就自动填好」这件事如果按钮该灰的时候不灰，玩家会点了没反应还不知道为什么。
+func _check_model_row() -> void:
+	# ① 知名供应商：能同步 + 官方入口指向价格页
+	_advisor.provider_id = "deepseek"
+	_panel._refill_model_box()
+	_check_true("deepseek：同步按钮可用", not (_panel._sync_button as Button).disabled)
+	_check_true("deepseek：官方入口可用", not (_panel._official_button as Button).disabled)
+	_check("deepseek：官方入口指向价格页", _panel._official_url,
+			"https://api-docs.deepseek.com/zh-cn/quick_start/pricing")
+	_check_true("deepseek：候选里有包内置的名字",
+			(_panel._available_ids as Array).has("deepseek-flash"))
+	_check_true("deepseek：提示行交代了可以同步",
+			String((_panel._model_sync_note as Label).text).contains("同步"))
+
+	# ② 自定义/中转站：没有统一的「列出模型」接口 ⇒ 两个按钮都置灰 + 文案说清要手填
+	_advisor.provider_id = "custom"
+	_panel._refill_model_box()
+	_check_true("自定义：同步按钮置灰", (_panel._sync_button as Button).disabled)
+	_check_true("自定义：官方入口也置灰", (_panel._official_button as Button).disabled)
+	_check_true("自定义：提示行说要手动填",
+			String((_panel._model_sync_note as Label).text).contains("手动填"))
+
+	# ③ 玩家自己填的名字必须留在候选里 —— 否则同步一次就找不回手填的值（会被静默换掉）
+	_advisor.provider_id = "deepseek"
+	_advisor.model = "我自己填的-不在名单里"
+	_panel._refill_model_box()
+	_check_true("玩家自填的名字留在候选里",
+			(_panel._available_ids as Array).has("我自己填的-不在名单里"))
+	_advisor.model = ""
+	_panel._refill_model_box()
 
 
 func _collect(node: Node, out: Array) -> void:

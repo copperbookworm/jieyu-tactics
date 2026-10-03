@@ -1,6 +1,31 @@
 《解域》jieyu-1 开发进度
 ========================
-最后更新：2026-10-03（**第四十四版 · 收三件事**：订正 DeepSeek 价目表（含时段计价）+ 全工程改为**随包 CJK 字体** + 加「仅调试包的立刻结束本局」；另修面板滚动与「清除 key」误删；动代码） ｜ git HEAD：c3af123（第四十三版）
+最后更新：2026-10-03（**第四十五版 · 选完供应商自动填好模型名与 base_url**：玩家只需填 API key；用供应商官方的「列出模型」接口现取，不抓网页；内置知名供应商官网/文档/价格页；动代码） ｜ git HEAD：8da614a（第四十四版）
+本次更新：本轮做**第四十五版**（使用者点名：「为了应对供应商以后会更新模型名和 base_url，玩家选完供应商后游戏自动填好模型名，只需填 API key；包里内置官网网址」）：
+	· **机制选择（关键决定）**：**不抓官网网页**，改用供应商官方的 **GET {base_url}/models** 接口。
+	  理由：官网文档页是给人看的 HTML/SPA，改版即崩、解析结果也无法验证；而这支接口是
+	  **给机器读的 JSON 契约**，DeepSeek 官方文档明文写着「列出当前可用模型」。
+	· **base_url 内置、模型名在线取**：base_url 变动极少（DeepSeek 一直是 https://api.deepseek.com），
+	  写进包；模型名变动频繁（2026-10-03 实测 DeepSeek 自己就从 deepseek-chat 换成了 deepseek-flash；
+	  同一家 DeepSeek 在 OpenRouter 上又叫 deepseek/deepseek-v4.1-flash），必须现取。
+	· **面板**：新增「可用模型」一行（下拉 + 「同步模型列表」+「官方价目」），开面板/换供应商时
+	  若缓存过期（24 h）自动同步一次；同步成功后自动把模型名填好（不覆盖玩家仍有效的选择）。
+	· **缓存与离线回退**：结果落 user://ai_usage/models_<provider>.json；取不到就用包内置的名字，
+	  再不行玩家照样能手填 —— 任何一步失败都不挡路。
+	· **官网网址内置**：6 家知名供应商各自带 official_site / api_docs / pricing_url，「官方价目」按钮
+	  交给系统浏览器打开（不带 key、不经本游戏）。URL 逐个实测过；OpenAI 那三个对非浏览器 UA 返 403
+	  是 Cloudflare 拦机器人（地址没错），Moonshot/智谱/OpenRouter 的文档页会 308 跳转（浏览器正常跟）。
+	· **记账照旧**：同步**不花 token**，但也记一条（purpose=models_sync，费用记 0 而不是「未知」）——
+	  「所有调用都只记在这台手机上」这句话才站得住。
+	· 顺带修：① 发现 **OpenRouter 在目录里根本没有默认模型**（既有缺口，同步失败就无路可走），
+	  补上 **openrouter/auto**（实测确实在它家 466 个模型列表里）；② 面板 OptionButton 的
+	  fit_to_longest_item 会把最小宽度撑开（几何门禁抓到，见下）；③ 配置/密钥路径做成可注入，
+	  端到端自检彻底隔离，不再可能写到玩家真实配置。
+· 实测（2026-10-03，真机 + 桌面，退出码均 0）：单元 **34 个 @tool 测试脚本 / 1097 项断言全绿**
+	  （跑批汇总「脚本 35 个」= 34 个测试脚本 + 1 个几何门禁）／几何门禁 **5 项全绿**／集成冒烟 **229 项全绿**／
+	  面板自检 **16 项全绿**（几何 7 + 行为 9）／网络链路端到端 **34 → 54 项全绿**（+20 项同步断言）／
+	  **126 个 .gd / 20796 行**（LF 口径）／AiAdvisorPanel.gd **781 行**／AiAdvisor.gd **858 行**／Main.gd **398 行**（守住 ≤400）／APK **34.07 MB**
+	上一轮抬头（原文保留）最后更新：2026-10-03（**第四十四版 · 收三件事**：订正 DeepSeek 价目表（含时段计价）+ 全工程改为**随包 CJK 字体** + 加「仅调试包的立刻结束本局」；另修面板滚动与「清除 key」误删；动代码） ｜ git HEAD：c3af123（第四十三版）
 本次更新：本轮做**第四十四版**（使用者点名的三件事 + 真机顺手两修）：
 	· ① **价目表订正**：AiPriceTable 升 VERSION 2，按官方价格页改成**时段计价**（空闲 = 高峰半价；
 	  高峰 = 北京时间周一~周五 9:00-12:00 与 14:00-18:00，不含法定节假日）。现行模型入表：
@@ -127,7 +152,7 @@
   重力/弹道高度（simulate）只保留给间瞄（高弹道越障）
 
 三、当前状态
-· 规模：**124 个 .gd / 19895 行**（2026-10-03 本轮复跑实测，LF 字节口径，不含 addons / gdtoolkit / .godot）；Main.gd **398 行**（守住 ≤400 验收线）
+· 规模：**126 个 .gd / 20796 行**（2026-10-03 第四十五版复跑实测，LF 字节口径，不含 addons / gdtoolkit / .godot）；Main.gd **398 行**（守住 ≤400 验收线）
   文件数从上一轮的 78 掉到 71 是**归档**造成的（候选 T ④ 移走 13 个零引用 .gd：11 个 1 行空骨架 + 2 个哥布林/史莱姆占位），
   同时新增 6 个（SmokeScreen / SmokeController / MapLayerSource / smoke_test / map_layer_test / probe_height_export）⇒ 78 − 13 + 6 = 71，账对得上
   Main 行数曲线（候选 N 的 ≤400 验收线）：968 → 391（拆分）→ 393 → 385 → 395（L3 后告急）
@@ -138,7 +163,7 @@
   ⚠ 数行口径：本机必须用「LF 字节数」统计（pwsh 的 Get-Content 在中文 UTF-8 文件上会少数约 6%）。
   上一轮我因此把 Main.gd 数成 911 行、全项目数成 6862 行，还误以为本文件原来的 7251 / 968 是错的——
   原值其实是对的（Main.gd 968 与 read 工具一致），三节这一段的数字已按正确口径重写。
-· 测试：**33** 个 @tool EditorScript
+· 测试：**34** 个 @tool EditorScript
   height_image / indirect / map_inspector / **map_layer** / mark / quest / role / **smoke** / suppression /
 ），共 **1033 项断言**，2026-10-02 第四十二版本轮复跑**全绿**（退出码 0；351 → 1033（第四十二版 +106）：
   载具开火链 11 项（vehicle_test 25 → 36）、启动自检 9 项（boot_check_test，新增脚本）
@@ -1699,6 +1724,85 @@
 · 待办（下一轮）：① 使用者需在真机上**重新粘贴 API key** —— 本轮真机操作中「清除 key」被误触，
   key 文件已删且**不可恢复**（已加二次确认防再犯；这不是工程债，是操作事故，如实记在这里）
   ② 面板单列内容 998 px 仍要翻页，将来可考虑改双列布局；③ 软键盘弹出时 ADJUST_RESIZE 顶掉下半截仍未处理
+
+【第四十五版 · 选完供应商自动填好模型名与 base_url（玩家只填 API key）（2026-10-03，动代码）】
+
+**要解决的问题**：供应商会改模型名（2026-10-03 实测 DeepSeek 已从 deepseek-chat 换成 deepseek-flash），
+base_url 也可能变。若把模型名写死在包里，玩家会遇到「选完供应商却不知道模型名填什么」。
+目标：选完供应商，base_url 与模型名都自动填好，玩家只需粘 API key。
+
+① **机制：用官方的「列出模型」接口，不抓官网网页**
+   · 端点：GET {base_url}{models_path}；DeepSeek 是 /models（官方文档 Lists Models 明确有这支），
+     Moonshot / OpenAI / OpenRouter 是 /v1/models，智谱是 /models，Gemini 是 /v1beta/models
+   · **为什么不抓官网页面**：文档页是给人看的 HTML/SPA，改版即崩、解析结果也无法自证；
+     而这支接口返回的是**给机器读的 JSON**，字段（id / name / context_window / max_output_tokens）
+     是供应商自己的契约。解析器对「不是 JSON / 顶层不是对象 / 是 error 对象 / 列表为空」四类都给了
+     明确错误码，绝不瞎猜
+   · 认证复用既有纪律：**key 只进请求头**（OpenAI 系 Authorization: Bearer，Gemini 走 x-goog-api-key），
+     绝不进 URL query —— 否则会落在日志/代理记录里
+   · 接口混进来的**非对话模型会被过滤**（embedding / whisper / tts / moderation / dall-e / bge / sora…），
+     vision 与 reasoner 一律保留。用 OpenRouter 真实数据实测：466 个里只滤掉 3 个（音乐/语音模型）
+
+② **base_url 内置、模型名在线取**
+   · base_url 变动极少 ⇒ 写进包（AiProviderCatalog 的 base_url），玩家不填也能用；
+     仍保留「中转站/自建网关」的覆盖输入框
+   · 模型名变动频繁 ⇒ 一律现取。离线兜底顺序：在线缓存 → 包内置名单 → 玩家手填
+   · 缓存：user://ai_usage/models_<provider>.json（含 synced_unix/synced_iso），TTL 24 h；
+     开面板或换供应商时若已过期且有 key，**自动同步一次**；也可手动点「同步模型列表」
+   · 选名策略（纯函数，可单测）：玩家当前填的若供应商仍提供 ⇒ **保留**；否则用包内置默认名；
+     再否则用列表第一个。**空列表绝不把玩家填的名字清掉**
+
+③ **包里内置知名供应商的官网网址**
+   · 6 家各带 official_site / api_docs / pricing_url（URL 逐个实测过；OpenAI 那三个对非浏览器 UA
+     返 403 是 Cloudflare 拦机器人、地址没错；Moonshot/智谱/OpenRouter 的文档页 308 跳转，浏览器正常跟）
+   · 面板「官方价目」按钮走 OS.shell_open 交给系统浏览器（不带 key、不经本游戏）；
+     **失败也要说话**：真机上先测得「点了没反应」，故现在失败会把错误码与网址显示出来让玩家自己开
+   · 真机实测成功：点一下 Firefox 打开 api-docs.deepseek.com/zh-cn/quick_start/pricing 的「模型 & 价格」页
+     （logcat 有 act=android.intent.action.VIEW dat=https://api-docs.deepseek.com/...）
+
+④ **记账口径不变**：同步**不花 token**（元数据接口），但仍记一条 purpose=models_sync、
+   total_tokens=0、est_cost_micros=0（**记 0 而不是「未知」**）、http_status、latency、price_tier。
+   「所有调用记录只存在这台手机上」这句话因此对同步也成立。
+   纪律照旧：**没开开关 / 没填 key ⇒ 一个字节都不发**。
+
+⑤ **顺带发现并修掉的既有问题**
+   · **OpenRouter 在目录里根本没有默认模型**（default_model 与 models 都是空的）：玩家选了它、
+     在线同步又失败时就无路可走。补上 **openrouter/auto** —— 已实测它确实在该家 /models 的 466 个
+     模型列表里（这是 OpenRouter 自己的自动路由型号）。聚合站的第三方模型 id 天天变，故只放这一个兜底
+   · **面板布局真被顶爆过**：OptionButton 默认 fit_to_longest_item=true，最小宽度会跟着最长那项文字撑开。
+     一开始把「上下文 100.0万 ｜ 输出上限 393216」写进项里，这一行最小宽度到 899 > 面板可用 844，
+     整个 Scroll 被撑出屏 —— **几何门禁当场抓到**（诊断行：Scroll min=907 ｜ HBox min=899）。
+     修法：项里只放模型 id、说明移到提示行；并关掉 fit_to_longest_item + 开 clip_text
+   · **配置/密钥路径可注入**（config_path / key_path，与 ledger_dir 同款）：端到端自检此前固定写
+     user://ai_advisor.cfg，同步成功会 save_config() ⇒ 有污染本机配置的风险，现在自检用 e2e 专用路径
+
+· 实测（2026-10-03，真机 + 桌面，退出码均 0）：单元 **34 个 @tool 测试脚本 / 1097 项断言全绿**
+  （跑批汇总「脚本 35 个」= 34 个测试脚本 + 1 个几何门禁）／几何门禁 **5 项全绿**／集成冒烟 **229 项全绿**／
+  面板自检 **7 → 16 项全绿**（原 7 项几何 + 本轮新增 9 项行为断言：同步/官方两个按钮的可用性
+  要跟着供应商走、自定义供应商要置灰并说明手填、玩家自填的模型名必须留在候选里）／
+  网络链路端到端 **34 → 54 项全绿**（+20 项同步断言）／**126 个 .gd / 20796 行**（LF 口径）／AiAdvisorPanel.gd **781 行**／systems/ai/AiAdvisor.gd **858 行**／Main.gd **398 行**／APK **34.07 MB**（与上轮持平）
+· 本轮改动面：systems/ai/AiProviderCatalog.gd（6 家官网/文档/价格页 + models_path + 访问器）、
+  systems/ai/AiModelListParser.gd（新 · 纯函数解析器 + 选名策略 + 说明串）、
+  systems/ai/AiAdvisor.gd（sync_models / maybe_auto_sync_models / 缓存读写 / models_synced 信号 / 路径可注入）、
+  ui/AiAdvisorPanel.gd（「可用模型」行 + 同步 + 官方价目 + 提示行）、tools/ai_mock_server.mjs（加 /models 路由）、
+  tools/ai_transport_check.gd（+20 项同步端到端）、test/ai_model_sync_test.gd（新 · 40 项）
+· 真机证据：shots/真机_20261003_选完供应商自动填好模型.png（开面板自动同步 → 模型名自动填好 + 缓存落盘）、
+  shots/真机_20261003_官方价目按钮拉起浏览器.png（Firefox 打开 DeepSeek「模型 & 价格」）
+· 真机也验了**失败路径**：mock 没起来时提示行给出「同步失败：网络没通…（模型名仍可手填，或点「官方价目」去官网看）」，
+  下拉框回退到内置 deepseek-flash —— 任何一步失败都不挡路
+· 待办（下一轮）：① **使用者仍需在真机上重新粘贴 API key**（第四十四版误触删除，不可恢复）
+  ② **价格表仍要靠发版更新**：模型名现在能在线同步，但「多少钱」没有这种接口（OpenRouter 的 /models 里
+  带 pricing，但 DeepSeek/OpenAI 不带），所以要「不发版也能改价」还得另想（例如你托管一份静态 json 清单）；
+  本版没做，因为那是一次线上托管的承诺，得你拍板
+  ③ 在线同步目前只在「开面板 / 换供应商」时触发，没有定时刷新；④ 软键盘顶掉下半截仍未处理
+   ⑤ **docx 本轮的收尾**：第四十五版回流后段落 **1217** / 表格 14 / 一级标题 二十~二十三 全在；
+   备份 .bak99（第四十五版回流）与 .bak100（纯标记收尾）都做了 byte-exact。顺带清掉两项历史差异：
+   第十六章批注数 97 → **111**（同句作者分布 94 → 108 一并改对，否则句内不自洽）、20.3 ⑧ 补 ✅ 标记
+   （并如实注明「弱网超时」与「切后台被系统收走请求」两种仍未专门验过）。仍未消除的差异 **7 → 5 条**：
+   第十八章旧口径快照、第二十一章 21.1 ⑬（两者自带「以 20.1 为准」）、20.2 的 MatchFlow「Main 399 行」、
+   20.3 ④ 的武器/载具列数、20.4 的 include_filter 写法（已登记在 20.5）。另：第二十一章里两处「97 条」
+   是**历史口径**（描述 2026-10-01 那次审查看到的范围），同句都带日期，按「历史只追加不改写」有意保留，
+   不要当错别字改掉。
 
 四、接下来（候选 A~N 已全部完成；✅ 候选 L（L1~L5）、✅ 候选 P（烟雾遮蔽）、✅ 候选 T 除 ⑥ 外的各条
 	亦已完成；**单元测试 32 个脚本 / 1033 项全绿、集成冒烟 229 项全绿**（2026-10-02 本轮真跑，退出码均 0）；

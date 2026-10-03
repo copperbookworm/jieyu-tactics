@@ -26,6 +26,7 @@ const LedgerScript := preload("res://systems/ai/AiUsageLedger.gd")
 const KeyVault := preload("res://systems/ai/AiKeyVault.gd")
 const DigestScript := preload("res://systems/ai/AiBattleDigest.gd")
 const PromptScript := preload("res://systems/ai/AiPrompt.gd")
+const ModelParser := preload("res://systems/ai/AiModelListParser.gd")
 const PanelScript := preload("res://ui/AiAdvisorPanel.gd")
 
 const CONFIG_PATH := "user://ai_advisor.cfg"
@@ -34,6 +35,11 @@ const EXPORT_PATH := "user://ai_usage_export.csv"
 const GAME_CONFIG_PATH := "res://data/config/GameConfig.gd"
 const ROLE_TABLE_PATH := "res://data/config/RoleTable.gd"
 const REQUEST_TIMEOUT := 60.0
+## 模型列表缓存放这儿（与账本同目录：玩家看得见、导出得走）
+const MODELS_CACHE_DIR := "user://ai_usage"
+## 缓存多久算过期：24 小时。模型名变动频繁（2026-10-03 DeepSeek 刚从 chat 换成 flash），
+## 所以换供应商时若缓存过期就自动同步一次；没过期就用缓存，省一次网络往返。
+const MODELS_CACHE_TTL := 24 * 3600
 
 ## 默认值只此一份：_load_config 与「恢复默认」共用
 const DEFAULTS := {
@@ -51,6 +57,8 @@ const DEFAULTS := {
 signal debrief_started()
 signal debrief_finished(ok: bool, text: String, entry: Dictionary)
 signal usage_changed()
+## 在线同步「可用模型」的结果。error 为空 = 成功；models 是 [{id,label,context,max_out}]
+signal models_synced(provider: String, models: Array, error: String)
 
 var enabled := false
 var provider_id := "deepseek"
@@ -68,6 +76,11 @@ var panel = null
 
 ## 账本目录可注入：自检工具用它指向临时目录，绝不碰玩家真实的 user://ai_usage
 var ledger_dir := LedgerScript.DEFAULT_DIR
+## 配置与密钥路径同样可注入：端到端自检要完全隔离，绝不能碰玩家真实的 user://ai_advisor.cfg
+var config_path := CONFIG_PATH
+var key_path := KEY_PATH
+## 模型列表缓存目录同样可注入：否则自检会把 mock 的模型名写进真实的 user://ai_usage
+var models_cache_dir := MODELS_CACHE_DIR
 
 var _http: HTTPRequest = null
 var _vault = null
@@ -88,11 +101,19 @@ var _started_usec := 0
 var _session_id := ""
 var _cfg_script = null
 var _role_script = null
+## 「列出模型」走**第二个** HTTPRequest：和复盘那条互不排队，
+## 且不会把 _busy 占住（同步不该让玩家以为「复盘进行中」）
+var _http_models: HTTPRequest = null
+var _models_pending: Dictionary = {}
+var _models_busy := false
+var _models_started_usec := 0
+## provider_id -> {synced_unix, synced_iso, models}；首次访问时才从磁盘读
+var _models_cache: Dictionary = {}
 
 
 func _ready() -> void:
 	ledger = LedgerScript.new(ledger_dir)
-	_vault = KeyVault.new(KEY_PATH)
+	_vault = KeyVault.new(key_path)
 	_load_config()
 	_key = _vault.load_key()
 	_http = HTTPRequest.new()
@@ -100,6 +121,11 @@ func _ready() -> void:
 	_http.timeout = REQUEST_TIMEOUT
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
+	_http_models = HTTPRequest.new()
+	_http_models.name = "AiModelsHttp"
+	_http_models.timeout = REQUEST_TIMEOUT
+	add_child(_http_models)
+	_http_models.request_completed.connect(_on_models_completed)
 	_wire_bus()
 	# headless 下不建 UI：跑批环境不需要按钮（几何门禁只扫 Main.tscn，但少一层更干净）
 	_ui_allowed = DisplayServer.get_name() != "headless"
@@ -344,6 +370,34 @@ func resolved_model() -> String:
 	return String(CatalogScript.resolve(provider_id).get("default_model", ""))
 
 
+## 目录里内置的模型名（离线兜底；在线同步成功过就以缓存为准）
+func bundled_models() -> Array:
+	var out: Array = []
+	for m in CatalogScript.resolve(provider_id).get("models", []):
+		out.append({"id": String(m), "label": ""})
+	return out
+
+
+func supports_model_sync() -> bool:
+	return CatalogScript.models_path_of(provider_id) != ""
+
+
+func is_syncing_models() -> bool:
+	return _models_busy
+
+
+## 给玩家点的官方入口：**价格页优先**（玩家最想看的是「现在多少钱、有哪些模型」），
+## 没有价格页退到 API 文档，再没有退到官网。空串 = 这家没内置（自定义/中转站）。
+func official_link() -> String:
+	var pricing := CatalogScript.pricing_url_of(provider_id)
+	if pricing != "":
+		return pricing
+	var docs := CatalogScript.api_docs_of(provider_id)
+	if docs != "":
+		return docs
+	return CatalogScript.official_site_of(provider_id)
+
+
 func status_text() -> String:
 	if competitive:
 		return "竞技模式下已关闭"
@@ -508,6 +562,163 @@ func _entry_for(parsed: Dictionary, response_code: int, latency_ms: int) -> Dict
 	}
 
 
+# ────────────────────────── 在线同步「可用模型」 ──────────────────────────
+
+## 去供应商**官方的「列出模型」接口**取一次模型名。不花 token（元数据接口，不计费），
+## 但仍然守两条纪律：① 没开开关 / 没填 key ⇒ 一个字节都不发；② key 只进请求头，绝不进 URL。
+## 返回 "" = 已发出（结果走 models_synced 信号）；非空 = 拒绝原因（直接给玩家看）。
+func sync_models() -> String:
+	if not enabled:
+		return "AI 参谋未开启 —— 不开启时本游戏绝不联网"
+	if _key == "":
+		return "还没填 API key"
+	var models_path := CatalogScript.models_path_of(provider_id)
+	if models_path == "":
+		return "该供应商没有统一的「列出模型」接口，模型名请手动填"
+	if _models_busy:
+		return "正在同步，稍等一下"
+	var provider := CatalogScript.resolve(provider_id)
+	var base := CatalogScript.effective_base_url(provider, base_url_override)
+	if base == "":
+		return "base_url 是空的 —— 先填一个"
+	_models_pending = {
+		"provider": provider_id,
+		"dialect": String(provider.get("dialect", CatalogScript.DIALECT_OPENAI)),
+	}
+	_models_busy = true
+	_models_started_usec = Time.get_ticks_usec()
+	# GET、无请求体；认证头复用 RequestBuilder（gemini 走 x-goog-api-key，key 不进 URL）
+	var headers := RequestBuilder.headers(provider, _key)
+	var err := _http_models.request(base + models_path, headers, HTTPClient.METHOD_GET, "")
+	if err != OK:
+		_models_busy = false
+		models_synced.emit(provider_id, [], "请求发不出去（HTTPRequest 错误码 %d）" % err)
+	return ""
+
+
+func _on_models_completed(result: int, response_code: int, _headers: PackedStringArray,
+		body: PackedByteArray) -> void:
+	if not _models_busy:
+		return
+	_models_busy = false
+	var provider := String(_models_pending.get("provider", provider_id))
+	var dialect := String(_models_pending.get("dialect", CatalogScript.DIALECT_OPENAI))
+	var latency := int((Time.get_ticks_usec() - _models_started_usec) / 1000)
+	var error_text := ""
+	var error_code := ""
+	var models: Array = []
+	if result != HTTPRequest.RESULT_SUCCESS:
+		var nf := Parser.network_failure(result)
+		error_code = String(nf.get("error_code", "network_error"))
+		error_text = "网络没通：" + Parser.error_text(error_code)
+	else:
+		var parsed := ModelParser.parse(body.get_string_from_utf8(), dialect, resolved_model())
+		if bool(parsed.get("ok", false)):
+			models = parsed.get("models", [])
+			_write_models_cache(provider, models)
+			# 同步成功就顺手把「用哪个模型」定下来：不覆盖玩家已明确、且供应商仍然提供的选择
+			var picked := ModelParser.choose_model(models, model,
+					String(CatalogScript.resolve(provider_id).get("default_model", "")))
+			if picked != model:
+				model = picked
+				save_config()
+		else:
+			error_code = String(parsed.get("error", "bad_response"))
+			error_text = "供应商返回的内容看不懂：" + Parser.error_text(error_code)
+	# 不花 token 也要记一条：玩家才信「所有调用都只记在这台手机上」
+	_led().record({
+		"provider": provider,
+		"model": "",
+		"purpose": "models_sync",
+		"phase": "config",
+		"session_id": _session_id,
+		"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0,
+		"reasoning_tokens": 0, "total_tokens": 0,
+		"est_cost_micros": 0, "currency": "",
+		"price_version": PriceTable.VERSION, "price_tier": PriceTable.tier_at(),
+		"latency_ms": latency, "http_status": response_code,
+		"status": "ok" if error_text == "" else "error",
+		"error_code": error_code, "error_message": error_text,
+	})
+	models_synced.emit(provider, models, error_text)
+	usage_changed.emit()
+
+
+## 面板打开 / 换供应商时调用：缓存过期且有 key 就自动同步一次（静默，失败不弹）。
+func maybe_auto_sync_models() -> String:
+	if not enabled or _key == "":
+		return ""
+	if CatalogScript.models_path_of(provider_id) == "":
+		return ""
+	if models_cache_age_seconds() <= MODELS_CACHE_TTL:
+		return ""
+	return sync_models()
+
+
+func _models_cache_path(provider: String) -> String:
+	return "%s/models_%s.json" % [models_cache_dir, provider]
+
+
+## 首次访问某供应商时才读盘，之后走内存
+func _ensure_models_cache(provider: String) -> void:
+	if _models_cache.has(provider):
+		return
+	_models_cache[provider] = {}
+	var path := _models_cache_path(provider)
+	if not FileAccess.file_exists(path):
+		return
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return
+	var text := f.get_as_text()
+	f.close()
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		return
+	if typeof(json.data) != TYPE_DICTIONARY:
+		return
+	_models_cache[provider] = json.data
+
+
+func _write_models_cache(provider: String, models: Array) -> void:
+	var payload := {
+		"synced_unix": int(Time.get_unix_time_from_system()),
+		"synced_iso": Time.get_datetime_string_from_system(false, false),
+		"models": models,
+	}
+	_models_cache[provider] = payload
+	DirAccess.make_dir_recursive_absolute(models_cache_dir)
+	var f := FileAccess.open(_models_cache_path(provider), FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(payload))
+	f.close()
+
+
+## 缓存里的模型列表（没同步过 / 缓存坏了都返回空数组，调用方回退到目录里的内置名）
+func cached_models(provider: String = "") -> Array:
+	var p := provider if provider != "" else provider_id
+	_ensure_models_cache(p)
+	var entry: Dictionary = _models_cache.get(p, {})
+	var models: Variant = entry.get("models", [])
+	return models if typeof(models) == TYPE_ARRAY else []
+
+
+func models_synced_at(provider: String = "") -> String:
+	var p := provider if provider != "" else provider_id
+	_ensure_models_cache(p)
+	return String((_models_cache.get(p, {}) as Dictionary).get("synced_iso", ""))
+
+
+## 缓存年龄（秒）。没同步过返回一个很大的数（语义 = 永远过期）。
+func models_cache_age_seconds(provider: String = "") -> int:
+	var p := provider if provider != "" else provider_id
+	_ensure_models_cache(p)
+	var at := int((_models_cache.get(p, {}) as Dictionary).get("synced_unix", 0))
+	if at <= 0:
+		return 1 << 30
+	return maxi(int(Time.get_unix_time_from_system()) - at, 0)
+
 # ────────────────────────────── 用量查询 / 导出 ──────────────────────────────
 
 func today_key() -> String:
@@ -620,7 +831,7 @@ func save_config() -> bool:
 	cfg.set_value("advisor", "auto_debrief", auto_debrief)
 	cfg.set_value("advisor", "competitive", competitive)
 	# ⚠ key 不进这个文件（分文件混淆存放，见 AiKeyVault 头部说明）
-	return cfg.save(CONFIG_PATH) == OK
+	return cfg.save(config_path) == OK
 
 
 func _load_config() -> void:
@@ -634,7 +845,7 @@ func _load_config() -> void:
 	auto_debrief = bool(DEFAULTS["auto_debrief"])
 	competitive = bool(DEFAULTS["competitive"])
 	var cfg := ConfigFile.new()
-	if cfg.load(CONFIG_PATH) != OK:
+	if cfg.load(config_path) != OK:
 		return
 	enabled = bool(cfg.get_value("advisor", "enabled", enabled))
 	provider_id = String(cfg.get_value("advisor", "provider", provider_id))

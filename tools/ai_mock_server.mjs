@@ -33,6 +33,21 @@ const server = http.createServer((req, res) => {
         messages: body.messages || [],
       }, null, 2));
     }
+    // 供应商官方的「列出模型」接口（OpenAI 兼容形状）。故意混一个 embedding 进去，
+    // 好让自检能断言「非对话模型会被过滤」，而不是只断言「拿到列表」。
+    if (req.method === "GET" && String(req.url).includes("models")) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        object: "list",
+        data: [
+          { id: "mock-chat", object: "model", owned_by: "mock", name: "Mock Chat",
+            context_window: 100000, max_output_tokens: 8192 },
+          { id: "mock-reasoner", object: "model", owned_by: "mock", name: "Mock Reasoner" },
+          { id: "mock-embedding", object: "model", owned_by: "mock", name: "Mock Embedding" },
+        ],
+      }));
+      return;
+    }
     const model = String(body.model || "");
     if (model.startsWith("mock-unauthorized")) {
       res.writeHead(401, { "Content-Type": "application/json" });

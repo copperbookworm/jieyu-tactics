@@ -13,6 +13,7 @@ extends CanvasLayer
 ## 刻意不写 class_name：引用方 preload。
 
 const CatalogScript := preload("res://systems/ai/AiProviderCatalog.gd")
+const ModelParser := preload("res://systems/ai/AiModelListParser.gd")
 
 ## 全工程字体方案（2026-10-03 使用者拍板走 B：**随包塞一份 CJK 字体**）：
 ## 工程默认字体 = res://assets/fonts/JieyuCJK-Subset.otf（见 project.godot 的 gui/theme/custom_font），
@@ -65,6 +66,17 @@ var _status_label: Label = null
 var _output: RichTextLabel = null
 var _usage_label: Label = null
 var _provider_ids: Array = []
+## 「可用模型」下拉框：候选 = 在线同步结果 ∪ 目录内置 ∪ 当前值
+var _model_box: OptionButton = null
+var _sync_button: Button = null
+var _official_button: Button = null
+var _model_sync_note: Label = null
+## 下拉框每一项对应的模型 id（显示文本里可能带说明，不能反解析）
+var _available_ids: Array = []
+## id -> 说明串（「上下文 100.0万 ｜ 输出上限 393216」），选中时显示在提示行
+var _available_desc: Dictionary = {}
+## 当前供应商的官方入口（价格页优先），空串 = 这家没内置
+var _official_url := ""
 
 
 func setup(owner_advisor) -> void:
@@ -77,6 +89,10 @@ func setup(owner_advisor) -> void:
 	advisor.debrief_started.connect(_on_debrief_started)
 	advisor.debrief_finished.connect(_on_debrief_finished)
 	advisor.usage_changed.connect(_on_usage_changed)
+	advisor.models_synced.connect(_on_models_synced)
+	# 面板一打开就刷一遍候选，并在缓存过期时自动同步一次（静默，失败只写提示行）
+	_modal.visibility_changed.connect(_on_modal_visibility)
+	_refill_model_box()
 
 
 # ────────────────────────────── 入口按钮 ──────────────────────────────
@@ -224,9 +240,12 @@ func _build_modal() -> void:
 	box.add_child(_enable_box)
 
 	box.add_child(_field("供应商", _make_provider_box()))
-	_model_edit = _make_line_edit("模型名（留空用该供应商默认）")
+	_model_edit = _make_line_edit("模型名（留空用该供应商默认；下面的下拉框会自动填）")
 	_model_edit.text_changed.connect(_on_model_changed)
 	box.add_child(_field("模型", _model_edit))
+	box.add_child(_field("可用模型", _build_model_row()))
+	_model_sync_note = _note("")
+	box.add_child(_model_sync_note)
 	_base_edit = _make_line_edit("base_url 覆盖（中转站 / 自建网关才需要填）")
 	_base_edit.text_changed.connect(_on_base_changed)
 	box.add_child(_field("base_url", _base_edit))
@@ -330,6 +349,149 @@ func _on_debug_end_match() -> void:
 		return
 	flow.call("_finish", "enemy", "调试：立刻结束本局")
 	_output.text = "调试：已请求立刻结束本局 —— 局末会自动触发复盘（若已开启自动复盘）。"
+
+
+# ────────────────────────── 「可用模型」：在线同步 ──────────────────────────
+
+## 这一行是「玩家只填 key」的关键：模型名不再靠玩家知道（DeepSeek 自己都从 chat 换成 flash 了），
+## 而是点一下就去供应商官方的「列出模型」接口现取。取不到也不挡路 —— 上面那栏仍能手填。
+func _build_model_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	_model_box = OptionButton.new()
+	# ⚠ 布局坑（几何门禁抓到的真实数据）：OptionButton 默认 fit_to_longest_item=true，
+	# 最小宽度会跟着**最长那项文字**撑开。一开始把「上下文 100.0万 ｜ 输出上限 393216」也写进项里，
+	# 这一行最小宽度被顶到 899 > 面板可用 844，整个 Scroll 被撑出屏。
+	# 修法两条：① 项里只放模型 id，说明改到下面的提示行显示（下拉框也更好扫）；
+	# ② 关掉 fit_to_longest_item + 开 clip_text：万一某个 id 特别长（OpenRouter 那种
+	# "vendor/model:batch"）也不会再把布局顶开，只是显示上裁掉。
+	_model_box.fit_to_longest_item = false
+	_model_box.clip_text = true
+	_model_box.size_flags_horizontal = Control.SIZE_FILL
+	_model_box.custom_minimum_size = Vector2(300.0, 40.0)
+	_model_box.theme = _theme_of(14)
+	_model_box.item_selected.connect(_on_available_model_selected)
+	row.add_child(_model_box)
+	_sync_button = _action("同步模型列表", _on_sync_models)
+	_sync_button.custom_minimum_size = Vector2(150.0, 40.0)
+	row.add_child(_sync_button)
+	_official_button = _action("官方价目", _on_open_official)
+	_official_button.custom_minimum_size = Vector2(100.0, 40.0)
+	row.add_child(_official_button)
+	return row
+
+
+## 候选 = 在线同步缓存 ∪ 目录内置 ∪ 当前值（去重、保序：同步来的在前）
+func _refill_model_box() -> void:
+	if _model_box == null or advisor == null:
+		return
+	var entries: Array = []
+	var seen := {}
+	for m in advisor.cached_models():
+		var id := String((m as Dictionary).get("id", ""))
+		if id != "" and not seen.has(id):
+			seen[id] = true
+			entries.append({"id": id, "desc": ModelParser.describe(m)})
+	for m in advisor.bundled_models():
+		var bid := String((m as Dictionary).get("id", ""))
+		if bid != "" and not seen.has(bid):
+			seen[bid] = true
+			entries.append({"id": bid, "desc": ""})
+	var current: String = advisor.model
+	if current != "" and not seen.has(current):
+		entries.push_front({"id": current, "desc": "当前填的值"})
+	_model_box.clear()
+	_available_ids.clear()
+	_available_desc.clear()
+	for e in entries:
+		var eid := String((e as Dictionary).get("id", ""))
+		# 项里只放 id：说明写进提示行（见本函数上面的布局坑注释）
+		_available_ids.append(eid)
+		_available_desc[eid] = String((e as Dictionary).get("desc", ""))
+		_model_box.add_item(eid)
+	var idx: int = _available_ids.find(current)
+	if idx >= 0:
+		_model_box.select(idx)
+	_sync_button.disabled = not advisor.supports_model_sync()
+	_official_url = advisor.official_link()
+	_official_button.disabled = _official_url == ""
+	_update_sync_note()
+
+
+func _update_sync_note() -> void:
+	if _model_sync_note == null or advisor == null:
+		return
+	var at: String = advisor.models_synced_at()
+	if at != "":
+		_model_sync_note.text = "已同步 %d 个可用模型（%s）。点「官方价目」可去官网核对。" % [
+				advisor.cached_models().size(), at]
+	elif advisor.supports_model_sync():
+		_model_sync_note.text = "还没同步过 —— 点「同步模型列表」会去供应商的官方接口现取（不花 token）。"
+	else:
+		_model_sync_note.text = "该供应商没有统一的「列出模型」接口，模型名请手动填。"
+
+
+func _on_modal_visibility() -> void:
+	if _modal == null or not _modal.visible or advisor == null:
+		return
+	_refill_model_box()
+	var refused: String = advisor.maybe_auto_sync_models()
+	if refused != "":
+		_model_sync_note.text = refused
+	elif advisor.is_syncing_models():
+		_model_sync_note.text = "正在自动同步可用模型……"
+
+
+func _on_sync_models() -> void:
+	if advisor == null:
+		return
+	var refused: String = advisor.sync_models()
+	if refused != "":
+		_model_sync_note.text = refused
+		return
+	_model_sync_note.text = "正在向 %s 的官方接口查询可用模型……" % CatalogScript.label_of(advisor.provider_id)
+
+
+func _on_models_synced(provider: String, models: Array, error: String) -> void:
+	if advisor == null or provider != advisor.provider_id:
+		return
+	if error != "":
+		if _model_sync_note != null:
+			_model_sync_note.text = "同步失败：%s（模型名仍可手填，或点「官方价目」去官网看）" % error
+		return
+	_refill_model_box()
+	# 只在玩家没在编辑时才回写，别把正在敲的字冲掉
+	if _model_edit != null and not _model_edit.has_focus():
+		_model_edit.text = advisor.model
+	_refresh_status()
+
+
+func _on_available_model_selected(index: int) -> void:
+	if index < 0 or index >= _available_ids.size():
+		return
+	var picked := String(_available_ids[index])
+	advisor.model = picked
+	# 选完直接写进「模型名」那一栏：让「从哪来」和「最后用哪个」在界面上是一件事
+	_model_edit.text = picked
+	advisor.save_config()
+	_refresh_status()
+	if _model_sync_note != null:
+		var desc := String(_available_desc.get(picked, ""))
+		_model_sync_note.text = "已选 %s%s" % [picked, ("：" + desc) if desc != "" else ""]
+
+
+func _on_open_official() -> void:
+	if _official_url == "":
+		return
+	# 交给系统浏览器：不经过本游戏、不带 key，玩家自己核对「现在多少钱、有哪些模型」
+	var err: int = OS.shell_open(_official_url)
+	if err != OK:
+		# 真机实测（HUAWEI PCE-W30 / HarmonyOS）：这台机器上 shell_open 没能把浏览器拉起来，
+		# 而按钮当时「点了没反应」——玩家完全不知道发生了什么。失败必须说出来 + 把地址亮出来，
+		# 让玩家能自己复制去浏览器看。
+		_model_sync_note.text = "没能拉起浏览器（错误码 %d）。官网地址（可手动复制）：%s" % [err, _official_url]
+	else:
+		_model_sync_note.text = "已把官网交给浏览器打开：%s" % _official_url
 
 
 func _title(text: String) -> Label:
@@ -475,6 +637,11 @@ func _on_provider_selected(index: int) -> void:
 	advisor.model = ""
 	advisor.save_config()
 	_refresh()
+	# 换家就重新给候选：这家可能还没同步过，缓存过期会自动去官方取一次
+	_refill_model_box()
+	var refused: String = advisor.maybe_auto_sync_models()
+	if refused != "" and _model_sync_note != null:
+		_model_sync_note.text = refused
 
 
 func _on_model_changed(text: String) -> void:

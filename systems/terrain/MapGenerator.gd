@@ -5,6 +5,11 @@ extends RefCounted
 ## 第一版不做 PNG 资产与 TileSet：高程网格在运行时由噪声生成，
 ## 地形表现直接把高程上色成 ImageTexture 贴到一个 Sprite2D 上（1 px = 1 m）。
 ## 这样绕开 .tres / .tscn 手工制作，先让循环跑起来。
+##
+## 【2026-10-03 第四十八版】新增：4.17 内容层 material.png 的解析
+## （单通道 id 图：0 无 / 1 泥泞 / 2 雪地 / 3 草丛 / 4 瓦砾 → 圆形区域列表）。
+## 工程侧的 TerrainZone 第一版只支持圆饼，所以这里做「连通域 → 等效圆」的收敛；
+## 格式解析集中在文件里，WorldSetup 只管按结果建节点。
 
 ## 丘陵草原配色（低 → 高），按最大海拔比例分段
 const TERRAIN_COLORS := [
@@ -14,6 +19,15 @@ const TERRAIN_COLORS := [
 	{"ratio": 0.75, "color": Color("7a8447")},  # 高地
 	{"ratio": 1.01, "color": Color("948b58")},  # 山脊／裸土
 ]
+
+## material.png 的 id → TerrainZone 的 kind（与 entities/zone/TerrainZone.gd 的 Kind 枚举同值）
+const MATERIAL_KIND_MAP := {1: 0, 2: 1, 3: 2}
+## 0 = 无内容层，4 = 瓦砾（残痕由 Cover 摧毁时现落，不从图里读）
+const MATERIAL_SKIP_IDS := [0, 4]
+
+## 内容层区域的最小格数：小于它就当噪声丢掉。
+## material.png 是程序生成的，边缘会有零星单格散点，全收进来会长出一堆半径不足 1 m 的圆饼。
+const MATERIAL_MIN_CELLS := 40
 
 ## grassland_demo 五节点世界坐标（docx 12.8.4，单位 m，原点左上）
 const DEMO_NODES := [
@@ -167,3 +181,68 @@ static func demo_enemy_fob_point() -> Vector2:
 ## 短于官方给的 150 s 时限 —— 有真实压力，但也留得出拦截时间。
 static func demo_flank_lane() -> Array[Vector2]:
 	return [Vector2(520.0, 180.0), Vector2(300.0, 180.0)]
+
+
+# ────────────── 4.17 内容层：material.png → 区域列表 ──────────────
+
+## 把 material.png（单通道 id 图）转成 TerrainZone 能吃的区域列表。
+## 返回 [{kind, position, radius, cells}]；图里没有任何内容层像素时返回空数组（调用方退回 demo）。
+##
+## 做法：先按 id 取掩码 → 4 邻域连通域（迭代式洪泛，不用递归，免得大区域爆栈）→
+## 每个连通域取「格心均值」当圆心、取「等面积圆半径」当半径。
+## 为什么用等面积而不是外接半径：外接半径会把长条状区域做成一个大圆饼盖住半张图；
+## 等面积圆在面积上等价，形状误差落在玩家最不敏感的那一维（区域边缘的弧线）。
+static func terrain_zones_from_material_image(image: Image,
+		min_cells: int = MATERIAL_MIN_CELLS) -> Array:
+	var entries: Array = []
+	if image == null or image.get_width() <= 0 or image.get_height() <= 0:
+		return entries
+	var img := image.duplicate() as Image
+	if img.get_format() != Image.FORMAT_L8:
+		img.convert(Image.FORMAT_L8)
+	var width := img.get_width()
+	var height := img.get_height()
+	var data := img.get_data()
+
+	var visited := PackedByteArray()
+	visited.resize(width * height)
+	visited.fill(0)
+
+	for start in width * height:
+		var cell_id := data[start]
+		if visited[start] == 1 or MATERIAL_SKIP_IDS.has(cell_id) or not MATERIAL_KIND_MAP.has(cell_id):
+			continue
+		# 4 邻域洪泛：手写队列（Array 当栈用），遇到不同 id 就停
+		var stack: Array[int] = [start]
+		visited[start] = 1
+		var count := 0
+		var sum_x := 0
+		var sum_y := 0
+		while not stack.is_empty():
+			var index: int = stack.pop_back()
+			var x := index % width
+			var y := index / width
+			count += 1
+			sum_x += x
+			sum_y += y
+			for offset in [[1, 0], [-1, 0], [0, 1], [0, -1]]:
+				var nx: int = x + int(offset[0])
+				var ny: int = y + int(offset[1])
+				if nx < 0 or ny < 0 or nx >= width or ny >= height:
+					continue
+				var n_index := ny * width + nx
+				if visited[n_index] == 1 or data[n_index] != cell_id:
+					continue
+				visited[n_index] = 1
+				stack.append(n_index)
+		if count < min_cells:
+			continue
+		# 1 格 = 1 m ⇒ 面积（m²）= 格数；等面积圆半径 r = sqrt(area / π)
+		var radius := sqrt(float(count) / PI)
+		entries.append({
+			"kind": int(MATERIAL_KIND_MAP[cell_id]),
+			"position": Vector2(float(sum_x) / float(count), float(sum_y) / float(count)),
+			"radius": radius,
+			"cells": count,
+		})
+	return entries

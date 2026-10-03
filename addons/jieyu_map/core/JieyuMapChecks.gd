@@ -337,12 +337,12 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 			report.append(_item(SEV_ERROR, "occluders.height_range",
 					"遮挡体 %s 的 h_low %.1f > h_top %.1f" % [str(item.get("id", "?")), h_low, h_top],
 					{}))
-		# 12.8.7 的 hp 标着「可选」，但 destructible=true 而没有血量就落不了地：
-		# 文档侧至今只有沙袋给了耐久（4.17 / 20.5：200），建筑没有毁伤规则（21.2.2 ⑧ 自认）。
+		# 12.8.7 的 hp 标着「可选」，但 destructible=true 而没有血量就落不了地
 		if bool(item.get("destructible", false)) and not item.has("hp"):
 			report.append(_item(SEV_WARN, "occluders.destructible_no_hp",
-					"遮挡体 %s 标了 destructible=true 却没有 hp（文档没给这类物件的耐久）"
+					"遮挡体 %s 标了 destructible=true 却没有 hp（没血量这条规则落不了地）"
 					% str(item.get("id", "?")), {}))
+		_check_damage_profiles(item, report)
 		if h_top >= JieyuMapSpec.BUILDING_H_LOW_M and str(item.get("type", "")) == "building":
 			buildings += 1
 		for point_v in polygon:
@@ -387,6 +387,57 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 				% [buildings, doc.occluders.size(), JieyuMapSpec.URBAN_SPACING_MIN_M,
 				JieyuMapSpec.URBAN_SPACING_MAX_M, JieyuMapSpec.BUILDING_H_LOW_M,
 				JieyuMapSpec.BUILDING_H_TOP_M], {"buildings": buildings}))
+
+
+## 三段的阈值表（拍板④）：查「三行齐不齐、比例合不合法、摧毁行有没有残痕」
+static func _check_damage_profiles(item: Dictionary, report: Array) -> void:
+	var item_id := str(item.get("id", "?"))
+	var destructible := bool(item.get("destructible", false))
+	if not item.has("damage_profiles"):
+		# 可摧毁却没有阈值表 ⇒ 工程侧只能「一刀清零」，就是拍板④要消灭的那个状态
+		report.append(_item(SEV_WARN if destructible else SEV_INFO,
+				"occluders.no_damage_profiles",
+				"遮挡体 %s 没有 damage_profiles（可摧毁物应当给出完好 / 受损 / 摧毁三段阈值）"
+				% item_id, {}))
+		return
+	if not (item["damage_profiles"] is Array):
+		report.append(_item(SEV_ERROR, "occluders.damage_profiles_type",
+				"遮挡体 %s 的 damage_profiles 不是数组" % item_id, {}))
+		return
+	var profiles: Array = item["damage_profiles"]
+	var states: Array = []
+	for profile_v in profiles:
+		if not (profile_v is Dictionary):
+			report.append(_item(SEV_ERROR, "occluders.damage_profile_item",
+					"遮挡体 %s 的 damage_profiles 里有非对象项" % item_id, {}))
+			continue
+		var profile: Dictionary = profile_v
+		var state := str(profile.get("state", ""))
+		states.append(state)
+		var ratio := float(profile.get("damaged_below_ratio", 0.0))
+		if ratio > 1.0 or ratio < -1.0:
+			report.append(_item(SEV_ERROR, "occluders.damage_ratio_range",
+					"遮挡体 %s 的 %s.damaged_below_ratio = %.2f 越界（应在 [-1, 1]）"
+					% [item_id, state, ratio], {}))
+		var scale := float(profile.get("height_scale", 1.0))
+		if scale < 0.0 or scale > 1.0:
+			report.append(_item(SEV_ERROR, "occluders.damage_height_scale",
+					"遮挡体 %s 的 %s.height_scale = %.2f 越界（应在 [0, 1]）"
+					% [item_id, state, scale], {}))
+		if state == JieyuMapSpec.DAMAGE_STATE_DESTROYED:
+			if bool(profile.get("blocks_sight", true)):
+				report.append(_item(SEV_ERROR, "occluders.destroyed_still_blocks",
+						"遮挡体 %s 的摧毁段还写着 blocks_sight=true（摧毁后不该再挡视线）" % item_id,
+						{}))
+			if not (profile.get("rubble") is Dictionary):
+				report.append(_item(SEV_WARN, "occluders.destroyed_no_rubble",
+						"遮挡体 %s 的摧毁段没有 rubble 残痕声明（拍板③：破坏后留贴地残痕 + 小减速）"
+						% item_id, {}))
+	for required in [JieyuMapSpec.DAMAGE_STATE_INTACT, JieyuMapSpec.DAMAGE_STATE_DAMAGED,
+			JieyuMapSpec.DAMAGE_STATE_DESTROYED]:
+		if not states.has(required):
+			report.append(_item(SEV_ERROR, "occluders.damage_state_missing",
+					"遮挡体 %s 的 damage_profiles 缺状态 %s" % [item_id, required], {}))
 
 
 static func _polygon_center(polygon: Array) -> Vector2:

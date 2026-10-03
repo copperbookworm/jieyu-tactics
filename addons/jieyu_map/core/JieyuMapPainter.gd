@@ -187,10 +187,12 @@ static func _blend_disc(doc: JieyuMapDoc, center: Vector2, radius: float, target
 
 ## ────────────── 掩体 / 区域编辑（zones.json / occluders.json）──────────────
 
-## 加一条可破坏或不可破坏的遮挡体（12.8.7 occluders 口径）
+## 加一条可破坏或不可破坏的遮挡体（12.8.7 occluders 口径 + 2026-10-03 的三段阈值）
+## destructible=true 时按占地给结构值（拍板②），并带上完好 / 受损 / 摧毁三段阈值（拍板④）。
 static func add_occluder(doc: JieyuMapDoc, center: Vector2, half_x: float, half_y: float,
-		h_top: float, type_name: String = "building", destructible: bool = false,
+		h_top: float, type_name: String = "building", destructible: bool = true,
 		hp: float = 0.0) -> Dictionary:
+	var is_building := type_name == "building"
 	var item := {
 		"id": "%s_%02d" % [type_name, doc.occluders.size() + 1],
 		"type": type_name,
@@ -200,7 +202,13 @@ static func add_occluder(doc: JieyuMapDoc, center: Vector2, half_x: float, half_
 		"destructible": destructible,
 	}
 	if destructible:
-		item["hp"] = hp if hp > 0.0 else 500.0
+		if hp > 0.0:
+			item["hp"] = hp
+		elif is_building:
+			item["hp"] = JieyuMapGen.building_hp_for_footprint(half_x * 2.0, half_y * 2.0)
+		else:
+			item["hp"] = JieyuMapSpec.SANDBAG_HP
+		item["damage_profiles"] = JieyuMapGen.damage_profiles_for(is_building)
 	doc.occluders.append(item)
 	return item
 

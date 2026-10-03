@@ -1,8 +1,34 @@
 [
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 4.9,
+    "hp": 1200.0,
     "id": "building_01",
     "polygon": [
       [
@@ -25,9 +51,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.5,
+    "hp": 1200.0,
     "id": "building_02",
     "polygon": [
       [
@@ -50,9 +102,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.2,
+    "hp": 1200.0,
     "id": "building_03",
     "polygon": [
       [
@@ -75,9 +153,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 5.3,
+    "hp": 1200.0,
     "id": "building_04",
     "polygon": [
       [
@@ -100,9 +204,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.1,
+    "hp": 1200.0,
     "id": "building_05",
     "polygon": [
       [
@@ -125,9 +255,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 4.9,
+    "hp": 1200.0,
     "id": "building_06",
     "polygon": [
       [
@@ -150,9 +306,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.4,
+    "hp": 1200.0,
     "id": "building_07",
     "polygon": [
       [
@@ -175,9 +357,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.0,
+    "hp": 1200.0,
     "id": "building_08",
     "polygon": [
       [
@@ -200,9 +408,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 5.8,
+    "hp": 1200.0,
     "id": "building_09",
     "polygon": [
       [
@@ -225,9 +459,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.9,
+    "hp": 1200.0,
     "id": "building_10",
     "polygon": [
       [
@@ -250,9 +510,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 4.6,
+    "hp": 1200.0,
     "id": "building_11",
     "polygon": [
       [
@@ -275,9 +561,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.1,
+    "hp": 1200.0,
     "id": "building_12",
     "polygon": [
       [
@@ -300,9 +612,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 4.3,
+    "hp": 1200.0,
     "id": "building_13",
     "polygon": [
       [
@@ -325,9 +663,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.3,
+    "hp": 1200.0,
     "id": "building_14",
     "polygon": [
       [
@@ -350,9 +714,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.5,
+    "hp": 1200.0,
     "id": "building_15",
     "polygon": [
       [
@@ -375,9 +765,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 5.7,
+    "hp": 1200.0,
     "id": "building_16",
     "polygon": [
       [
@@ -400,9 +816,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 5.0,
+    "hp": 1200.0,
     "id": "building_17",
     "polygon": [
       [
@@ -425,9 +867,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.9,
+    "hp": 1200.0,
     "id": "building_18",
     "polygon": [
       [
@@ -450,9 +918,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 4.1,
+    "hp": 1200.0,
     "id": "building_19",
     "polygon": [
       [
@@ -475,9 +969,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 4.6,
+    "hp": 1200.0,
     "id": "building_20",
     "polygon": [
       [
@@ -500,9 +1020,35 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.6,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 3.4,
+    "hp": 1200.0,
     "id": "building_21",
     "polygon": [
       [
@@ -525,6 +1071,31 @@
     "type": "building"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.4,
@@ -551,6 +1122,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
@@ -577,6 +1173,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
@@ -603,6 +1224,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
@@ -629,6 +1275,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.6,
@@ -655,6 +1326,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.3,
@@ -681,6 +1377,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.7,
@@ -707,6 +1428,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.0,
@@ -733,6 +1479,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
@@ -759,6 +1530,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.7,
@@ -785,6 +1581,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
@@ -811,6 +1632,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.6,
@@ -837,6 +1683,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
@@ -863,6 +1734,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.4,
@@ -889,6 +1785,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.3,
@@ -915,6 +1836,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
@@ -941,6 +1887,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
@@ -967,6 +1938,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.8,
@@ -993,6 +1989,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
@@ -1019,6 +2040,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
@@ -1045,6 +2091,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
@@ -1071,6 +2142,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.8,
@@ -1097,6 +2193,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.6,
@@ -1123,6 +2244,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.4,
@@ -1149,6 +2295,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 0.9,
@@ -1175,6 +2346,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.9,
@@ -1201,6 +2397,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.0,
@@ -1227,6 +2448,31 @@
     "type": "wall"
   },
   {
+    "damage_profiles": [
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.7,
+        "height_scale": 1.0,
+        "state": "intact"
+      },
+      {
+        "blocks_sight": true,
+        "damaged_below_ratio": 0.0,
+        "height_scale": 0.45,
+        "state": "damaged"
+      },
+      {
+        "blocks_sight": false,
+        "damaged_below_ratio": -1.0,
+        "height_scale": 0.0,
+        "rubble": {
+          "material_id": 4,
+          "radius_scale": 1.25,
+          "speed_scale": 0.7
+        },
+        "state": "destroyed"
+      }
+    ],
     "destructible": true,
     "h_low": 0.0,
     "h_top": 1.8,

@@ -197,8 +197,14 @@ func _test_generation() -> void:
 			(a.zones.get("raas_nodes", []) as Array).size())
 	_check_true("生成了遮挡体", a.occluders.size() > 0)
 	_check_true("遮挡体都是 building/wall", _all_occluders_valid(a.occluders))
-	_check_true("可摧毁的遮挡体都带 hp（建筑不可摧毁且无 hp —— 文档没有建筑毁伤规则）",
-			_destructible_have_hp(a.occluders))
+	# 2026-10-03 拍板四条：① 一律可摧毁 ② 按占地给结构值 ③ 摧毁留残痕 ④ 三段阈值
+	_check_true("遮挡体全部可摧毁且带 hp（拍板①）", _all_destructible_with_hp(a.occluders))
+	_check_true("可摧毁物都带完好/受损/摧毁三段阈值（拍板④）",
+			_all_have_damage_profiles(a.occluders))
+	_check_true("建筑结构值落在三档里（拍板②：800 / 1200 / 3000）",
+			_building_hp_in_tiers(a.occluders))
+	_check_true("「摧毁」段不挡视线且带残痕声明（拍板③）",
+			_destroyed_profiles_valid(a.occluders))
 	_check("meta 记录了生成配方", a.meta.has("recipe"), true)
 	_check("meta.recipe.seed 与配方一致", int(a.meta["recipe"]["seed"]), 20260101)
 
@@ -231,15 +237,71 @@ func _all_occluders_valid(occluders: Array) -> bool:
 	return true
 
 
-## 12.8.7 口径：destructible=true 必须带 hp；建筑（文档没有毁伤规则）必须是 destructible=false 且无 hp
-func _destructible_have_hp(occluders: Array) -> bool:
+## 拍板①：一律 destructible=true，且必须带 hp（没血量这条规则落不了地）
+func _all_destructible_with_hp(occluders: Array) -> bool:
 	for item_v in occluders:
 		var item: Dictionary = item_v
-		var destructible := bool(item.get("destructible", false))
-		if destructible and not item.has("hp"):
+		if not bool(item.get("destructible", false)):
 			return false
-		if str(item.get("type", "")) == "building" and destructible:
+		if not item.has("hp") or float(item["hp"]) <= 0.0:
 			return false
+	return true
+
+
+## 拍板④：三段齐全，且比例合法（受损/摧毁的顶高比例必须 ≤ 1）
+func _all_have_damage_profiles(occluders: Array) -> bool:
+	var wanted := [JieyuMapSpec.DAMAGE_STATE_INTACT, JieyuMapSpec.DAMAGE_STATE_DAMAGED,
+			JieyuMapSpec.DAMAGE_STATE_DESTROYED]
+	for item_v in occluders:
+		var item: Dictionary = item_v
+		if not (item.get("damage_profiles") is Array):
+			return false
+		var states: Array = []
+		for profile_v in (item["damage_profiles"] as Array):
+			if not (profile_v is Dictionary):
+				return false
+			var profile: Dictionary = profile_v
+			states.append(str(profile.get("state", "")))
+			var scale := float(profile.get("height_scale", 1.0))
+			if scale < 0.0 or scale > 1.0:
+				return false
+		for state in wanted:
+			if not states.has(state):
+				return false
+	return true
+
+
+## 拍板②：建筑 hp 只能落在三档之一（按占地分档，不是随手给的数）
+func _building_hp_in_tiers(occluders: Array) -> bool:
+	var tiers := [JieyuMapSpec.STRUCTURE_HP_SMALL, JieyuMapSpec.STRUCTURE_HP_HOUSE,
+			JieyuMapSpec.STRUCTURE_HP_REINFORCED]
+	for item_v in occluders:
+		var item: Dictionary = item_v
+		if str(item.get("type", "")) != "building":
+			continue
+		if not tiers.has(float(item.get("hp", 0.0))):
+			return false
+	return true
+
+
+## 拍板③：摧毁段必须不挡视线，且给得出残痕（材质 id / 半径系数 / 移速倍率）
+func _destroyed_profiles_valid(occluders: Array) -> bool:
+	for item_v in occluders:
+		var item: Dictionary = item_v
+		for profile_v in (item.get("damage_profiles", []) as Array):
+			var profile: Dictionary = profile_v
+			if str(profile.get("state", "")) != JieyuMapSpec.DAMAGE_STATE_DESTROYED:
+				continue
+			if bool(profile.get("blocks_sight", true)):
+				return false
+			if float(profile.get("height_scale", 1.0)) != 0.0:
+				return false
+			var rubble: Variant = profile.get("rubble", null)
+			if not (rubble is Dictionary):
+				return false
+			if int((rubble as Dictionary).get("material_id", 0)) \
+					!= JieyuMapSpec.RUBBLE_MATERIAL_ID:
+				return false
 	return true
 
 

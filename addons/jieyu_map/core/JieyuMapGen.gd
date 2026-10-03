@@ -14,11 +14,6 @@ const WEIGHT_FLATNESS := 3.0
 const WEIGHT_ROAD := 1.5
 const WEIGHT_ELEV_PENALTY := 2.0
 
-## 半高墙（沙袋类）的耐久占位值，对齐工程 `GameConfig.COVER_HP`（200）。
-## 文档侧只有 4.17 / 20.5 一句「耐久 200，清零后退出 occluder 组」，
-## 所以这是**唯一**有据可依的可摧毁物件血量；建筑不写 hp（文档没有这个规则）。
-const SANDBAG_HP := 200.0
-
 
 ## ────────────── 1. 噪声基底（12.8.3）──────────────
 
@@ -497,15 +492,21 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 					break
 			if near_core:
 				continue   # 4.2 / 六章：核心占领区不堆建筑，别把判定器变迷宫
-			occluders.append({
+			var half_x := rng.randf_range(4.0, 7.0)
+			var half_y := rng.randf_range(4.0, 7.0)
+			var building := {
 				"id": "building_%02d" % (occluders.size() + 1),
 				"type": "building",
-				"polygon": rect_polygon(center, rng.randf_range(4.0, 7.0),
-						rng.randf_range(4.0, 7.0)),
+				"polygon": rect_polygon(center, half_x, half_y),
 				"h_low": 0.0,
 				"h_top": roundf(rng.randf_range(3.0, 6.0) * 10.0) / 10.0,
-				"destructible": false,
-			})
+				# 2026-10-03 拍板①：一律 destructible = true；
+				# 拍板②：结构值按占地 tiering（小屋 800 / 标准 1200 / 加固 3000），
+				# 锚点与工程的 FOB 结构值同档（1200）。
+				"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
+				"hp": building_hp_for_footprint(half_x * 2.0, half_y * 2.0),
+			}
+			occluders.append(building)
 			placed += 1
 	# 沿节点外围再撒一圈半高墙（0.5–2 m：人高掩体，可由高程或遮挡层承担）
 	for node_v in nodes:
@@ -520,10 +521,8 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 					or center.y > float(doc.height_px) - 8.0:
 				continue
 			wall_index += 1
-			# 12.8.7 的 destructible / hp 是**可选**字段；文档里唯一有明确耐久的可摧毁物件是沙袋
-			# （4.17 / 20.5：耐久 200，打光退出 occluder 组），所以这里产出的半高墙标成可摧毁。
-			# ⚠ 建筑一律 destructible=false —— 文档至今没有建筑毁伤规则（21.2.2 ⑧ 自认），
-			#   标 true 只会凭空发明一套血量（难崩模式的「建筑毁伤更多」也在第一版被降级）。
+			# 半高墙 = 沙袋类：文档 4.17 / 20.5 给了明文耐久 200（与工程 GameConfig.COVER_HP 同值），
+			# 这是整份文档里**唯一**有据可依的可摧毁物件血量。
 			occluders.append({
 				"id": "wall_%02d" % wall_index,
 				"type": "wall",
@@ -531,10 +530,71 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 						rng.randf_range(1.0, 1.8)),
 				"h_low": 0.0,
 				"h_top": roundf(rng.randf_range(0.8, 2.0) * 10.0) / 10.0,
-				"destructible": true,
-				"hp": SANDBAG_HP,
+				"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
+				"hp": JieyuMapSpec.SANDBAG_HP,
 			})
+	_apply_damage_profiles(occluders)
 	return occluders
+
+
+## 建筑结构值：按占地分三档（拍板②的「标准档 1200」）
+##   < 60 m²  → 小屋 / 哨所 800
+##   < 200 m² → 标准建筑 1200（锚点，与 FOB 同档）
+##   ≥ 200 m² → 加固 / 多层 3000
+## 为什么按占地而不是按类型名：类型名是自由文本（12.8.7 只约束了 wall / building…），
+## 靠它分档迟早写错；占地是几何事实，插件与地图作者都能一眼算出来。
+static func building_hp_for_footprint(width_m: float, depth_m: float) -> float:
+	var footprint := absf(width_m) * absf(depth_m)
+	if footprint < 60.0:
+		return JieyuMapSpec.STRUCTURE_HP_SMALL
+	if footprint < 200.0:
+		return JieyuMapSpec.STRUCTURE_HP_HOUSE
+	return JieyuMapSpec.STRUCTURE_HP_REINFORCED
+
+
+## 给每条可摧毁的遮挡体补上三段阈值（拍板④）。
+## 形态固定成三行，工程侧照表读即可，不需要懂怎么算出来的：
+##   intact    —— 耐久比 > damaged_below_ratio
+##   damaged   —— h_top × damaged_height_scale（挡视线的缝变大）
+##   destroyed —— h_top × 0（退出遮挡），并留一圈残痕
+static func _apply_damage_profiles(occluders: Array) -> void:
+	for item_v in occluders:
+		var item: Dictionary = item_v
+		if not bool(item.get("destructible", false)):
+			continue
+		var is_building := str(item.get("type", "")) == "building"
+		item["damage_profiles"] = damage_profiles_for(is_building)
+
+
+## 三段阈值表（building = true 时受损顶高比例取 0.60，否则取 0.45）
+static func damage_profiles_for(is_building: bool) -> Array:
+	var damaged_scale := JieyuMapSpec.DAMAGE_BUILDING_DAMAGED_HEIGHT_SCALE if is_building \
+			else JieyuMapSpec.DAMAGE_DEFAULT_DAMAGED_HEIGHT_SCALE
+	return [
+		{
+			"state": JieyuMapSpec.DAMAGE_STATE_INTACT,
+			"damaged_below_ratio": JieyuMapSpec.DAMAGE_DEFAULT_DAMAGED_BELOW_RATIO,
+			"height_scale": 1.0,
+			"blocks_sight": true,
+		},
+		{
+			"state": JieyuMapSpec.DAMAGE_STATE_DAMAGED,
+			"damaged_below_ratio": 0.0,
+			"height_scale": damaged_scale,
+			"blocks_sight": true,
+		},
+		{
+			"state": JieyuMapSpec.DAMAGE_STATE_DESTROYED,
+			"damaged_below_ratio": -1.0,
+			"height_scale": JieyuMapSpec.DAMAGE_DEFAULT_DESTROYED_HEIGHT_SCALE,
+			"blocks_sight": false,
+			"rubble": {
+				"material_id": JieyuMapSpec.RUBBLE_MATERIAL_ID,
+				"radius_scale": JieyuMapSpec.RUBBLE_RADIUS_SCALE,
+				"speed_scale": JieyuMapSpec.RUBBLE_SPEED_SCALE,
+			},
+		},
+	]
 
 
 ## 轴对齐矩形多边形（12.8.7 polygon 用 [x, y] 数组）
@@ -589,12 +649,16 @@ static func path_between(a: Vector2, b: Vector2, segments: int = 8,
 
 ## ────────────── 5. 内容层图（4.17）──────────────
 
-## 4.17 环境互动区的三种颜色（行序方案里工程侧按同色像素分段，所以每行必须纯色）
+## 4.17 环境互动区的配色（行序方案里工程侧按同色像素分段，所以每行必须纯色）
+## 第四色是瓦砾残痕（material id 4）—— 它不在内容层图里生成，只给工程侧的取值留位。
 const CONTENT_COLORS := [
 	Color8(107, 82, 51),    # 0 泥泞
 	Color8(240, 245, 255),  # 1 雪地
 	Color8(61, 133, 61),    # 2 草丛
+	Color8(120, 112, 100),  # 3 瓦砾（残痕）
 ]
+## kind（0 泥泞 / 1 雪地 / 2 草丛）→ material.png 的 id（1 / 2 / 3）
+const CONTENT_MATERIAL_IDS := [1, 2, 3]
 
 
 ## 生成 content.png（按行序排 N 片区域）与 material.png（单通道 id 图）。
@@ -631,7 +695,8 @@ static func build_content_images(doc: JieyuMapDoc, recipe: Dictionary = {}) -> D
 			if kind < 0 or noise01 > keep_chance:
 				continue
 			counts[kind] += 1
-			material.set_pixel(x, y, Color8(kind + 1, kind + 1, kind + 1))
+			material.set_pixel(x, y, Color8(CONTENT_MATERIAL_IDS[kind], CONTENT_MATERIAL_IDS[kind],
+					CONTENT_MATERIAL_IDS[kind]))
 			rows_image.set_pixel(x, y, CONTENT_COLORS[kind])
 	return {"rows": rows_image, "material": material, "counts": counts}
 

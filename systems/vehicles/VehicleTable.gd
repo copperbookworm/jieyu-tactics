@@ -65,6 +65,17 @@ static func number(vehicle: Dictionary, key: String, fallback: float) -> float:
 	return text.to_float()
 
 
+## 车载主炮对建筑 / 工事的结构伤害（2026-10-03 拍板的一列）。
+## 缺列或空串 ⇒ 0（打不动），与「普通子弹对建筑伤害为 0」同一条默认口径 —— 默认不能是「能打」。
+static func gun_structure_damage(vehicle: Dictionary) -> float:
+	return number(vehicle, "gun_structure_damage", 0.0)
+
+
+## 车载反坦克导弹对建筑 / 工事的结构伤害（只有装了导弹的车有值）
+static func atgm_structure_damage(vehicle: Dictionary) -> float:
+	return number(vehicle, "atgm_structure_damage", 0.0)
+
+
 static func ids() -> Array:
 	return load_table().keys()
 

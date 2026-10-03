@@ -15,6 +15,8 @@ const AllyScript := preload("res://entities/ally/Ally.gd")
 const FobScript := preload("res://entities/fob/Fob.gd")
 ## 环境互动区（docx 4.17）：同样无 class_name，preload 引用
 const TerrainZoneScript := preload("res://entities/zone/TerrainZone.gd")
+## 掩体被摧毁后落的贴地残痕（4.17 破坏互动：留残痕 + 小减速，不影响通视）
+const RubblePatchScript := preload("res://entities/zone/RubblePatch.gd")
 ## 本局模式规则（人数口径：docx 5.8）—— 队友数从这里取
 const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
 ## 编成（docx 4.10.8 / 5.8）：组 4 人 · 一小队至少 2 组
@@ -31,6 +33,8 @@ var organization: Dictionary = {}
 var squad_orders: Dictionary = {}
 var spawned_enemy_count := 0
 var spawned_ally_count := 0
+## 掩体被摧毁后落的残痕（4.17）：它们与泥泞 / 雪地共用一条移速链路，所以要并进 player.zones
+var _rubble_zones: Array = []
 
 
 ## 建场。map_preview_mode 时只建地形 + 预览层（游戏循环一行都不动）
@@ -218,29 +222,160 @@ static func _enemy_spawn_position(points: Array, index: int) -> Vector2:
 	return base + Vector2(cos(angle), sin(angle)) * (14.0 + 9.0 * float(lap))
 
 
-## 掩体（docx 4.7 第③级）：第一版按 demo 点放沙袋（挡通视也挡子弹，见 Cover.gd）
+## 掩体（docx 4.7 第③级）：两套来源，优先用**地图数据**。
+##
+## ① 地图目录里有 occluders.json（12.8.1 / 12.8.7 口径）⇒ 按它建：
+##    每项有 polygon / h_low / h_top / destructible / hp / damage_profiles，
+##    这里把它们折进第一版的 Cover（轴对齐矩形 + 顶高 + 耐久的近似），
+##    并把「摧毁」信号接到残痕（4.17 破坏互动：留贴地残痕 + 小减速，不影响通视）。
+## ② 没有地图数据（例如没设 map_id、或跑的是旧图）⇒ 退回 demo 摆位，
+##    保证既有测试（集成冒烟断言场上 20 个沙袋）与单跑 Main.tscn 的行为一字不变。
 func _build_covers(main) -> void:
-	var points := MapGenerator.demo_cover_points()
-	for i in points.size():
+	var entries := _load_occluders(main)
+	if entries.is_empty():
+		var points := MapGenerator.demo_cover_points()
+		for i in points.size():
+			var cover = CoverScript.new()
+			cover.name = "Cover%d" % (i + 1)
+			cover.global_position = points[i]
+			main.add_child(cover)
+		return
+	var rubble_zones: Array = []
+	for i in entries.size():
+		var entry: Dictionary = entries[i]
 		var cover = CoverScript.new()
 		cover.name = "Cover%d" % (i + 1)
-		cover.global_position = points[i]
+		cover.global_position = _polygon_center(entry.get("polygon", []))
+		var polygon: Array = entry.get("polygon", [])
+		cover.half_size = _polygon_half_size(polygon)
+		cover.height = float(entry.get("h_top", GameConfig.COVER_SANDBAG_HEIGHT))
+		cover.max_hp = float(entry.get("hp", GameConfig.COVER_HP))
+		var destructible := bool(entry.get("destructible", true))
 		main.add_child(cover)
+		# 不可摧毁的遮挡体（例如按老口径标的建筑）退出可破坏链路：
+		# 耐久开到很大 + 不进残痕接线，语义上就是「打不烂的实体墙」
+		if not destructible:
+			cover.max_hp = INF
+			cover.hp = INF
+			continue
+		rubble_zones.append(cover)
+		_connect_rubble(main, cover)
 
 
-## 环境互动区（docx 4.17，候选 O 第四轮）：泥泞 / 雪地 / 草丛。摆位来自 MapGenerator（单一数据源）。
-## 建好后把区域数组注入玩家——Player 每帧用它算移速倍率与隐蔽度（Enemy 反过来读玩家的隐蔽度）。
+## 地图目录（res://assets/maps/<id>/）里的 occluders.json → 条目数组；读不到就是空数组
+func _load_occluders(main) -> Array:
+	var map_id := _map_id_from_path(str(main.map_height_image) if "map_height_image" in main else "")
+	if map_id.is_empty():
+		return []
+	var path := "res://assets/maps/%s/occluders.json" % map_id
+	if not FileAccess.file_exists(path):
+		print("[地图] %s 没有 occluders.json → 掩体退回 demo 摆位" % map_id)
+		return []
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("[地图] occluders.json 打不开：%s" % path)
+		return []
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not (parsed is Array):
+		push_error("[地图] occluders.json 顶层不是数组：%s" % path)
+		return []
+	print("[地图] 已导入地图掩体：%s（%d 个）" % [path, (parsed as Array).size()])
+	return parsed
+
+
+## 从高度图路径反推地图目录名：res://assets/maps/<id>/heightmap.png 或 .../<id>_height.png
+static func _map_id_from_path(height_image_path: String) -> String:
+	if height_image_path.is_empty():
+		return ""
+	var directory := height_image_path.get_base_dir()
+	if directory.get_file() != "maps" and directory.begins_with("res://assets/maps/"):
+		return directory.get_file()
+	var file_name := height_image_path.get_file()
+	if file_name.ends_with("_height.png"):
+		return file_name.trim_suffix("_height.png")
+	return ""
+
+
+## 矩形近似：取多边形包围盒的半宽/半高（第一版 Cover 只支持矩形，任意多边形留待后续）
+static func _polygon_half_size(polygon: Array) -> Vector2:
+	if polygon.size() < 3:
+		return Vector2(GameConfig.COVER_SANDBAG_HALF_X, GameConfig.COVER_SANDBAG_HALF_Y)
+	var min_point := Vector2(INF, INF)
+	var max_point := Vector2(-INF, -INF)
+	for point_v in polygon:
+		var point := JieyuMapGen.vec2(point_v)
+		min_point = Vector2(minf(min_point.x, point.x), minf(min_point.y, point.y))
+		max_point = Vector2(maxf(max_point.x, point.x), maxf(max_point.y, point.y))
+	var half := (max_point - min_point) * 0.5
+	return Vector2(maxf(half.x, 0.5), maxf(half.y, 0.5))
+
+
+static func _polygon_center(polygon: Array) -> Vector2:
+	if polygon.is_empty():
+		return Vector2.ZERO
+	var sum := Vector2.ZERO
+	for point_v in polygon:
+		sum += JieyuMapGen.vec2(point_v)
+	return sum / float(polygon.size())
+
+
+## 掩体被摧毁 → 在原位落一块贴地残痕（不挡通视、只小减速）
+func _connect_rubble(main, cover) -> void:
+	cover.destroyed_now.connect(func(node) -> void:
+		_spawn_rubble(main, node.global_position,
+				maxf(node.half_size.x, node.half_size.y) * GameConfig.RUBBLE_RADIUS_SCALE))
+
+
+func _spawn_rubble(main, at: Vector2, radius: float) -> void:
+	var patch = RubblePatchScript.new()
+	patch.name = "Rubble%d" % (_rubble_zones.size() + 1)
+	patch.global_position = at
+	main.add_child(patch)
+	patch.setup(radius, GameConfig.RUBBLE_LIFETIME)
+	# 残痕与泥泞 / 雪地共用一条移速链路（TerrainZones.speed_scale_at 只认
+	# covers() / speed_scale() 两个方法），所以玩家侧一行都不用改
+	_rubble_zones.append(patch)
+	if main.player != null and main.player.zones != null:
+		main.player.zones.append(patch)
+
+
+## 环境互动区（docx 4.17）：同样两套来源 —— 地图目录里有内容层图就用它，否则退回 demo 三片。
+## 掩体被摧毁后落的残痕也并进 zones（同为「脚下区域」，共用一条移速链路）。
 func _build_terrain_zones(main) -> void:
 	var zones: Array = []
-	for entry in MapGenerator.demo_terrain_zones():
+	for entry in _terrain_zone_entries(main):
 		var zone = TerrainZoneScript.new()
 		zone.name = "TerrainZone%d" % (zones.size() + 1)
 		zone.global_position = entry["position"]
 		main.add_child(zone)
 		zone.setup(int(entry["kind"]), float(entry["radius"]))
 		zones.append(zone)
+	zones.append_array(_rubble_zones)
 	if main.player != null:
 		main.player.zones = zones
+
+
+## 内容层来源：地图目录的 material.png（4.17 拍板的方案 B，单通道 id 图）优先；
+## 没有就退回 MapGenerator.demo_terrain_zones() 的三片摆位。
+## 方案 A（content.png 按行序排纯色区域）留给后续：它要逐行检测同色像素，与 B 二选一即可。
+func _terrain_zone_entries(main) -> Array:
+	var map_id := _map_id_from_path(str(main.map_height_image) if "map_height_image" in main else "")
+	if map_id.is_empty():
+		return MapGenerator.demo_terrain_zones()
+	var path := "res://assets/maps/%s/material.png" % map_id
+	if not FileAccess.file_exists(path):
+		return MapGenerator.demo_terrain_zones()
+	var image := Image.load_from_file(ProjectSettings.globalize_path(path))
+	if image == null:
+		push_warning("[地图] material.png 读不到，退回 demo 地形区：%s" % path)
+		return MapGenerator.demo_terrain_zones()
+	var entries := MapGenerator.terrain_zones_from_material_image(image)
+	if entries.is_empty():
+		print("[地图] material.png 没有任何内容层像素，退回 demo 地形区")
+		return MapGenerator.demo_terrain_zones()
+	print("[地图] 已导入内容层：%s（%d 片区域）" % [path, entries.size()])
+	return entries
 
 
 ## 敌方 FOB（候选 L2，docx 4.10.11 T-S2）：一座敌方后方工事。

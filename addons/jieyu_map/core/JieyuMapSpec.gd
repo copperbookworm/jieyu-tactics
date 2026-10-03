@@ -88,11 +88,40 @@ const OVERWATCH_CORE_COVER_RATIO := 0.70
 const OVERWATCH_MIN_ELEV_M := 40.0      # 低于这个高程不算「制高点」
 const OVERWATCH_CORE_SAMPLES := 9       # 核心区采样点（3×3）
 
+# ────────────── 破坏规则（2026-10-03 使用者拍板四条）──────────────
+## ① 遮挡体默认可摧毁（一律 destructible = true）
+const DEFAULT_DESTRUCTIBLE := true
+## ② 结构值锚点「标准档」：与工程的 FOB 结构值同档（1200）
+const STRUCTURE_HP_SMALL := 800.0         # 小屋 / 哨所
+const STRUCTURE_HP_HOUSE := 1200.0        # 标准建筑（锚点）
+const STRUCTURE_HP_REINFORCED := 3000.0   # 加固 / 多层
+## 沙袋类半高墙的耐久：文档 4.17 / 20.5 明文「耐久 200」，与工程 GameConfig.COVER_HP 同值
+const SANDBAG_HP := 200.0
+## ③ 破坏后留贴地残痕 + 小减速（不影响通视）
+const RUBBLE_MATERIAL_ID := 4             # material.png 的 id 值
+const RUBBLE_SPEED_SCALE := 0.70          # 与泥泞同档
+const RUBBLE_RADIUS_SCALE := 1.25         # 残痕半径 = 遮挡体最长边 × 这个系数
+## ④ 三段破坏：完好 → 受损（h_top 变矮）→ 摧毁（退出遮挡）
+const DAMAGE_STATE_INTACT := "intact"
+const DAMAGE_STATE_DAMAGED := "damaged"
+const DAMAGE_STATE_DESTROYED := "destroyed"
+const DAMAGE_DEFAULT_DAMAGED_BELOW_RATIO := 0.70
+const DAMAGE_DEFAULT_DAMAGED_HEIGHT_SCALE := 0.45
+const DAMAGE_DEFAULT_DESTROYED_HEIGHT_SCALE := 0.0
+## 建筑的受损顶高比例取 0.60（比沙袋的 0.45 保守：楼塌一半不该比沙袋还矮）
+const DAMAGE_BUILDING_DAMAGED_HEIGHT_SCALE := 0.60
+## 与工程 data/weapons_data.txt 的 structure_damage 列对齐的抽样值（只用于校验提示，不参与生成）
+const SAMPLE_RIFLE_STRUCTURE_DAMAGE := 0.0       # 普通子弹：打不动建筑
+const SAMPLE_HMG_STRUCTURE_DAMAGE := 30.0        # 12.7mm 车装机枪
+const SAMPLE_TANK_GUN_STRUCTURE_DAMAGE := 280.0  # 125mm 主炮
+const SAMPLE_ARTILLERY_STRUCTURE_DAMAGE := 420.0 # 155mm 榴弹炮
+
 # ────────────── 命名口径（《给地图不同区域命名》：短 / 唯一 / 可想象 / 可战术化）──────────────
 const NAME_MAX_CHARS := 6               # 中文 2–3 字为宜，放宽到 6 字符
 const MODE_IDS := ["pvp_competitive", "pvp_armor", "pvp_casual", "pvevp"]
 
 ## 4.17 环境互动区的 kind 取值（与 entities/zone/TerrainZone.gd 的 Kind 枚举同值）
+## 瓦砾（RUBBLE_MATERIAL_ID）不在其中：残痕由掩体摧毁时现落，不从内容图里读
 const CONTENT_KIND_NAMES := ["泥泞", "雪地", "草丛"]
 
 

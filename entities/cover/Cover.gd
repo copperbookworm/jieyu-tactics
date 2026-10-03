@@ -10,16 +10,29 @@ extends Node2D
 ##   ① 挡通视——视线高度没高出掩体顶就判「被遮挡」
 ##   ② 挡子弹——与通视同一套高度规则（站姿 1.6 m 打得过 1.1 m 沙袋，趴下 0.6 m 打不过）
 ##   ③ 提供依托——蹲 / 卧贴着掩体时给一档精度（C3）
-##   ④ 可破坏——打光耐久后退出 occluder 组，不再遮挡，只留残骸
+##   ④ 可破坏——三段耐久（完好 / 受损 / 摧毁），见下
 ## 支持任意旋转：求交与距离都在本地空间做（global_transform 的逆变换），不限定轴对齐
+##
+## 三段耐久（2026-10-03 使用者拍板，落进 occluders.json 的 damage_profiles）：
+##   · 完好   ：耐久比 > damaged_below          → 顶高 = height
+##   · 受损   ：0 < 耐久比 ≤ damaged_below      → 顶高 = height × damaged_scale（挡视线的缝变大）
+##   · 摧毁   ：耐久归零                        → 退出 occluder 组（不再挡通视与子弹），残痕另建
+## 「受损变矮」不是新物理：通视与子弹都走 top_height_at()，顶高一降，缝自己就出来了
+## （判据是「视线高度 ≥ 掩体顶高 + COVER_SIGHT_SLACK 才算看得过去」）。
 
 @export var half_size := Vector2(GameConfig.COVER_SANDBAG_HALF_X,
 		GameConfig.COVER_SANDBAG_HALF_Y)
-@export var height := GameConfig.COVER_SANDBAG_HEIGHT  # m，掩体顶高（相对地面）
+@export var height := GameConfig.COVER_SANDBAG_HEIGHT  # m，**完好**时的掩体顶高（相对地面）
 @export var max_hp := GameConfig.COVER_HP              # 耐久：打光后不再挡通视与子弹
+## 掉到这条线以下算「受损」（顶高按 damaged_height_scale 缩）
+@export var damaged_below_ratio := GameConfig.COVER_DAMAGED_BELOW_RATIO
+@export var damaged_height_scale := GameConfig.COVER_DAMAGED_HEIGHT_SCALE
 
 var hp := GameConfig.COVER_HP
 var destroyed := false
+
+## 摧毁时发（WorldSetup 拿它落残痕）。参数是自己，免得接收方还要闭包捕获
+signal destroyed_now(cover)
 
 
 func _ready() -> void:
@@ -35,6 +48,7 @@ func take_damage(amount: float) -> void:
 	if hp <= 0.0:
 		destroyed = true
 		remove_from_group(GameConfig.OCCLUDER_GROUP)
+		destroyed_now.emit(self)
 	queue_redraw()
 
 
@@ -46,9 +60,26 @@ func health_ratio() -> float:
 	return hp / maxf(max_hp, 0.001)
 
 
-## 掩体顶的绝对高度（地面高 + 掩体高）；地面高度由调用方传入，避免这里依赖 HeightGrid
+## 是否处在「受损」档（完好 = false，摧毁 = false —— 摧毁是另一回事）
+func is_damaged() -> bool:
+	return not destroyed and health_ratio() <= damaged_below_ratio
+
+
+## 当前顶高相对完好顶高的比例：完好 1.0 / 受损 damaged_height_scale / 摧毁 0.0
+func height_scale() -> float:
+	if destroyed:
+		return 0.0
+	return damaged_height_scale if is_damaged() else 1.0
+
+
+## 当前实际掩体高度（完好时等于 height）
+func effective_height() -> float:
+	return height * height_scale()
+
+
+## 掩体顶的绝对高度（地面高 + 当前掩体高）；地面高度由调用方传入，避免这里依赖 HeightGrid
 func top_height_at(ground_height: float) -> float:
-	return ground_height + height
+	return ground_height + effective_height()
 
 
 ## 线段是否穿过本掩体：穿过返回「沿 from→to 方向先撞上的那一面」的交点（世界坐标），
@@ -111,6 +142,19 @@ func _draw() -> void:
 	# 高度提示：越高的掩体顶部亮条越粗（1.1 m 沙袋 → 1.4 m 矮墙）
 	if height >= 1.3:
 		draw_rect(rect.grow(-3.0), Color(1.0, 1.0, 1.0, 0.22), false, 2.0)
+	# 受损档：画几道裂纹 + 内缩一圈，让「顶高变矮了」在画面上看得出来
+	# （3C 的可读性要求：状态变化必须有视觉反馈，不能只靠耐久条）
+	if is_damaged():
+		var crack := Color(0.16, 0.13, 0.11, 0.9)
+		draw_line(Vector2(-half_size.x * 0.6, -half_size.y), Vector2(-half_size.x * 0.1, 0.0),
+				crack, 1.5)
+		draw_line(Vector2(-half_size.x * 0.1, 0.0), Vector2(-half_size.x * 0.45, half_size.y),
+				crack, 1.5)
+		draw_line(Vector2(half_size.x * 0.5, -half_size.y), Vector2(half_size.x * 0.15, 0.0),
+				crack, 1.5)
+		draw_line(Vector2(half_size.x * 0.15, 0.0), Vector2(half_size.x * 0.55, half_size.y),
+				crack, 1.5)
+		draw_rect(rect.grow(-2.0), Color(1.0, 0.85, 0.35, 0.55), false, 1.0)
 	# 挨过打才显示耐久条（顶部细条，免得满耐久时满屏都是条）
 	if life < 0.999:
 		var bar := Rect2(Vector2(-half_size.x, -half_size.y - 4.0),

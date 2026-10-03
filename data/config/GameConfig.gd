@@ -286,6 +286,22 @@ const COVER_SANDBAG_HALF_X := 3.6       # m，沙袋矩形半宽
 const COVER_SANDBAG_HALF_Y := 1.1       # m，沙袋矩形半长
 const COVER_SANDBAG_HEIGHT := 1.1       # m，沙袋顶高（站姿眼高 1.6 m 能看过，卧姿看不出去）
 const COVER_HP := 200.0                # 掩体耐久：玩家近距 62 伤害 → 4 发打坏（榴弹/机枪后续再调）
+## 掩体三段耐久（2026-10-03 使用者拍板）：耐久比掉到这条线以下算「受损」，顶高按下面的比例缩。
+## 为什么是 0.70 / 0.45：62 伤害打 200 耐久 ⇒ 第 2 发就进受损档（有中间态、不是「要么完好要么没」）；
+## 0.45 的顶高让 1.1 m 沙袋降到约 0.5 m，正好与 PRONE_SIGHT_HEIGHT 同档
+## ——「受损后卧姿能看过」是一条可读、可解释的边界。
+const COVER_DAMAGED_BELOW_RATIO := 0.70
+const COVER_DAMAGED_HEIGHT_SCALE := 0.45
+## 掩体破坏后留下的贴地残痕（4.17 破坏互动：留残痕 + 小减速，不影响通视）
+const RUBBLE_SPEED_SCALE := 0.70        # 与泥泞同档（瓦砾 ＝ 脚下不利索）
+const RUBBLE_RADIUS_SCALE := 1.25       # 残痕半径 = 掩体最长边 × 这个系数
+const RUBBLE_LIFETIME := 0.0            # s，0 ＝ 留到本局结束
+## 建筑结构值锚点（2026-10-03 拍板「标准档 1200」，与 FOB 的结构值同档）：
+## 主炮 125mm 对建筑伤害 280 ⇒ 5 发拆一栋；30mm 机炮 45 ⇒ 27 发（基本打不掉）；
+## 而普通子弹对建筑伤害恒为 0（见 data/weapons_data.txt 的 structure_damage 列）。
+const STRUCTURE_HP_SMALL := 800.0       # 小屋 / 哨所
+const STRUCTURE_HP_HOUSE := 1200.0      # 标准建筑（锚点）
+const STRUCTURE_HP_REINFORCED := 3000.0 # 加固 / 多层（困难模式与后续版本用）
 const COVER_SIGHT_SLACK := 0.15         # m，视线高度需高出掩体顶这么多才算「看得过去」
 const PRONE_SIGHT_HEIGHT := 0.6         # m，卧姿视线高度（C2「矮掩体」：少 1 m 看不到东西）
 const SUPPORT_RANGE := 2.5              # m，离掩体多近算「依托/架枪」

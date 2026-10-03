@@ -282,6 +282,34 @@ func _bench() -> Dictionary:
 	return out
 
 
+## 组件拆解：把「一个敌人一帧」与「一次 has_sight」都拆开量，才知道下一刀该切哪儿
+func _components() -> Dictionary:
+	var out := {}
+	var dt := 1.0 / 60.0
+	var enemies := _live("enemy")
+	var e = enemies[0] if not enemies.is_empty() else null
+	if e != null:
+		# 敌人一帧的几块：AI（含通视）、可见性（0.1 s 一次）、视觉/移动
+		out["e_ai"] = _us_per(Callable(e, "_update_ai").bind(dt), BENCH_REPEAT)
+		out["e_vis"] = _us_per(Callable(e, "_update_visibility"), BENCH_REPEAT)
+		out["e_see"] = _us_per(Callable(e, "_can_see_player"), BENCH_REPEAT)
+		out["e_frame"] = _us_per(Callable(e, "_physics_process").bind(dt), BENCH_REPEAT)
+	# 通视内部：逐层量
+	if _main.sight != null and _main.player != null:
+		var s = _main.sight
+		var f: Vector2 = _main.player.global_position
+		var t: Vector2 = f + Vector2(180.0, 60.0)
+		var oh: float = s.eye_height_at(f)
+		var th: float = s.eye_height_at(t)
+		if s.grid != null:
+			out["c_cells"] = _us_per(Callable(s.grid, "cells_on_segment").bind(f, t), BENCH_REPEAT)
+		out["c_terrain"] = _us_per(Callable(s, "terrain_first_blocker").bind(f, oh, t, th, 0.0), BENCH_REPEAT)
+		out["c_occl"] = _us_per(Callable(s, "occluder_blocks").bind(f, oh, t, th), BENCH_REPEAT)
+		out["c_smoke"] = _us_per(Callable(s, "smoke_blocks").bind(f, oh, t, th), BENCH_REPEAT)
+		out["c_full"] = _us_per(Callable(s, "has_sight").bind(f, oh, t, th, 0.0), BENCH_REPEAT)
+	return out
+
+
 func _finish() -> void:
 	_done = true
 	var b := _bench()
@@ -310,6 +338,14 @@ func _finish() -> void:
 	print("  单价        : 通视 %.1f µs/次" % b["sight_us"])
 	print("  敌人一帧    : 中位 %.0f µs / 最大 %.0f µs（巡逻态 → 交战态）" % [b["enemy_med"], b["enemy_max"]])
 	print("  队友一帧    : 中位 %.0f µs / 最大 %.0f µs（队友常驻交战态，所以比敌人中位贵）" % [b["ally_med"], b["ally_max"]])
+	var c := _components()
+	if not c.is_empty():
+		print("  敌人一帧拆解: AI %.0f µs ｜ 可见性 %.0f µs ｜ 其中「能不能看到」 %.0f µs ｜ 整个 _physics_process %.0f µs" % [
+				float(c.get("e_ai", 0.0)), float(c.get("e_vis", 0.0)),
+				float(c.get("e_see", 0.0)), float(c.get("e_frame", 0.0))])
+		print("  通视内部拆解: 取格 %.0f µs ｜ 地形层 %.0f µs ｜ 掩体层 %.0f µs ｜ 烟雾层 %.0f µs ｜ 合计 has_sight %.0f µs" % [
+				float(c.get("c_cells", 0.0)), float(c.get("c_terrain", 0.0)),
+				float(c.get("c_occl", 0.0)), float(c.get("c_smoke", 0.0)), float(c.get("c_full", 0.0))])
 	print("  墙钟帧间隔  : 均值 %.2f ms / p50 %.2f / p90 %.2f / p99 %.2f（**仅供参考**：headless 按物理步追赶，很多帧不跑物理）" % [
 			mean, _percentile(sorted_ms, 0.5), _percentile(sorted_ms, 0.9), _percentile(sorted_ms, 0.99)])
 	print("  一帧预算占比: 实测 %.0f%% ｜ 典型 %.0f%% ｜ 最坏 %.0f%%（预算 16.67 ms，**不含物理引擎与渲染**）" % [

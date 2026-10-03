@@ -282,6 +282,12 @@ func blind_aim_target() -> Vector2:
 
 
 ## 能否看到玩家：地形通视（容差在 SightSystem 里）
+## 通视节流器：只节流「地形 + 掩体」这两层贵的（~190 µs），
+## **烟雾层每帧都新鲜查**（~1 µs）—— docx 4.12.5「无通视 → 转入盲射」靠的就是烟雾那一下翻转，
+## 把它一起节流会让状态转换延迟数帧（2026-10-03 就是这么把集成冒烟三条断言弄红的）。
+var _sight_throttle := SightSystem.Throttle.new()
+
+
 ## 【为什么敌人不参与通视节流】2026-10-03 试过：敌人 AI + 可见性共用节流器（SightSystem.Throttle）后，
 ## 「无通视 → 转入盲射」（docx 4.12.5）的状态转换被推迟最多 SIGHT_THROTTLE_FRAMES 帧，
 ## 集成冒烟的三条断言当场变红。行为契约优先于这点开销 ⇒ 敌人保持逐帧查；
@@ -293,8 +299,14 @@ func _can_see_player() -> bool:
 	# 口径不同，会在起伏地形产生「敌能打我、我瞄不到敌」的单向通视。
 	var origin_height := _sight.eye_height_at(global_position)
 	# 玩家卧姿时目标高度降到 0.6 m（C2 矮掩体）：卧下更容易被地形与沙袋挡住
-	return _sight.has_sight(global_position, origin_height,
-			_player.global_position, _target_sight_height())
+	# 顺序：先查便宜的烟雾层（4.12.5 的状态转换靠它，必须新鲜），再查被节流的地形 + 掩体层。
+	# has_sight = 地形 ∧ 掩体 ∧ ¬烟雾，两项合起来与原来的一次 has_sight 结果一致。
+	var target_height := _target_sight_height()
+	if _sight.smoke_blocks(global_position, origin_height,
+			_player.global_position, target_height):
+		return false
+	return _sight_throttle.core(_sight, Engine.get_physics_frames(),
+			global_position, origin_height, _player.global_position, target_height)
 
 
 ## 视线目标高度：直接走 SightSystem 的统一口径（卧姿 0.6 m 矮掩体）

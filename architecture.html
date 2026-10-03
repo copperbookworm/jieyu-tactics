@@ -3,297 +3,357 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>《解域》jieyu-1 架构与路线图</title>
+<title>《解域》jieyu-1 · 架构 · 进度 · 路线图</title>
 <style>
   :root{
     --bg:#12151a; --panel:#1b2029; --panel2:#232a35; --line:#2f3846;
-    --txt:#e6ebf2; --dim:#9aa7b8; --ok:#3ddc84; --wip:#ffc94d; --plan:#66aaff;
-    --ask:#ff8f66; --dead:#6b7787;
+    --txt:#e6ebf2; --dim:#9aa7b8; --ok:#3ddc84; --wip:#ffc94d;
+    --plan:#66aaff; --ask:#ff8f66; --dead:#6b7787; --new:#c792ea;
   }
   *{box-sizing:border-box}
-  body{margin:0;padding:18px;background:var(--bg);color:var(--txt);
+  body{margin:0;padding:20px;background:var(--bg);color:var(--txt);
     font-family:-apple-system,"Noto Sans CJK SC","Segoe UI",Roboto,sans-serif;
-    font-size:14px;line-height:1.6}
-  h1{font-size:20px;margin:0 0 4px}
-  h2{font-size:16px;margin:26px 0 10px;padding-left:9px;border-left:4px solid var(--plan)}
-  h3{font-size:14px;margin:16px 0 8px;color:var(--dim)}
-  .sub{color:var(--dim);font-size:12px;margin:0 0 14px}
-  code{background:#0d1013;border:1px solid var(--line);border-radius:4px;
-    padding:1px 5px;font-size:12px;color:#cfe3ff}
-  .wrap{max-width:1100px;margin:0 auto}
-  .cards{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;
-    padding:10px 12px;flex:1 1 150px;min-width:140px}
-  .card b{display:block;font-size:19px;color:#fff}
-  .card span{color:var(--dim);font-size:12px}
-  .layer{background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    margin:10px 0;padding:10px 12px}
-  .layer>.name{font-size:13px;color:var(--dim);margin-bottom:8px;display:flex;
-    justify-content:space-between;flex-wrap:wrap;gap:6px}
-  .blocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
-  .blk{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--ok);
-    border-radius:7px;padding:8px 10px}
-  .blk.dead{border-left-color:var(--dead);opacity:.62}
-  .blk.new{border-left-color:var(--wip)}
-  .blk .t{font-weight:600;font-size:13px}
-  .blk .d{color:var(--dim);font-size:12px;margin-top:3px}
-  .tag{display:inline-block;font-size:11px;border-radius:10px;padding:0 7px;
-    margin-left:6px;border:1px solid var(--line);color:var(--dim)}
-  .chain{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
-  .chain .step{background:var(--panel2);border:1px solid var(--line);border-radius:20px;
-    padding:4px 12px;font-size:12px}
-  .chain .arrow{color:var(--dim)}
-  details{background:var(--panel);border:1px solid var(--line);border-radius:9px;
-    margin:9px 0;padding:0 12px}
-  details[open]{padding-bottom:10px}
-  summary{cursor:pointer;padding:10px 0;font-weight:600;font-size:13.5px;list-style:none}
-  summary::-webkit-details-marker{display:none}
-  summary::before{content:"▸ ";color:var(--plan)}
-  details[open] summary::before{content:"▾ "}
-  ul{margin:6px 0 6px 18px;padding:0}
-  li{margin:3px 0;font-size:13px}
-  .st{font-weight:700;margin-right:5px}
-  .ok .st,.ok{color:var(--ok)} .wip .st,.wip{color:var(--wip)}
-  .plan .st,.plan{color:var(--plan)} .ask .st,.ask{color:var(--ask)}
-  .dimtxt{color:var(--dim);font-size:12px}
-  .warn{background:#2a1d17;border:1px solid #5a3a2a;border-radius:9px;
-    padding:10px 12px;margin:10px 0;font-size:13px}
-  .warn b{color:var(--ask)}
-  .legend{color:var(--dim);font-size:12px;margin:6px 0 0}
-  .legend i{font-style:normal;margin-right:12px}
+    font-size:14px;line-height:1.62}
+  h1{font-size:21px;margin:0 0 4px}
+  h2{font-size:16px;margin:30px 0 12px;padding-left:10px;border-left:4px solid var(--plan)}
+  h3{font-size:14px;margin:18px 0 8px;color:var(--dim)}
+  a{color:var(--plan)}
+  code{background:#0d1014;border:1px solid var(--line);border-radius:3px;
+    padding:1px 5px;font-size:12.5px;color:#cfe3ff}
+  .sub{color:var(--dim);font-size:13px;margin:0 0 6px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 0;font-size:12.5px;color:var(--dim)}
+  .legend b{font-weight:600}
+  .grid{display:grid;gap:12px}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  .g6{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:13px 14px}
+  .card h4{margin:0 0 6px;font-size:13px;color:var(--dim);font-weight:600;letter-spacing:.3px}
+  .kpi{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:12px 13px}
+  .kpi .n{font-size:21px;font-weight:700;color:var(--ok);line-height:1.2}
+  .kpi .n.blue{color:var(--plan)} .kpi .n.new{color:var(--new)}
+  .kpi .l{font-size:12px;color:var(--dim);margin-top:3px}
+  table{width:100%;border-collapse:collapse;margin:8px 0 4px;font-size:13px}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--dim);font-weight:600;font-size:12.5px}
+  tr:nth-child(even) td{background:#191e26}
+  .tag{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:10px;
+    border:1px solid currentColor;white-space:nowrap}
+  .t-ok{color:var(--ok)} .t-wip{color:var(--wip)} .t-plan{color:var(--plan)}
+  .t-ask{color:var(--ask)} .t-new{color:var(--new)}
+  ul{margin:6px 0 6px 20px;padding:0}
+  li{margin:3px 0}
+  .note{background:#161b23;border-left:3px solid var(--wip);padding:9px 12px;border-radius:0 5px 5px 0;color:#cbd5e1;font-size:13px;margin:10px 0}
+  .done{color:var(--dead);text-decoration:line-through}
+  .flow{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;color:#cfe3ff;
+    background:#0d1014;border:1px solid var(--line);border-radius:6px;padding:12px;overflow-x:auto;white-space:pre}
+  footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);color:var(--dim);font-size:12.5px}
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <h1>《解域》jieyu-1 · 架构与路线图</h1>
-  <p class="sub">
-    Godot 4.7.1 (Mobile 渲染) ｜ 主场景 <code>res://scenes/gameplay/Main.tscn</code> ｜
-    逻辑分辨率 960×540 横屏 ｜ autoload：仅 <code>EventBus</code> ｜
-    依据文档：<code>[JIEYU]/squad-2d/解域游戏.docx</code><br>
-    路线图来源：<code>本项目开发进度.txt</code>（最后更新 2026-10-01，仍是本项目的唯一进度入口）
-  </p>
-
-  <div class="cards">
-    <div class="card"><b>102</b><span>个 .gd 脚本（实测，不含 addons）</span></div>
-    <div class="card"><b>29</b><span>个 @tool 测试脚本（845 项断言）</span></div>
-    <div class="card"><b>3</b><span>张数据表（txt/CSV）</span></div>
-    <div class="card"><b>1</b><span>个 autoload（EventBus）</span></div>
-    <div class="card"><b>0</b><span>外部依赖（纯离线，无 CDN）</span></div>
-  </div>
-  <p class="legend">
-    <i>色块左边线：<span class="ok">绿＝已在跑</span></i>
-    <i><span class="wip">黄＝最近一轮新增（已回写进度文件）</span></i>
-    <i><span style="color:var(--dead)">灰＝存在但零引用（占位，别当功能）</span></i>
-  </p>
-
-  <h2>一、整体架构（分层）</h2>
-
-  <div class="layer">
-    <div class="name"><span>① 入口 / 装配层</span><span>代码装配，场景文件只有空节点 —— 不手改 .tscn</span></div>
-    <div class="blocks">
-      <div class="blk"><div class="t">Main.tscn → Main.gd</div>
-        <div class="d">唯一主场景。地形/玩家/敌人/载具/HUD 全在 <code>_ready()</code> 里 new 出来；也是地图预览模式的开关所在</div></div>
-      <div class="blk dead"><div class="t">core/SceneManager·GameManager·GameState·InputManager·SaveManager（已归档）</div>
-        <div class="d">零引用模板脚本（grep 核实），当前流程不经过它们 —— 2026-10-01 候选 T ④ 已整体移出工程，见 <code>D:\Godot4.7_Proj\_archive\jieyu-1_orphans_20261001\</code></div></div>
-    </div>
-  </div>
-
-  <div class="layer">
-    <div class="name"><span>② 数据层（表驱动）</span><span>数值不进代码，进表</span></div>
-    <div class="blocks">
-      <div class="blk"><div class="t">GameConfig.gd</div>
-        <div class="d">全局常量总表：武器衰减、散布、姿态、压制、载具、相机、UI 坐标</div></div>
-      <div class="blk"><div class="t">RoleTable.gd</div>
-        <div class="d">3 兵种（步枪兵/侦察兵/精确射手）→ 携带武器、标记时效、伤害倍率（候选 T ②：不再镜像弹匣/备弹，唯一数据源＝武器表）</div></div>
-      <div class="blk"><div class="t">weapons_data.txt + WeaponTable.gd</div>
-        <div class="d">5 把枪（含官方表抄录列）；<b>曾是 .csv，被 Godot 当翻译表导入</b>，故改 .txt</div></div>
-      <div class="blk"><div class="t">vehicles_data.txt + VehicleTable.gd</div>
-        <div class="d">ifv_a / mbt_t1；命中面判定、等效厚度 = 法向厚度 ÷ cos(偏角+倾角)、击穿判定</div></div>
-      <div class="blk"><div class="t">quest_templates.txt + QuestTable.gd</div>
-        <div class="d">8 条可发模板（候选 L1~L5 补完：T-M1/T-M2/T-S1~T-S6，与官方表逐行一致）</div></div>
-    </div>
-  </div>
-
-  <div class="layer">
-    <div class="name"><span>③ 系统层（纯逻辑，多数可脱离场景测试）</span></div>
-    <div class="blocks">
-      <div class="blk"><div class="t">systems/terrain</div>
-        <div class="d">HeightGrid（1 m 高程网格）/ MapGenerator（噪声＋灰度图导入）/ SightSystem（DDA 逐格通视＋掩体层＋烟雾层，候选 P 加烟）/ MapInspector（可达性与通视探针）</div></div>
-      <div class="blk"><div class="t">systems/combat</div>
-        <div class="d">BallisticsSystem（直瞄射线／带阻力间瞄解算）/ CaptureZone（净进度 −1..1 状态机）/ IndirectFire / SuppressionSystem / Tracer</div></div>
-      <div class="blk"><div class="t">systems/marks · quest</div>
-        <div class="d">MarkSystem（6 类标记、30 s 时效）/ QuestSystem（主线＋≤2 支线、权重表、时限）</div></div>
-      <div class="blk"><div class="t">systems/camera</div>
-        <div class="d">AimCameraController：准心＝屏心＝相机中心；右半屏起手接管；三档离散缩放</div></div>
-      <div class="blk"><div class="t">systems/weapons · vehicles</div>
-        <div class="d">WeaponTable / VehicleTable：读表 + 查询纯函数（刻意无 class_name，引用方 preload）</div></div>
-      <div class="blk dead"><div class="t">systems/ai/AISystem · combat/CombatSystem · combat/DamageSystem · inventory/*（已归档）</div>
-        <div class="d">零引用占位，2026-10-01 候选 T ④ 已移出工程（敌人 AI 实际写在 <code>entities/enemy/Enemy.gd</code> 里）。归档位置见 <code>_archive\jieyu-1_orphans_20261001\</code></div></div>
-    </div>
-  </div>
-
-  <div class="layer">
-    <div class="name"><span>④ 实体层（场上会动的东西）</span></div>
-    <div class="blocks">
-      <div class="blk"><div class="t">entities/player/Player.gd</div>
-        <div class="d">移动、姿态三态、散布（动静二分×聚焦×压制）、弹匣/换弹/切枪、血量与视线眼高</div></div>
-      <div class="blk new"><div class="t">entities/visual/UnitFigure.gd</div>
-        <div class="d"><b>候选 M 第三轮（2026-10-01，docx 12.7.1）</b>：上下半身分离 —— 根 + 两个子节点 <code>Lower</code>（身体 + 两条前后摆的腿，随移动方向）/ <code>Upper</code>（肩 + 枪管 + 双手，随准星方向）；精灵帧 → 程序相位（腿的交替随速度推进、站住冻住）；姿态进图（站 / 蹲 ×0.85 / 卧：拉长 ×1.5 + 压扁）</div></div>
-      <div class="blk"><div class="t">entities/enemy/Enemy.gd</div>
-        <div class="d">AI 状态机（巡逻→发现→交火→<b>盲射</b>）、还击散布受压制影响、停火犹豫、压制弧表现；候选 P 加「被烟挡住时朝最后已知位置盲射、命中率 −70%」</div></div>
-      <div class="blk"><div class="t">entities/cover/Cover.gd · entities/smoke/SmokeScreen.gd</div>
-        <div class="d">可旋转、可破坏掩体（沙袋 ×20），兼作 occluder；烟雾＝临时 occluder（半径 10 m / 高 3 m / 25 s，只挡视线不挡子弹，走独立的 SMOKE_GROUP）</div></div>
-      <div class="blk new"><div class="t">entities/zone/TerrainZone.gd</div>
-        <div class="d"><b>4.17 环境互动区</b>：泥泞 / 雪地 / 草丛三种圆形区域（程序绘制、进 <code>TERRAIN_ZONE_GROUP</code>）；查询走 <code>systems/terrain/TerrainZones.gd</code>（移速取最慢、隐蔽取最强并封顶 0.60），玩家移速与敌人发现距离分别读它；贴掩体的暴露系数在 <code>entities/player/Player.gd</code></div></div>
-      <div class="blk"><div class="t">entities/fob · supply · lane</div>
-        <div class="d">候选 L2~L4 的三个任务实体：敌方 FOB（结构值 1200）／补给车（4 m/s，抵达即结算）／侧翼通路（50 m 宽走廊，穿线即失败）</div></div>
-      <div class="blk new"><div class="t">entities/vehicle/Vehicle.gd</div>
-        <div class="d">双座位、炮塔与车体分离＋回正、后坐、装甲挨打、主炮开火、AI 驾驶；<b>12.7.2 载具动画（2026-10-01）</b>：<code>Hull</code> / <code>Turret</code> / <code>Track</code> 三层子节点，履带相位 ＝ 跑过的距离（停车冻结、报废冻结 + 变黑），报废后炮管变黑并缩短 15%，残骸挂 <code>WreckSmoke</code> 持续冒烟；<b>反坦克导弹 ATGM（2026-10-01）</b>：<code>data/vehicles_data.txt</code> 加 5 列（2 发 / 伤害 1000 / 穿深 900 / 间隔 8 s / 射程 2000 m），武器位「弹种」键一键切主炮⇄导弹，HUD 显示当前弹种与余弹 —— 两发正面击穿即可摧毁敌方主战坦克（正面等效 808 mm、结构值 2000）</div></div>
-      <div class="blk dead"><div class="t">EnemyGoblin.gd / EnemySlime.gd / PlayerStateMachine.gd（已归档）</div>
-        <div class="d">零引用残留（前者只剩一句 print），2026-10-01 候选 T ④ 已移出工程</div></div>
-    </div>
-  </div>
-
-  <div class="layer">
-    <div class="name"><span>⑤ 表现层（CanvasLayer HUD 全部代码生成）</span></div>
-    <div class="blocks">
-      <div class="blk"><div class="t">VirtualJoystick</div>
-        <div class="d">左下角摇杆（圆心 100,440、半径 90、触摸判定 144 px）——左侧 UI 一律避让此区</div></div>
-      <div class="blk"><div class="t">FireButton · FocusButton</div>
-        <div class="d">开火；按住式聚焦（收窄准心＋边缘暗角）</div></div>
-      <div class="blk"><div class="t">MiniMap · TacticalMap · MapPreview</div>
-        <div class="d">小地图／全屏战术图（开图不暂停）／地图预览模式。两张地图的图层：地形 → 节点净进度 → 任务目标 → <b>世界目标（补给车 / 侧翼通路 / 已暴露的敌方 FOB，2026-10-01 ④）</b> → 己方 → 报点标记；取数统一走 <code>ui/MapLayerSource.gd</code></div></div>
-      <div class="blk"><div class="t">MarkWheel · MarkOverlay · QuestCard · IndirectOverlay · DebugEnemyArrow</div>
-        <div class="d">报点环、标记渐隐、任务卡片、间瞄落点预警圈、敌方方位箭头</div></div>
-      <div class="blk new"><div class="t">BlobShadow · MuzzleFlash · ImpactFx · EffectSpawner</div>
-        <div class="d"><b>候选 M 第一轮（2026-10-01，docx 12.3 / 12.7.3 / 12.7.4）</b>：脚底 Blob Shadow（扁椭圆、不随身体转动、高度→缩放/透明度）、枪口火光（0.06 s）、命中特效（6 条确定性火花 + 扩散环，0.22 s）、受击闪白（受击方自己画白圈）、轻微屏幕震动（相机订阅 <code>EventBus.player_hit</code>）；特效由开枪的人通过 <code>systems/effects/EffectSpawner.gd</code> 挂进场景，所以 Main 一行未加</div></div>
-      <div class="blk new"><div class="t">AudioSystem（autoload <code>Audio</code>）· ProceduralAudio · Sfx</div>
-        <div class="d"><b>候选 M 第二轮（2026-10-01，docx 第十章）</b>：工程零音频资产 ⇒ 用 <code>AudioStreamWAV.data</code> 直接填 16-bit 单声道 PCM，11 段音效（噪声 + 正弦 × 指数衰减包络，种子取 <code>hash(id)</code> 保证逐字节确定）；播放层是 autoload <code>Audio</code>（懒合成 + 缓存、每音 4 声部轮换、0.045 s 限频、enabled 开关，战局音效订阅 EventBus），调用点走 <code>Sfx.play()</code>（运行时按名字找 autoload，不依赖编译期全局名）；玩家 / 敌人 / 载具 / 间瞄 7 处开火与命中接线</div></div>
-      <div class="blk new"><div class="t">CombatFeedPanel · TipPanel · CommandWheel · DownedOverlay</div>
-        <div class="d"><b>候选 O 第一 / 二轮（2026-10-01）</b>：对局内战斗播报（docx 4.14，同类合并＋限频，订阅 EventBus / 任务 / 载具与 FOB 的 wrecked，间瞄 / 补给 / 侧翼通路走 <code>HudBuilder.push_feed()</code>）、对局操作提示者（docx 4.15，7 条一次性提示）、快捷指令轮盘（docx 4.13，6 条指令＋两层冷却，落点类走报点体系落成标记）；纯逻辑分别在 <code>systems/hud/CombatFeed.gd</code> / <code>systems/hud/TipBook.gd</code> / <code>systems/comm/CommandBook.gd</code>，指令执行链 <code>systems/comm/CommandController.gd</code> 挂在 MarkController 下；<b>4.16 被击倒时的视角</b>（倒地态 + 相机锁死在身体上 + 全屏灰罩/暗角 + 倒计时，<code>ui/DownedOverlay.gd</code>，行为闸门在 Player、相机锁定在 AimCameraController）</div></div>
-    </div>
-  </div>
-
-  <div class="layer">
-    <div class="name"><span>⑥ 校验层</span><span>29 个 @tool 测试脚本 + 2 个跑批/自检工具：<code>--headless</code> 直接跑，退出码 0＝全绿</span></div>
-    <div class="blocks">
-      <div class="blk"><div class="t">test/*.gd</div>
-        <div class="d">terrain / ballistics / capture / cover / crosshair / handling / height_image / indirect / map_inspector / <b>map_layer</b> / mark / quest / role / <b>smoke</b> / suppression / <b>combat_feed</b> / <b>tips</b> / <b>command</b> / <b>downed</b> / <b>terrain_zone</b> / <b>effects</b> / <b>audio</b> / <b>figure</b> / <b>vehicle_anim</b> / <b>atgm</b> / tactical_map / vehicle / weapon …（29 个，845 项断言）</div></div>
-      <div class="blk"><div class="t">tools/*.gd</div>
-        <div class="d">run_tests_headless（跑 test/）、run_integration_headless（真起 Main.tscn，205 项）、build_scenes（生成场景，不手写 .tscn）、export_height_map（噪声地形导出起手稿）、probe_export_pack（真 PCK 里验高度图与三张数据表读得到）</div></div>
-      <div class="blk dead"><div class="t">gdtoolkit/ · .gdlintrc</div>
-        <div class="d">gdlint 静态检查；max-file-lines 1200（Main.gd 候选 N 拆分后 397 行，已不再贴上限）</div></div>
-    </div>
-  </div>
-
-  <h2>二、可玩循环（验收那条线）</h2>
-  <div class="chain">
-    <span class="step">出生</span><span class="arrow">→</span>
-    <span class="step">摇杆移动</span><span class="arrow">→</span>
-    <span class="step">通视发现敌人</span><span class="arrow">→</span>
-    <span class="step">弹道交火 / 压制</span><span class="arrow">→</span>
-    <span class="step">上下车＋炮塔对射</span><span class="arrow">→</span>
-    <span class="step">白旗点净进度占领</span><span class="arrow">→</span>
-    <span class="step">胜负结算</span><span class="arrow">→</span>
-    <span class="step">点按重开</span>
-  </div>
-  <p class="dimtxt">这条链是「第一版垂直切片」的目标，进度文件三、当前状态记为：<b>完整</b>。</p>
-
-  <h2>三、路线图（严格对齐 本项目开发进度.txt）</h2>
-
-  <details open class="ok">
-    <summary>✅ 已实现 —— 进度文件「二、已完成」</summary>
-    <ul>
-      <li><span class="st">第一版</span>垂直切片闭环：S1 地形（1 m 网格＋DDA 通视）／S2 玩家与相机（准心＝屏心）／S3 触屏摇杆／S4 射击层（弹道＋曳光＋击杀计分）／S5 占领层（状态机＋3 节点全占即胜＋重开）；收尾：小地图＋开发箭头＋横屏设置</li>
-      <li><span class="st">第二版</span>P1 敌人 AI 状态机＋玩家血量死亡＋失败结算；P2 净进度占领模型（−1..1 蓝红对冲）＋敌人占领行为＋HUD 三态</li>
-      <li><span class="st">射击补全</span>QBZ-191 全套数值、弹匣/备弹/射速冷却/换弹状态机、MOA 3、伤害衰减（62→35 替换一击必杀）</li>
-      <li><span class="st">真机缺陷修复</span>占领浮点累加停在 0.999…（加容差吸附）／敌我通视眼高口径不统一（统一 1.6）／EventBus 在 @tool 下访问失败（改 has_signal＋字符串 emit）</li>
-      <li><span class="st">口径对齐</span>直瞄改为「射线穿圆＋max_range 截断」，弹道高度/下坠只留给间瞄</li>
-      <li><span class="st">第三版</span>P2 射击手感：散布动静二分（2.5/1.0）、聚焦模式取代开镜（按住式按键＋暗角）</li>
-      <li><span class="st">地图数据链</span>灰度高度图导入（1000×1000、8 位、1 m/级）＋起手图 map_01_height.png＋导出工具；验收四条已在测试里</li>
-      <li><span class="st">地图检测模式</span>不进游戏循环看地形：可达性红域＋关键点＋通视探针（120 射线×300 m）</li>
-      <li><span class="st">准心改版</span>十字→等腰三角箭头（尖端＝屏心），修过「方向反了」并留回归测试 crosshair_test</li>
-      <li><span class="st">准心遮挡</span>按用户要求恢复文档严格口径（SIGHT_MARGIN 0.3、放宽量 0、近距豁免 0）</li>
-      <li><span class="st">占领体验修复</span>翻转口径改为「完整翻转 −1→+1 = 30 s」；HUD 加「区内兵力 我N｜敌M」与对冲标记</li>
-      <li><span class="st">战术地图</span>4.11 落地：全屏覆盖、不暂停、报点守通视红线、集结点/标记链</li>
-      <li><span class="st">第四版修复</span>关图后摇杆永久锁死（复位唯一出口＝closed 信号）＋开图清触点</li>
-      <li><span class="st">第五版</span>压制对 AI 生效：还击散布、停火犹豫（阈值 0.6→0.35 因为真机够不到）、橙色压制弧</li>
-      <li><span class="st">第十二版</span>武器系统表驱动重构（5 把枪、切枪 1.04 s、兵种主副武器绑定）</li>
-      <li><span class="st">第十四版</span>间瞄深化：带阻力解算＋反解落点（误差 &lt;1.5 m）＋撞地形提前炸；表现层反复后定为「只留落点预警圈」</li>
-      <li><span class="st">第十五版</span>载具系统：装甲挡弹＋上车驾驶＋主炮开火＋HUD</li>
-      <li><span class="st">第十六版</span>任务系统深化：1 主线＋≤2 支线、权重表（3 个战局变量）、SMEAC、超时失败不扣分</li>
-      <li><span class="st">第十七版</span>载具深化：双座位（只有武器位能开炮）、炮塔分离＋回正＋后坐、敌方坦克 AI（900 m＋通视、5° 才开火）</li>
-      <li><span class="st">方案否决记录</span>「落点固定半径圆」（指哪打哪）已评审否决并 revert —— 保留在文件里防重复提案</li>
-      <li><span class="st">摇杆修复</span>触屏推摇杆带动准心（Android 模拟鼠标事件）→ 准心按右半屏起手＋跟踪 touch index</li>
-    </ul>
-  </details>
-
-  <details open class="wip">
-    <summary>🔄 进行中 / 当前状态 —— 进度文件「三、当前状态」＋各版「未做」</summary>
-    <ul>
-      <li><span class="st">可玩循环</span>完整（出生→交火→占点→胜负→重开）；测试为 @tool 脚本手工运行，尚未接 CI</li>
-      <li><span class="st">未做（间瞄）</span>7.4.1 离线弹道表（查表式弹道碰撞）、地图上画完整弧线投影</li>
-      <li><span class="st">未做（战术地图）</span>集结点与小队标记链、载具图层、PVEVP 战线（FOB / 补给车 / 侧翼通路图层已随 2026-10-01 ④ 补上）</li>
-      <li><span class="st">未做（压制）</span>敌人转移掩体、主动躲进掩体（需要掩体/寻路系统）、语音音效反馈</li>
-      <li><span class="st">未做（任务）</span>另 5 条模板及其前置系统、主动放弃按钮、SMEAC 详表卡片</li>
-      <li><span class="st">未做（载具）</span>摧毁表现（现在只变暗）、视野盲区随座位而异、多车编队、AI 规避与掩体利用、实际入射法线角</li>
-      <li class="new"><span class="st">2026-10-01 本轮（候选 P + 候选 T 剩余债 + 地图图层）</span>烟雾遮蔽（4.12 五项确认参数：10 m／3 m／25 s／不挡子弹／AI 盲射 −70%）＋敌方 BLIND_FIRE 状态＋准心被烟回退＋隔着烟不许报点；高度图改走导入资源（真 PCK 里验过：老写法读不到、新写法读得到）；兵种表删掉与武器表重复的弹匣/备弹；19 个零引用孤儿文件（11 个 1 行空骨架 + 2 个哥布林/史莱姆占位 + 6 个 0 引用 .tscn）归档；战术地图与小地图补世界目标图层（FOB / 补给车 / 侧翼通路）</li>
-    </ul>
-  </details>
-
-  <details open class="plan">
-    <summary>📅 计划 —— 进度文件「四、接下来」（下一批候选）</summary>
-    <ul>
-      <li><span class="st">候选 L</span>✅ 已完成（L1~L5）：T-S2 摧毁 FOB／T-S3 摧毁敌方载具／T-S5 护送补给／T-S6 守住侧翼通路／T-M2 守住节点；模板池 3 → 8 条，官方 8 条与工程一致</li>
-      <li><span class="st">候选 P</span>✅ 已完成（2026-10-01）：烟雾遮蔽（4.12/4.12.8 确认稿五项参数全落地）——半径 10 m／高 3 m／25 s／只挡视线不挡子弹／AI 盲射 −70%；烟幕同时管住准心回退与「隔着烟不许报点」</li>
-      <li><span class="st">候选 T</span>🔄 部分完成（2026-10-01）：① 高度图导出兼容（真 PCK 验过）② 兵种表不再镜像弹匣/备弹 ③ 主线高亮 ④ 19 个孤儿文件归档 ⑦ MarkSystem 过期注释 —— 只剩 ⑤ architecture.html（本轮同步完）与 ⑥ 基线提交</li>
-      <li><span class="st">候选 M</span>表现与音频（12.7 动画 / 12.3 阴影）：角色动画帧（移动/开火/倒地）、枪口火光、命中特效、基础音效<br>
-        <span class="dimtxt">验收标准：开火与命中在画面上有明确反馈</span></li>
-    </ul>
-  </details>
-
-  <details class="plan">
-    <summary>📅 待办（不阻塞，按需）—— 进度文件「六、其他待办」</summary>
-    <ul>
-      <li>地形笔刷编辑器（内置编辑 / 运行时雕刻）：已先落地灰度图导入，笔刷后置</li>
-      <li>高度图 16 bit 精度（8 bit＝0.59 m/级，丘陵够用；掩体级精度再说）</li>
-      <li>部位伤害（需给敌人加头/身/腿部位模型）</li>
-      <li>枪口火光、后坐视觉（12.7.3）</li>
-      <li>M320 枪榴弹 / 间瞄（需 simulate＋战术地图选落点）</li>
-      <li>载具（LVT-2 等，需 8.2 载具数据字典）</li>
-      <li>多兵种与武器切换</li>
-    </ul>
-  </details>
-
-  <details class="ask">
-    <summary>❓ 已知待拍板 —— 进度文件「七、已知待拍板」</summary>
-    <ul>
-      <li><span class="st">SIGHT_MARGIN</span>已拍板并落地（2026-09-28）：回到文档 12.2 的 0.3 m，准心侧放宽量与近距豁免都归零；两个开关保留，真机嫌严可临时调回 0.02 / 10.0（改数值不改逻辑）</li>
-      <li><span class="st">候选 K 那轮提的（已记入进度文件七节）</span>① 玩家 IFV 穿深 60 mm 对敌方 MBT（前 808／侧 260／后 130／顶 50）无解，是否给 IFV 加炮射导弹 ATGM（推荐穿深 800：正面 808 仍打不穿、侧后可穿，形成绕侧后梯度）；② <code>Enemy.detection_range</code> 定为 20 m 还是 120 m；③ 调试开关 <code>ENEMY_DAMAGE_SCALE</code> 何时恢复 1.0</li>
-      <li><span class="st">2026-10-01 新增四条待拍板</span>① <code>Main.tscn</code> 的 <code>map_preview_mode</code> 开关（已由用户手动关掉，集成冒烟回到 67→91 项全绿）；② T-M2 守住节点时限 120 s 是否定稿；③ 守住型「时限到点＝达成」口径是否回写 docx 4.10.11 正文；④ FOB/补给车/通路的图层口径（FOB 按「暴露一次就长显」实现）</li>
-    </ul>
-  </details>
-
-  <h2>四、欠账与风险</h2>
-  <div class="warn">
-    <b>1. ✅ 已还（候选 N，2026-09-30）</b>：Main.gd 由 1002 行拆到 403 行（WorldSetup / VehicleController / MarkController / HudBuilder 四个子模块），gdlint 上限不再是问题。原文：撞 gdlint 上限（放宽到 1200）只是止疼。
-  </div>
-  <div class="warn">
-    <b>2. ✅ 已办（候选 T ④，2026-10-01）</b>：零引用占位脚本 11 个 + 2 个哥布林/史莱姆占位 + 6 个 0 引用 .tscn 共 <b>19 个文件</b>已整体移出工程（<code>_archive\jieyu-1_orphans_20261001\</code>，git 里记为删除，可 checkout 回来）。原文：占位脚本 11 个零引用，真接错线会让人以为这些系统已经存在。
-  </div>
-  <div class="warn">
-    <b>3. ✅ 已办（2026-10-01）</b>：进度文件已回写到候选 L 收官 + 文档回流 + 本轮（候选 P／候选 T 剩余债／地图图层）；.git 基线提交 6cb6ee5 已在。原文：进度文件落后于代码，文件头还写着「候选 K」。
-  </div>
-  <div class="warn">
-    <b>4. 数据表是 txt 冒充 CSV</b>：因为 .csv 会被 Godot 当翻译表导入并生成 .translation 垃圾。人改表时注意：编辑 <code>data/*_data.txt</code>，别新建 .csv。
-  </div>
-
-  <p class="dimtxt" style="margin-top:22px">
-    本文档由本地脚本生成，纯内联样式、无任何外部资源，断网可直接打开。<br>
-    唯一数据来源：<code>jieyu-1</code> 目录树 + <code>本项目开发进度.txt</code>（最后更新 2026-10-01）+
-    <code>project.godot</code>；引用关系经 grep 核实，未核实项不写入。
-  </p>
+<h1>《解域》jieyu-1 · 架构 · 进度 · 路线图</h1>
+<p class="sub">工作副本 <code>D:\Godot4.7_Proj\jieyu-1</code>（Godot 4.7.1 · 纯 2D 俯视 · 960×540）
+· 实测日期 <b>2026-10-03</b> · 对应 <b>第四十七版 · 游戏外壳</b> · git HEAD <code>ce06436</code></p>
+<div class="legend">
+  <span><b style="color:var(--ok)">●</b> 已落地并验收</span>
+  <span><b style="color:var(--wip)">●</b> 部分落地 / 有未完项</span>
+  <span><b style="color:var(--plan)">●</b> 计划内（文档已定，工程未做）</span>
+  <span><b style="color:var(--ask)">●</b> 待拍板</span>
+  <span><b style="color:var(--dead)">●</b> 后续版本（已降级）</span>
+  <span><b style="color:var(--new)">●</b> 第四十七版新增</span>
 </div>
+
+<h2>一、体检卡（全部本轮真跑 / 真数）</h2>
+<div class="grid g6">
+  <div class="kpi"><div class="n">149</div><div class="l">个 .gd / <b>24974 行</b>（LF 字节口径）</div></div>
+  <div class="kpi"><div class="n">398</div><div class="l">Main.gd 行数（硬线 ≤400，守住）</div></div>
+  <div class="kpi"><div class="n">39 / 1337</div><div class="l">测试脚本 / 断言（全绿，退出码 0）</div></div>
+  <div class="kpi"><div class="n blue">5 + 25</div><div class="l">几何门禁：HUD 5 + 外壳五屏 25</div></div>
+  <div class="kpi"><div class="n blue">230</div><div class="l">集成冒烟项（真实例化 Main.tscn）</div></div>
+  <div class="kpi"><div class="n new">47</div><div class="l">版本轮次（本页随版本同步）</div></div>
+</div>
+<div class="note">
+  <b>口径（别用别的数）</b>：行数一律 <b>LF 字节数</b>（pwsh 的 <code>Get-Content</code> 在中文 UTF-8 上会少数约 6%，
+  历史上因此把 Main.gd 数成 911 行）；测试项数一律取跑批日志的汇总行，<b>没全绿就写「有失败 + 失败项原文」</b>，不报绿。
+</div>
+
+<h2>二、整体架构（分层）</h2>
+<p class="sub">命名约定：<b>不写 <code>class_name</code> 的模块，引用方必须 <code>preload</code></b> ——
+新 <code>class_name</code> 在 <code>--script</code> 模式下不在全局类缓存里，裸写名字会解析失败。</p>
+
+<div class="grid g3">
+  <div class="card" style="border-color:#4a3f6b">
+    <h4>① 外壳层 <span class="tag t-new">第四十七版新增</span></h4>
+    <ul>
+      <li><code>scenes/app/App.tscn</code> ← <b>主场景</b>（启动进大厅）</li>
+      <li><code>ui/app/App.gd</code>（240 行 · 装配 + 路由 + 起对战）</li>
+      <li><code>systems/ui/ScreenRouter.gd</code>（栈 / 返回键 / layer 100）</li>
+      <li><code>ui/screens/</code>：ScreenBase · Lobby · ModeSelect · Settings · Pause · Result · Info · MatchHost</li>
+      <li><code>ui/UiKit.gd</code>（尺寸 / 配色 / 字号集中一处）</li>
+      <li><code>data/config/ModeTable.gd</code> · <code>systems/match/MatchRules.gd</code></li>
+      <li><code>systems/settings/GameSettings.gd</code>（<code>user://game_settings.cfg</code>）</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>② 对局层（一局的世界）</h4>
+    <ul>
+      <li><code>scenes/gameplay/Main.tscn</code> + <code>Main.gd</code>（398 行）</li>
+      <li>子模块：WorldSetup(191) · VehicleController(205) · MarkController(79) · HudBuilder(603) · IndirectController(67) · SupplyController(56) · LaneController(92)</li>
+      <li>由 <code>MatchHost</code> 在 <code>add_child</code> <b>之前</b>灌 @export（模式 / 兵种 / 载具 / 敌人数 / 种子）—— 所以 Main.gd 一行未改</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>③ 系统层 <code>systems/</code></h4>
+    <ul>
+      <li>terrain：HeightGrid · SightSystem（地形 + 掩体 + 烟雾三层）· MapGenerator · TerrainZones · MapInspector</li>
+      <li>combat：BallisticsSystem · CaptureZone · SuppressionSystem · IndirectFire · Tracer</li>
+      <li>quest / marks / comm / hud / audio / effects / camera / weapons / vehicles</li>
+      <li>match：MatchFlow（胜负流程）· MatchRules（本局规则）</li>
+      <li>ai：AiAdvisor + 10 个纯逻辑模块（BYO key · 本地账本 · 默认零联网）</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>④ 实体层 <code>entities/</code></h4>
+    <ul>
+      <li>player · enemy · ally（3 名队友）· vehicle（我方 IFV + 敌方 MBT）</li>
+      <li>cover（20 个沙袋）· fob（工事）· lane（侧翼通路）· supply（补给车）· smoke</li>
+      <li>zone（泥泞 / 雪地 / 草丛）· effects（阴影 / 枪口火光 / 弹着）· visual（UnitFigure 上下半身）</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>⑤ 数据层</h4>
+    <ul>
+      <li><code>data/config/</code>：GameConfig · RoleTable（3 兵种）· <b>ModeTable（6 模式 · 新增）</b></li>
+      <li><code>data/weapons_data.txt</code> <b>25 把</b> · <code>vehicles_data.txt</code> <b>18 辆 × 27 列</b> · <code>quest_templates.txt</code> <b>8 条</b></li>
+      <li>自制高度图 <code>assets/maps/map_demo_height.png</code>（1000×1000 / 1 m 网格 / 最大海拔 150 m）</li>
+      <li>随包 CJK 字体 <code>assets/fonts/JieyuCJK-Subset.otf</code>（1.66 MB · OFL）</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>⑥ 核心 / 自动加载 / 门禁</h4>
+    <ul>
+      <li><code>core/EventBus.gd</code>（信号总线）</li>
+      <li>autoload：<code>EventBus</code> · <code>Audio</code> · <code>AiAdvisor</code> · <code>_mcp_game_helper</code></li>
+      <li>门禁：<code>tools/geom_assertions.gd</code>（HUD）· <code>tools/screen_geom_check.gd</code>（外壳）· 共用 <code>tools/geom_checks.gd</code></li>
+      <li>跑批：<code>run_tests_headless.gd</code> · <code>run_integration_headless.gd</code></li>
+      <li>专项自检：<code>ai_transport_check.gd</code>（71 项）· <code>ai_panel_check.gd</code>（26 项）</li>
+    </ul>
+  </div>
+</div>
+
+<h3>界面跳转（第四十七版把「怎么进对局」正式化了）</h3>
+<div class="flow">启动 ─► 大厅(lobby) ──push──► 模式选择(modes) ──开始对局──► 对局(MatchHost + Main.tscn)
+           │  │                    │                              │
+           │  └─push─► 说明(info)    │                              ├─暂停键─► 暂停(pause)
+           └──push──► 设置(settings) ◄┘                              │            │
+                 （从暂停进设置时暂停留在栈底）                          │            └─push─► 设置(settings)
+                                                                   └─胜负─► 结算(result)</div>
+<p class="sub">跳转纪律：同一时刻只有一屏可见 · 栈底不能退（返回按钮只在能退时出现）· 重复 push 被忽略 ·
+返回键只有一个出口（ESC / <code>ui_cancel</code> / Android 实体返回）· 菜单层 layer 100（HUD 1 / 战术地图 10 / AI 参谋 90）。</p>
+
+<h2>三、可玩循环（验收那条线）</h2>
+<table>
+  <tr><th style="width:78px">环节</th><th>发生什么</th><th>玩家看到的证据</th><th style="width:96px">状态</th></tr>
+  <tr><td>启动</td><td>出大厅而不是直接进对局</td><td>大厅四按钮 + 「下一局配置」面板</td><td><span class="tag t-new">新</span></td></tr>
+  <tr><td>0–3 s</td><td>选完模式点开始对局，世界按模式规则建起来</td><td>玩家小人在出生区，相机已对准</td><td><span class="tag t-ok">✅</span></td></tr>
+  <tr><td>3–8 s</td><td>手指在右半屏滑动 → 地图跟着走</td><td><b>准心＝屏心＝相机中心</b>三者恒等</td><td><span class="tag t-ok">✅</span></td></tr>
+  <tr><td>8–15 s</td><td>走到棱线后，敌兵消失（通视断）</td><td>敌兵在通视恢复的那一帧出现</td><td><span class="tag t-ok">✅</span></td></tr>
+  <tr><td>15–25 s</td><td>按开火 → 曳光 → 命中 / 脱靶</td><td>命中走弹道表，不是瞬间射线</td><td><span class="tag t-ok">✅</span></td></tr>
+  <tr><td>25–40 s</td><td>占点 / 报点 / 快捷指令 / 烟雾 / 间瞄</td><td>HUD 三列按键 + 轮盘 + 地图图层</td><td><span class="tag t-ok">✅</span></td></tr>
+  <tr><td>结束</td><td>胜负判定 → 结算屏 → 再来一局 / 回大厅</td><td>竞技三级判定（见下表）· 结算战报</td><td><span class="tag t-ok">✅</span></td></tr>
+</table>
+
+<h2>四、三个模式：差别都接了线（22.10 第一版）</h2>
+<table>
+  <tr><th>模式</th><th>胜负口径</th><th>时长 / 加时</th><th style="width:52px">友伤</th><th style="width:76px">AI 参谋</th><th style="width:110px">出处</th></tr>
+  <tr>
+    <td><b>PVP 竞技</b></td>
+    <td>占领数：全占立即胜 / 重生预算（进攻方人数 ×2）耗尽即负 / 到点比点数</td>
+    <td>15 分钟 → 加时 3 分钟突然死亡 → 仍平即平局</td>
+    <td>开</td><td>关闭</td><td>5.3 / 5.7 · 20 章</td>
+  </tr>
+  <tr>
+    <td><b>PVP 休闲</b></td>
+    <td>与竞技完全同表</td>
+    <td>同上</td>
+    <td>关</td><td>开放</td><td>5.3（「与竞技同表」）</td>
+  </tr>
+  <tr>
+    <td><b>PVEVP</b></td>
+    <td>战术目标：达成＝胜 / 未达成＝败（本版＝完成当前主线任务）</td>
+    <td>20 分钟 · <b>无加时、无平局</b></td>
+    <td>关</td><td>开放</td><td>5.3 · 22.6</td>
+  </tr>
+  <tr><td class="done">PVP 装甲对抗</td><td colspan="5">后续版本（22.10 降级）——界面上置灰并写明理由</td></tr>
+  <tr><td class="done">困难模式</td><td colspan="5">后续版本（22.10 降级）——困难项未逐条定标</td></tr>
+  <tr><td class="done">兵棋模式</td><td colspan="5">后续版本（22.10 降级）——兵棋 SOP 与回合系统未做</td></tr>
+</table>
+<div class="note">
+  <b>刻意没做</b>「每模式敌人数」：docx 全篇没有一局人数的口径（待拍板清单第 13 条）。
+  凭空给每个模式编一个数字就是「文档没落地」—— 敌人数只由玩家设置决定（1~8）。
+  <b>默认模式＝PVP 休闲</b>：它是唯一「既有占领规则 + AI 参谋开放 + 关友伤」的组合，与第四十六版为止的行为最接近，回归面为零。
+</div>
+
+<h2>五、版本时间线（每一版都有真跑的验收数字）</h2>
+<div class="grid g3">
+  <div class="card"><h4>第一版 ~ 第十八版</h4>
+    <ul><li>垂直切片闭环：地形 / 通视 / 相机 / 摇杆 / 射击 / 占领 / 胜负 / 重开</li>
+    <li>射击系统对齐 7.2；真机暴露的缺陷修复（占领 30 s 不翻蓝 / 单向通视）</li>
+    <li>候选 A~N：压制 / 兵种 / 掩体 / 间瞄 / 载具 / 任务系统深化</li>
+    <li>候选 N 把 Main 从 968 行拆到 391 行（≤400 硬线的由来）</li></ul></div>
+  <div class="card"><h4>第十九版 ~ 第二十九版</h4>
+    <ul><li>红基线归零（DSH 接手第一件事）</li>
+    <li>候选 L1~L5：T-S2 / T-S3 / T-S5 / T-S6 / T-M2 五条任务模板全部落地（模板池 3 → 8 条）</li>
+    <li>候选 P 烟雾遮蔽（SightSystem 变三层 + AI 盲射）</li>
+    <li>地图世界图层（小地图与战术地图共用 MapLayerSource）</li>
+    <li>第二十七 / 二十九版是<b>纯文档回流</b>（不动代码）</li></ul></div>
+  <div class="card"><h4>第三十版 ~ 第四十一版</h4>
+    <ul><li>候选 O 五节：4.13 快捷指令 / 4.14 战斗播报 / 4.15 操作提示 / 4.16 倒地视角 / 4.17 环境互动</li>
+    <li>候选 M：Blob Shadow / 枪口火光 / 命中反馈 / 程序生成音效 / 上下半身分割 / 载具履带动画</li>
+    <li>候选 Q：5.7 完整胜负流程（计时 / 加时 / 平局 / 重生预算）</li>
+    <li>候选 R：数据表扩到官方全量（武器 25 / 载具 18）</li>
+    <li>ATGM：IFV 装炮射导弹，两发打爆主战坦克</li></ul></div>
+  <div class="card"><h4>第四十二版 ~ 第四十六版</h4>
+    <ul><li>AI 参谋（局间顾问）第一版：BYO key / 预算闸门 / 本地账本 / 游戏内面板</li>
+    <li>第四十三版：HarmonyOS 真机验证，修掉全角标点豆腐块与输入框触摸不聚焦</li>
+    <li>第四十四版：随包 CJK 字体 / 价目表订正 / 仅调试包的立刻结束本局</li>
+    <li>第四十五版：选完供应商自动填好模型名（走官方「列出模型」接口）</li>
+    <li>第四十六版：价格表不发版也能改价（静态 JSON 清单 + 严格校验 + 默认零联网）</li></ul></div>
+  <div class="card" style="border-color:#4a3f6b"><h4>第四十七版 <span class="tag t-new">本页对应</span></h4>
+    <ul><li><b>主场景换成 <code>App.tscn</code></b>：启动进大厅；<b>Main.tscn / Main.gd 一行未改</b></li>
+    <li>屏幕路由 + 六屏（大厅 / 模式选择 / 设置 / 暂停 / 结算 / 说明）</li>
+    <li>模式表：6 个模式按 11.4 列全，按 22.10 只有 3 个可选，三个的规则<b>全接线</b></li>
+    <li>设置五项（补齐「音量界面」与「操作提示开关」两处既有欠账）</li>
+    <li>局内暂停菜单（世界冻结 + HUD 收起）</li>
+    <li>HUD 九宫格<b>几何一个没动</b>，只把「谁坐哪个格子」按用途摆正</li></ul></div>
+  <div class="card"><h4>下一版（未开工）</h4>
+    <ul><li>真机确认这一轮的外壳（可读性 / 触摸 / 软键盘）</li>
+    <li>结算屏补回放 / 分享 / 信誉分</li>
+    <li>候选 S（信誉分与治理）· 载具相机三档（19 章 ②）· 5.4 攻防转换</li>
+    <li>候选 M 剩「需要美术资产」的部分（12.7.6 帧规格 / 骨骼手部 / 阵亡帧）+ 音频定位</li></ul></div>
+</div>
+
+<h2>六、门禁健康度（三道，全绿才允许提交）</h2>
+<table>
+  <tr><th style="width:120px">门禁</th><th>命令</th><th style="width:120px">项数</th><th style="width:96px">状态</th><th>它钉住什么</th></tr>
+  <tr><td>单元测试</td><td><code>--script res://tools/run_tests_headless.gd</code></td><td>39 脚本 / <b>1337 项</b></td>
+    <td><span class="tag t-ok">全绿</span></td><td>纯逻辑：规则表 / 弹道 / 任务 / 标记 / 模式表 / 设置 / 路由栈 等</td></tr>
+  <tr><td>HUD 几何门禁</td><td><code>--script res://tools/geom_assertions.gd</code></td><td><b>5 项</b></td>
+    <td><span class="tag t-ok">全绿</span></td><td>不出屏 / 同级不新增重叠（基线 6 组）/ 点按 ≥32 px / 层号合法</td></tr>
+  <tr><td>外壳几何门禁</td><td><code>--script res://tools/screen_geom_check.gd</code></td><td><b>25 项</b></td>
+    <td><span class="tag t-ok">全绿</span></td><td>大厅 / 模式 / 设置 / 暂停 / 结算五屏各 5 条（零重叠）</td></tr>
+  <tr><td>集成冒烟</td><td><code>--script res://tools/run_integration_headless.gd</code></td><td><b>230 项</b></td>
+    <td><span class="tag t-ok">全绿</span></td><td>真实例化 Main.tscn：装配关系 + 九条交互链</td></tr>
+  <tr><td>解析 / 导入自检</td><td><code>--import</code></td><td>—</td><td><span class="tag t-ok">通过</span></td><td>脚本能编译、场景能加载</td></tr>
+  <tr><td>真启动冒烟</td><td><code>--headless --quit-after 90</code></td><td>—</td><td><span class="tag t-ok">退出码 0</span></td><td>真主场景 App.tscn 跑起来无 ERROR</td></tr>
+</table>
+<div class="note">
+  <b>门禁也会「空跑通过」</b>：App 起不来 ⇒ 一屏都没注册 ⇒ 零重叠零失败，看着像全绿。
+  所以外壳门禁加了两道自检：<b>屏幕注册清单体检</b> + <b>「这一屏必须真的采集到可见控件」</b>。
+  另外跑批里「子进程没起来」按 <b>失败</b> 计，不再算「跳过」——历史上把跳过的红当成绿提交过。
+</div>
+
+<h2>七、未来计划（严格按文档，不自创）</h2>
+
+<h3>7.1 22.10「第一版范围」的完成度</h3>
+<table>
+  <tr><th style="width:210px">22.10 原文口径</th><th>工程实际</th><th style="width:250px">进度</th></tr>
+  <tr><td><b>2 个阵营</b>（泛亚 + 蓝方）</td>
+    <td>工程里<b>没有阵营系统</b>；首版大厅<b>不列</b>阵营选择（列了就是空壳按钮）</td>
+    <td><span class="tag t-plan">🔵 未做</span>（待拍板：4 选 1 / 2 选 1 / 整块不做）</td></tr>
+  <tr><td><b>1 张地图</b>（grassland_demo 1 km × 1 km）</td>
+    <td>已落地：1000×1000 / 1 m 网格 / 最大海拔 150 m，自制灰度高度图可导入</td>
+    <td><span class="tag t-ok">✅ 已做</span></td></tr>
+  <tr><td><b>3 个模式</b>（PVP 竞技 + PVP 休闲 + PVEVP）</td>
+    <td>已落地并可选；三个模式的规则差别全接线；另外 3 个模式置灰写明理由</td>
+    <td><span class="tag t-ok">✅ 已做</span></td></tr>
+</table>
+
+<h3>7.2 下一批建议（来自 <code>本项目开发进度.txt</code> 四、接下来）</h3>
+<ul>
+  <li><span class="tag t-wip">优先级最高</span> <b>真机确认第四十七版的外壳</b>：大厅 / 模式选择 / 设置的可读性与触摸；
+    已知问题：软键盘弹出会顶掉设置屏下半截（Android ADJUST_RESIZE，第四十三版登记未处理）。</li>
+  <li><b>结算屏补齐</b>：现在只有结论 + 战报，没有回放 / 分享 / 信誉分变化（4.8 信誉分工程为零）。</li>
+  <li>从这三条里挑一个开工：<b>候选 S</b>（信誉分与治理）· <b>载具相机三档</b>（docx 19 章 ②）· <b>5.4 攻防转换</b>。</li>
+  <li><b>候选 M 剩下的「需要美术资产」那部分</b>：12.7.6 的 91 帧规格表 · 骨骼手部动作 · 全身倒地 / 阵亡帧；
+    以及<b>音频的定位与距离衰减</b>（音量界面已于第四十七版落地）。</li>
+  <li>两个调试值待恢复：<code>Enemy.detection_range</code>（工作区 20 m，原 120 m）等（见七节）。</li>
+</ul>
+
+<h3>7.3 docx 20.6「文档里有设计、工程为零」——可直接当任务清单</h3>
+<table>
+  <tr><th>条目</th><th style="width:220px">状态</th></tr>
+  <tr><td>4.1 五节点 RAAS 的推进细则与单局计时</td><td><span class="tag t-plan">🔵 未做</span></td></tr>
+  <tr><td>4.4 剩余部分：RALLY 集结点 · 兵力续航区与预算</td><td><span class="tag t-plan">🔵 未做</span></td></tr>
+  <tr><td>4.8 信誉分</td><td><span class="tag t-plan">🔵 未做</span></td></tr>
+  <tr><td>第九章 单兵装备与资产体系 + 资产 CSV（17 个装备槽）</td><td><span class="tag t-plan">🔵 未做</span></td></tr>
+  <tr><td>12.7.1 人物帧动画 · 12.7.2 载具履带 / 后坐 · 12.7.6 帧规格表</td><td><span class="tag t-plan">🔵 未做（需美术）</span></td></tr>
+  <tr><td>8.3 载具数据存储的正式方案</td><td><span class="tag t-plan">🔵 未做</span></td></tr>
+  <tr><td>4.12 发烟弹 / 白磷来源 + 表现层真遮挡混合</td><td><span class="tag t-wip">🟡 部分</span></td></tr>
+  <tr><td>11.4 对局外界面：阵营选择 · 组队 · 好友 · 仓库 · 高光录像 · 匹配</td><td><span class="tag t-wip">🟡 大厅与模式选择已做，其余未做</span></td></tr>
+  <tr><td class="done">5.3 除 PVP 竞技之外各模式的胜负表</td><td><span class="tag t-ok">✅ 第四十七版划掉</span></td></tr>
+  <tr><td class="done">4.13 / 4.14 / 4.15 / 4.16 / 4.17 五节</td><td><span class="tag t-ok">✅ 第三十~三十三版落地</span></td></tr>
+  <tr><td class="done">4.10.11 模板池剩余 5 条 · 4.4 的 FOB 与补给 · 12.3 阴影 · 10 章音频</td><td><span class="tag t-ok">✅ 已落地（各自未完项见 docx 20.5）</span></td></tr>
+</table>
+
+<h3>7.4 待拍板（需要使用者定，工程不替用户决定）</h3>
+<table>
+  <tr><th style="width:64px">编号</th><th>问题</th><th style="width:250px">工程当前处置</th></tr>
+  <tr><td>㊱</td><td><b>「竞技 / 严格对抗」到底包含哪几个模式？</b>原文只写「只有竞技 / 严格对抗才关闭 AI 参谋」，
+    而休闲「与竞技同表」、困难「同竞技」、兵棋在 13.1.2 与竞技并列禁用共享皮肤</td>
+    <td><span class="tag t-ask">待拍板</span> 只有 PVP 竞技关闭，休闲 / PVEVP 开放</td></tr>
+  <tr><td>㊲</td><td>AI 参谋在竞技模式下的<b>可见性</b>：入口按钮仍可见（点开只得一句「已关闭」）</td>
+    <td><span class="tag t-ask">待拍板</span> 不隐藏入口，只写提示</td></tr>
+  <tr><td>㊳</td><td><b>PVEVP 的「VP」那一半</b>（21.3.8 明确「无来源、待撰写」）——战术目标体系要正式定标</td>
+    <td><span class="tag t-ask">待拍板</span> 占位：完成当前主线任务（本版＝夺下第一个节点）</td></tr>
+  <tr><td>㊴</td><td><b>首版大厅的阵营选择</b>：11.4 列 4 个，22.10 只做 2 个 —— 4 选 1 / 2 选 1 / 整块不做？</td>
+    <td><span class="tag t-ask">待拍板</span> 整块不做</td></tr>
+  <tr><td>新增</td><td><b>模式差异要不要再拉大？</b>当前差别全在「规则层」；若要做「编成层」差异（步兵对抗 / 装甲对抗：有没有载具、坦克几辆）需在 ModeTable 加字段并接线</td>
+    <td><span class="tag t-ask">待拍板</span> 未做</td></tr>
+  <tr><td>19 ①</td><td>逻辑分辨率与 PPU：文档 1920×1080 + 64/32/16，工程 960×540 + 32/16/8</td><td>保持工程口径</td></tr>
+  <tr><td>19 ⑥</td><td>数据表规模口径：文档写全量、工程按切片（任务模板已结清）</td><td>已扩到武器 25 / 载具 18</td></tr>
+  <tr><td>19 ⑨</td><td>4.8 信誉分是否进第一版</td><td>只有战力分，无信誉分</td></tr>
+  <tr><td>㉛ / ㉜</td><td>AI 参谋的 key 是否上 Android Keystore · 是否做流式（SSE）</td><td>混淆存放 · 非流式</td></tr>
+  <tr><td>—</td><td><code>Enemy.detection_range</code> 保留 20 m（近视）还是退回 120 m</td><td>保持工作区现状</td></tr>
+</table>
+
+<h3>7.5 工程债（docx 20.5 · 已修 / 仍欠）</h3>
+<table>
+  <tr><th>条目</th><th style="width:220px">状态</th></tr>
+  <tr><td>HUD 控件重叠 6 组（含 3 组「有意」、3 组「无意待修」）</td><td><span class="tag t-wip">🟡 已建基线，逐条定案</span></td></tr>
+  <tr><td>地图报点与准心报点的通视口径不一致</td><td><span class="tag t-wip">🟡 登记未修</span></td></tr>
+  <tr><td>烟雾表现层不是真遮挡（程序绘制圆饼，后生成的单位画在烟上面）</td><td><span class="tag t-wip">🟡 登记未修</span></td></tr>
+  <tr><td>敌方载具 AI 被烟挡住后没有盲射路径</td><td><span class="tag t-wip">🟡 登记未修</span></td></tr>
+  <tr><td>载具里镜头与准心不跟车</td><td><span class="tag t-wip">🟡 登记未修</span></td></tr>
+  <tr><td>软键盘弹出顶掉面板下半部分</td><td><span class="tag t-wip">🟡 登记未处理</span></td></tr>
+  <tr><td>16 辆新载具与 20 把新枪的模板值未做平衡校验</td><td><span class="tag t-wip">🟡 登记未做</span></td></tr>
+  <tr><td class="done">音量设置界面（AudioSystem 头部自述「未做」）</td><td><span class="tag t-ok">✅ 第四十七版已修</span></td></tr>
+  <tr><td class="done">操作提示开关（HudBuilder「设置界面后置，先给 API」）</td><td><span class="tag t-ok">✅ 第四十七版已修</span></td></tr>
+  <tr><td class="done">全工程字体隐患（全角标点豆腐块）</td><td><span class="tag t-ok">✅ 第四十四版已修</span></td></tr>
+  <tr><td class="done">面板翻页死区 / 「清除 key」误删</td><td><span class="tag t-ok">✅ 第四十四版已修</span></td></tr>
+</table>
+
+<h2>八、这一页的数据从哪来（可复现）</h2>
+<table>
+  <tr><th style="width:240px">数字</th><th>取证方式</th></tr>
+  <tr><td>149 个 .gd / 24974 行</td><td>LF 字节口径统计（不含 <code>addons/</code> <code>gdtoolkit/</code> <code>.godot/</code>），用只读检查脚本与本机实测交叉核对</td></tr>
+  <tr><td>39 / 1337 · 5 · 25 · 230</td><td>本轮真跑：<code>run_tests_headless.gd</code> + <code>run_integration_headless.gd</code>，取日志汇总行，退出码均为 0</td></tr>
+  <tr><td>版本 / git HEAD</td><td><code>git log -1</code></td></tr>
+  <tr><td>数据表行数</td><td>直接数 <code>data/*.txt</code>（含表头）</td></tr>
+</table>
+
+<h3>同步的文档（本轮一起改的）</h3>
+<ul>
+  <li><code>jieyu-1/本项目开发进度.txt</code> —— 唯一进度入口（抬头 + 三、当前状态 + 四、接下来 + 六、其他待办 + 七、已知待拍板 + 【第四十七版】版本段）</li>
+  <li><code>squad-2d/解域游戏.docx</code> —— 第二十章「工程实现现状」20.1~20.6 + 第十八章已确认决议 + 第十九章待确认决策（新增 ㊱~㊴）+ 22.10 工程落地注（改前备份 <code>解域游戏.docx.bak102</code>）</li>
+  <li><code>jieyu-1/docs/游戏外壳设计.md</code> —— 外壳的落地规格（发布说明 / 文件清单 / 跳转图 / 模式差异 / 设置生效点 / 边界条件 / 验收数字 / 未做与待拍板）</li>
+  <li><code>jieyu-1/architecture.html</code> —— 本页（第四十七版刷新；此前停在第三十五版口径：845 项 / 397 行）</li>
+</ul>
+
+<footer>
+  《解域》jieyu-1 · 所有数字为本机实测（未实测的一律标注为「计划 / 待拍板」）·
+  设计口径以 <code>squad-2d/解域游戏.docx</code> 与 <code>jieyu-1/本项目开发进度.txt</code> 为准。
+</footer>
+
 </body>
 </html>

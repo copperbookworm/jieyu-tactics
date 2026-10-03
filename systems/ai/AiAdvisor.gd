@@ -480,6 +480,7 @@ func _record_and_emit(parsed: Dictionary, response_code: int) -> void:
 func _entry_for(parsed: Dictionary, response_code: int, latency_ms: int) -> Dictionary:
 	var usage: Dictionary = parsed.get("usage", {})
 	var model_id := String(_pending.get("model", ""))
+	var _entry_now := int(Time.get_unix_time_from_system())
 	var prompt := int(usage.get("prompt_tokens", 0))
 	var completion := int(usage.get("completion_tokens", 0))
 	var cached := int(usage.get("cached_tokens", 0))
@@ -494,9 +495,11 @@ func _entry_for(parsed: Dictionary, response_code: int, latency_ms: int) -> Dict
 		"cached_tokens": cached,
 		"reasoning_tokens": int(usage.get("reasoning_tokens", 0)),
 		"total_tokens": int(usage.get("total_tokens", prompt + completion)),
-		"est_cost_micros": PriceTable.cost_micros(model_id, prompt, completion, cached),
+		# 费用与时段用同一个时间戳算，避免正好卡在时段边界上时「金额按高峰、时段记空闲」
+		"est_cost_micros": PriceTable.cost_micros(model_id, prompt, completion, cached, _entry_now),
 		"currency": PriceTable.currency_of(model_id),
 		"price_version": PriceTable.VERSION,
+		"price_tier": PriceTable.tier_at(_entry_now),
 		"latency_ms": latency_ms,
 		"http_status": response_code,
 		"status": "ok" if bool(parsed.get("ok", false)) else "error",

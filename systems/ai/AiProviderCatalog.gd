@@ -21,8 +21,9 @@ const PROVIDERS := {
 		"dialect": DIALECT_OPENAI,
 		"base_url": "https://api.deepseek.com",
 		"path": "/chat/completions",
-		"default_model": "deepseek-chat",
-		"models": ["deepseek-chat", "deepseek-reasoner"],
+		# 2026-10-03 按官方价格页订正：现行是 flash / v4-pro；旧名 chat / reasoner 仍可调用但已不在价格页
+		"default_model": "deepseek-flash",
+		"models": ["deepseek-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"],
 		"key_hint": "platform.deepseek.com",
 	},
 	"moonshot": {

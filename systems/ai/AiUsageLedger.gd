@@ -46,7 +46,7 @@ func record(entry: Dictionary) -> Dictionary:
 		"provider": "", "model": "", "purpose": "", "phase": "",
 		"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0,
 		"reasoning_tokens": 0, "total_tokens": 0,
-		"est_cost_micros": -1, "currency": "", "price_version": 0,
+		"est_cost_micros": -1, "currency": "", "price_version": 0, "price_tier": "",
 		"latency_ms": 0, "http_status": 0, "status": "ok",
 		"error_code": "", "error_message": "", "retry_count": 0,
 	}
@@ -190,7 +190,7 @@ func tokens_on_date(date_key: String, entries: Array = []) -> int:
 
 const CSV_COLUMNS := ["iso", "ts", "provider", "model", "purpose", "status", "prompt_tokens",
 	"completion_tokens", "cached_tokens", "reasoning_tokens", "total_tokens", "est_cost_micros",
-	"currency", "price_version", "latency_ms", "http_status", "error_code", "session_id"]
+	"currency", "price_version", "price_tier", "latency_ms", "http_status", "error_code", "session_id"]
 
 
 func to_csv(entries: Array) -> String:

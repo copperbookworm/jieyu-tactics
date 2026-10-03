@@ -187,6 +187,46 @@ func _test_price_table() -> void:
 	_check("free 模型计 0 而不是未知", PriceTable.cost_micros("glm-4-flash", 999, 999, 0), 0)
 	_check("表外模型＝未知价(-1)", PriceTable.cost_micros("no-such-model", 10, 10, 0), -1)
 	_check("币种随模型", PriceTable.currency_of("gpt-4o-mini"), "USD")
+	# ── VERSION 2：按 DeepSeek 官方价格页订正的时段计价 ──
+	_check("价目表版本已升到 2", PriceTable.VERSION, 2)
+	_check_true("deepseek-flash 在表里（现行模型）", PriceTable.has_model("deepseek-flash"))
+	_check_true("deepseek-v4-pro 在表里", PriceTable.has_model("deepseek-v4-pro"))
+	_check_true("legacy deepseek-chat 仍保留（历史账目可比）", PriceTable.has_model("deepseek-chat"))
+	# 2026-10-05 是周一、2026-10-04 是周日（已用日历核对）；下面时间戳是 UTC，+8h 得北京时间
+	var monday_peak := int(Time.get_unix_time_from_datetime_dict(
+			{"year": 2026, "month": 10, "day": 5, "hour": 2, "minute": 0, "second": 0}))
+	var sunday_same := int(Time.get_unix_time_from_datetime_dict(
+			{"year": 2026, "month": 10, "day": 4, "hour": 2, "minute": 0, "second": 0}))
+	_check("北京时间周一 10:00 ＝ 高峰", PriceTable.tier_at(monday_peak), PriceTable.TIER_PEAK)
+	_check("北京时间周日 10:00 ＝ 空闲", PriceTable.tier_at(sunday_same), PriceTable.TIER_OFFPEAK)
+	_check("周一 08:00（高峰前一小时）＝ 空闲",
+			PriceTable.tier_at(monday_peak - 2 * 3600), PriceTable.TIER_OFFPEAK)
+	_check("周一 12:00（上午高峰到 12:00 不含）＝ 空闲",
+			PriceTable.tier_at(monday_peak + 2 * 3600), PriceTable.TIER_OFFPEAK)
+	_check("周一 14:00（下午高峰）＝ 高峰",
+			PriceTable.tier_at(monday_peak + 4 * 3600), PriceTable.TIER_PEAK)
+	# flash：空闲 输入 1 元 / 命中 0.02 元 / 输出 4 元；高峰 = 空闲 ×2
+	_check("flash 空闲：1M 未命中输入 ＝ ¥1",
+			PriceTable.cost_micros("deepseek-flash", 1000000, 0, 0, sunday_same), 1000000)
+	_check("flash 高峰：1M 未命中输入 ＝ ¥2",
+			PriceTable.cost_micros("deepseek-flash", 1000000, 0, 0, monday_peak), 2000000)
+	_check("flash 高峰：1M 命中缓存输入 ＝ ¥0.04",
+			PriceTable.cost_micros("deepseek-flash", 1000000, 0, 1000000, monday_peak), 40000)
+	_check("flash 空闲：1M 输出 ＝ ¥4",
+			PriceTable.cost_micros("deepseek-flash", 0, 1000000, 0, sunday_same), 4000000)
+	_check("v4-pro 高峰：1M 输出 ＝ ¥27",
+			PriceTable.cost_micros("deepseek-v4-pro", 0, 1000000, 0, monday_peak), 27000000)
+	_check("flash 币种 ＝ CNY", PriceTable.currency_of("deepseek-flash"), "CNY")
+	# 真机实测过的那次真调用（2026-10-03T08:28:47 周六，属空闲时段）：
+	# prompt 304 / 命中缓存 128 / completion 512
+	# ⇒ 未命中 176×¥1 + 命中 128×¥0.02 + 输出 512×¥4 = ¥2.226560 ⇒ 四舍五入 2227 微元
+	_check("真机那次调用在新价目表下 ＝ 2227 微元（≈¥0.0022，空闲）",
+			PriceTable.cost_micros("deepseek-flash", 304, 512, 128, sunday_same), 2227)
+	_check_true("同一次调用若落在高峰则 ≈ 两倍",
+			PriceTable.cost_micros("deepseek-flash", 304, 512, 128, monday_peak) == 4453)
+	_check_true("legacy 模型不受时段影响",
+			PriceTable.cost_micros("deepseek-chat", 1000000, 0, 0, monday_peak)
+			== PriceTable.cost_micros("deepseek-chat", 1000000, 0, 0, sunday_same))
 	_check_true("金额串含金额", PriceTable.format_micros(6000, "CNY").contains("0.006"))
 	_check("未知价显示「未知」而不是 0", PriceTable.format_micros(-1, ""), "未知")
 	_check("0 元显示 0（免费模型）", PriceTable.format_micros(0, "CNY"), "¥0")

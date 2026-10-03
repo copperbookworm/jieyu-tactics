@@ -32,6 +32,10 @@ window/stretch/mode="canvas_items"
 
 enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg")
 
+[gui]
+
+theme/custom_font="res://assets/fonts/JieyuCJK-Subset.otf"
+
 [input_devices]
 
 pointing/emulate_touch_from_mouse=true

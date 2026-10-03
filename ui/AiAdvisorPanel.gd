@@ -14,25 +14,21 @@ extends CanvasLayer
 
 const CatalogScript := preload("res://systems/ai/AiProviderCatalog.gd")
 
-## 面板专用字体：显式给一份带 CJK / 全角标点覆盖的字体，不靠 OS 隐式回退。
-## 起因（2026-10-03 真机实测）：HarmonyOS 上 Godot 的隐式系统回退不稳定 —— 同一字符串里
-## 「（」渲染成豆腐块而「）」正常（既有 ui/DownedOverlay.gd 的「无法被扶起）」就有这毛病）。
-## 那是**工程级既有问题**（本工程没有随包字体，CJK 一直靠 OS 回退），本文件先把参谋面板修好。
-const CJK_FONT_FAMILIES := ["HarmonyOS Sans SC", "Noto Sans CJK SC", "Noto Sans SC",
-	"Source Han Sans CN", "Droid Sans Fallback", "sans-serif"]
-
-## 真机实测（2026-10-03，HUAWEI PCE-W30 / HarmonyOS）：**优先直接加载字体文件**。
-## 踩过的坑：SystemFont(\"HarmonyOS Sans SC\") 实际解析到的是 **不含 CJK 的 Latin 版**
-## \"HarmonyOS Sans\"（get_font_name() 返回的就是它，has_char(（) = false），
-## 于是 CJK 又回到 Godot 那条不可靠的隐式回退上 —— 表现为「同一段中英混排文本里，
-## 紧跟 ASCII 的全角标点变成豆腐块」（短纯标点串反而正常）。
-## 直接读 SC 字体文件后，基础字体本身就覆盖 CJK，不再依赖回退。
-const CJK_FONT_FILES := [
-	"/system/fonts/HarmonyOS_Sans_SC.ttf",
-	"/system/fonts/NotoSansCJK-Regular.ttc",
-	"/system/fonts/NotoSansSC-Regular.otf",
-	"/system/fonts/DroidSansFallbackFull.ttf",
-]
+## 全工程字体方案（2026-10-03 使用者拍板走 B：**随包塞一份 CJK 字体**）：
+## 工程默认字体 = res://assets/fonts/JieyuCJK-Subset.otf（见 project.godot 的 gui/theme/custom_font），
+## 于是所有 HUD / 面板控件天生就覆盖 CJK 与全角标点，不再依赖 Godot 的隐式系统回退。
+##
+## 背景（真机实测 · HUAWEI PCE-W30 / HarmonyOS）：本工程原先没有随包字体，
+## ThemeDB.fallback_font 是只有拉丁的「Open Sans SemiBold」，CJK 全靠隐式系统回退；
+## 那条路在同一段里混排「拉丁 + 全角标点」时不稳定，被选中的回退字体可能不含该标点 ⇒ 豆腐块
+## （既有 ui/DownedOverlay.gd 的「剩余 57 s（第一版单机…」真机截图里就是）。
+##
+## 试过但不够的办法（留作教训，别改回去）：
+##   · SystemFont + font_names=["HarmonyOS Sans SC"] —— 真机上解析成**不含 CJK 的拉丁版**
+##     「HarmonyOS Sans」，has_char(（) 仍是 false，等于没修；
+##   · 运行时读 /system/fonts/HarmonyOS_Sans_SC.ttf —— 能修，但那是**设备专有字体**，
+##     不能随包分发，换台机器未必有。故最终改成本工程自带 OFL 字体（见 assets/fonts/）。
+const UI_FONT_PATH := "res://assets/fonts/JieyuCJK-Subset.otf"
 
 const BUTTON_POS := Vector2(600.0, 300.0)
 const BUTTON_SIZE := Vector2(80.0, 44.0)
@@ -61,6 +57,10 @@ var _max_tokens_box: SpinBox = null
 var _budget_match_box: SpinBox = null
 var _budget_day_box: SpinBox = null
 var _request_button: Button = null
+## 「清除 key」要二次确认：真机上误触一次就把玩家的 key 删了（2026-10-03 实测踩到），
+## 而 key 删了不可恢复（本机只有混淆串、玩家手里那份才是原文）。
+var _clear_button: Button = null
+var _clear_armed := false
 var _status_label: Label = null
 var _output: RichTextLabel = null
 var _usage_label: Label = null
@@ -81,50 +81,26 @@ func setup(owner_advisor) -> void:
 
 # ────────────────────────────── 入口按钮 ──────────────────────────────
 
-func _build_cjk_font() -> Font:
-	for path in CJK_FONT_FILES:
-		if not FileAccess.file_exists(path):
-			print("[AI 参谋字体] 跳过（不存在）：", path)
-			continue
-		var ff := FontFile.new()
-		var err := ff.load_dynamic_font(path)
-		print("[AI 参谋字体] 尝试 ", path, " 载入err=", err, " 名=", ff.get_font_name(),
-			" has_char（=", ff.has_char(0xFF08))
-		if err == OK:
-			return ff
-	# 桌面开发机没有这些系统字体：退回 SystemFont（桌面本来就渲染正常）
-	var cjk := SystemFont.new()
-	cjk.font_names = PackedStringArray(CJK_FONT_FAMILIES)
-	cjk.allow_system_fallback = true
-	return cjk
+## 面板自己再显式取一次随包字体：工程默认字体已覆盖 CJK，这里是为了让「面板用什么字体」
+## 在代码里一眼可见，也避免以后有人换掉面板父节点的主题时把字体悄悄带走。
+func _ui_font() -> Font:
+	if _cjk_font == null:
+		_cjk_font = load(UI_FONT_PATH)
+	return _cjk_font
 
 
-## ⚠⚠ 关键坑（2026-10-03 真机实测 · HUAWEI PCE-W30 / HarmonyOS，别改回去）：
-## **根因：本工程没有随包字体，Godot 默认字体是 Open Sans SemiBold（只有拉丁），
-## CJK 一直靠 Godot 的「隐式系统回退」渲染 —— 而那条路在 HarmonyOS 上不稳定：
-## 同一段里「拉丁 + 全角标点」混排时，被选中的回退字体可能不含该标点 ⇒ 全角标点变豆腐块。**
-## 真机证据（同一段文本逐项对照）：
-##   · 短纯标点串「（）：；｜。，「】」→ 正常；长混排串「…token）｜ 本次…」→ 豆腐块
-##   · 换父容器（_modal 直挂 / ScrollContainer 里的 VBox）、加不加 font_color 覆盖、
-##     开关 autowrap —— 三种变量都不影响结果，**只有换文本才变**⇒ 问题在「字体对文本的覆盖」
-##   · 解析出来的字体 has_char（) = false（默认 Open Sans，以及 SystemFont 解析到的
-##     **不含 CJK 的拉丁版 "HarmonyOS Sans"**，都是 false）
-## 修法（已生效）：**显式加载系统里那份真含 CJK 的字体文件**（见 CJK_FONT_FILES）——
-## 装的是 HarmonyOS_Sans_SC.ttf，之后 has_char（) = true，整屏标点全正常。
-## 注意：SystemFont.new() + font_names=["HarmonyOS Sans SC"] **不管用**，真机上它解析成拉丁版。
-## 全工程其它 HUD 控件同样有这个隐患（既有 ui/DownedOverlay.gd 的「（第一版单机…」就是豆腐块），
-## 本文件只修了参谋面板；全局换字体是另一件事，已登记进进度文件。
+## 每个字号一份主题（字号必须走 Theme，见下）。根因与教训见本文件顶部 UI_FONT_PATH 的注释。
 func _theme_of(size: int) -> Theme:
 	if _theme_cache.has(size):
 		return _theme_cache[size]
-	if _cjk_font == null:
-		_cjk_font = _build_cjk_font()
 	var t := Theme.new()
-	t.default_font = _cjk_font
 	t.default_font_size = size
-	for type_name in ["Label", "Button", "CheckBox", "OptionButton", "LineEdit", "TextEdit"]:
-		t.set_font("font", type_name, _cjk_font)
-	t.set_font("normal_font", "RichTextLabel", _cjk_font)
+	var font := _ui_font()
+	if font != null:
+		t.default_font = font
+		for type_name in ["Label", "Button", "CheckBox", "OptionButton", "LineEdit", "TextEdit"]:
+			t.set_font("font", type_name, font)
+		t.set_font("normal_font", "RichTextLabel", font)
 	_theme_cache[size] = t
 	return t
 
@@ -132,6 +108,36 @@ func _theme_of(size: int) -> Theme:
 ## 每个工厂函数都给自己的控件显式挂 theme（不靠 _modal 往下继承）：
 ## 一是让「这个控件用什么字体」在代码里一眼可见，二是避免以后有人给面板某个父节点换 theme 时
 ## 子控件的字体被悄悄改掉。注意：这不是豆腐块的成因（成因见 _build_cjk_font 上方注释）。
+
+
+## 面板翻页条（▲/▼）。**为什么不做拖拽滚动**：真机实测（2026-10-03）——
+##   · `input swipe` 的拖拽事件根本没进 _input（打了诊断 print，滑动时一条都没有）；
+##   · ScrollContainer 自己那套拖动依赖被关掉的 emulate_mouse_from_touch（工程设置）；
+##   · 更坑的是：直接挂在 _modal 上的按钮**收不到点击**（矩形、层级都核对过，就是没反应），
+##     而 ScrollContainer 箱体里的控件一直好使（勾选框、清除 key 都是这样被点到的）。
+## 所以翻页按钮放在箱体内部，并且**顶部一行 + 底部一行**：滚到哪边都有一个够得着。
+## BaseButton 走触摸本身，不依赖拖拽，也不依赖鼠标模拟。
+func _pager_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "Pager"
+	row.add_theme_constant_override("separation", 8)
+	var up := _action("▲ 上一页", _on_scroll_up)
+	up.custom_minimum_size = Vector2(120.0, 36.0)
+	row.add_child(up)
+	var down := _action("▼ 下一页", _on_scroll_down)
+	down.custom_minimum_size = Vector2(120.0, 36.0)
+	row.add_child(down)
+	return row
+
+
+func _on_scroll_up() -> void:
+	if _scroll != null:
+		_scroll.scroll_vertical = maxi(_scroll.scroll_vertical - 300, 0)
+
+
+func _on_scroll_down() -> void:
+	if _scroll != null:
+		_scroll.scroll_vertical += 300
 
 
 func _build_button() -> void:
@@ -184,7 +190,9 @@ func _build_modal() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.name = "Scroll"
 	scroll.position = WINDOW_POS + Vector2(10.0, 10.0)
-	scroll.size = WINDOW_SIZE - Vector2(20.0, 20.0)
+	# 底部让出 56 px 给「▲/▼ 翻页」按钮条：真机上 ScrollContainer 收不到拖拽事件（见下面的说明），
+	# 所以滚动只能靠显式按钮；按钮与滚动区不能重叠，否则几何门禁会算成新的同级重叠。
+	scroll.size = Vector2(WINDOW_SIZE.x - 20.0, WINDOW_SIZE.y - 20.0 - 56.0)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_modal.add_child(scroll)
 	_scroll = scroll
@@ -195,6 +203,11 @@ func _build_modal() -> void:
 	box.add_theme_constant_override("separation", 8)
 	scroll.add_child(box)
 
+	var pager_top := _pager_row()
+	box.add_child(pager_top)
+	box.move_child(pager_top, 0)
+	# 调试入口放最上面：它是真机回归用的，不该让人先翻两页才够得着
+	_build_debug_row(box)
 	box.add_child(_title("AI 参谋（局间顾问）"))
 	_status_label = _body("")
 	box.add_child(_status_label)
@@ -224,7 +237,8 @@ func _build_modal() -> void:
 	var key_row := HBoxContainer.new()
 	key_row.add_theme_constant_override("separation", 8)
 	key_row.add_child(_action("保存 key", _on_save_key))
-	key_row.add_child(_action("清除 key", _on_clear_key))
+	_clear_button = _action("清除 key", _on_clear_key)
+	key_row.add_child(_clear_button)
 	_key_state = _body("")
 	# _body 默认 800 px 最小宽度（面板是竖排），但这一个在横排里、后面还并排两个按钮 ——
 	# 不改小的话整行最小宽度会被顶到 1124 px，外层 ScrollContainer 跟着跑出屏幕（ai_panel_check 抓到过）
@@ -279,9 +293,44 @@ func _build_modal() -> void:
 	usage_row.add_child(_action("清空本地记录", _on_clear_records))
 	usage_row.add_child(_action("刷新", _refresh))
 	box.add_child(usage_row)
+	box.add_child(_pager_row())
 
 
 # ────────────────────────────── 控件工厂 ──────────────────────────────
+
+## 调试专用：立刻结束本局。**只在 debug 包出现**（正式包这段直接 return，连按钮都不建）。
+## 为什么要它：复盘按设计只在一局结束后触发，真机回归要么真打完一局（8~15 分钟）、要么干等；
+## 有了这个入口，真机验收可以「开面板 → 点它 → 局末自动复盘 → 看 ④ 账单」一次跑完。
+## 实现走的是对局本来的结束路径（MatchFlow._finish → Main._on_defeat → EventBus.match_finished），
+## 所以它顺带把「采集快照 → 自动复盘 → 落账本」整条链也一起验了，不是绕开逻辑的假入口。
+func _build_debug_row(box: VBoxContainer) -> void:
+	if not OS.is_debug_build():
+		return
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.add_child(_action("立刻结束本局（仅调试包）", _on_debug_end_match))
+	box.add_child(row)
+	box.add_child(_note("调试入口：只出现在 debug 包（OS.is_debug_build()）；正式包没有这个按钮。"))
+
+
+func _on_debug_end_match() -> void:
+	var tree := get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
+	if scene == null:
+		_output.text = "调试：拿不到当前场景。"
+		return
+	# Main 没有 class_name，按它与子模块之间既有的字段名约定取 match_flow（同 AiAdvisor 的鸭子类型写法）
+	var flow = null
+	for p in scene.get_property_list():
+		if String(p.get("name", "")) == "match_flow":
+			flow = scene.get("match_flow")
+			break
+	if flow == null or not flow.has_method("_finish"):
+		_output.text = "调试：当前场景不是对局（找不到 match_flow）。"
+		return
+	flow.call("_finish", "enemy", "调试：立刻结束本局")
+	_output.text = "调试：已请求立刻结束本局 —— 局末会自动触发复盘（若已开启自动复盘）。"
+
 
 func _title(text: String) -> Label:
 	var l := _body(text)
@@ -473,6 +522,13 @@ func _on_save_key() -> void:
 
 
 func _on_clear_key() -> void:
+	if not _clear_armed:
+		_clear_armed = true
+		_clear_button.text = "再点一次确认清除"
+		_output.text = "清除 API key 需要再点一次确认（防误触）。"
+		return
+	_clear_armed = false
+	_clear_button.text = "清除 key"
 	advisor.clear_api_key()
 	_key_edit.text = ""
 	_output.text = "已清除 API key。"

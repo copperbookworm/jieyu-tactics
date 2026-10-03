@@ -1,6 +1,24 @@
 《解域》jieyu-1 开发进度
 ========================
-最后更新：2026-10-02（**第四十二版 · AI 参谋（局间顾问）第一版**：玩家自备 API key 的局后复盘 + 本地 token 账本 + 游戏内面板；动代码，新增 autoload） ｜ git HEAD：17fc7be（几何基线 6 组重叠定案）→ 本轮提交 6b0c78a（第四十二版；本行是抬头补记，见下一条提交）
+最后更新：2026-10-03（**第四十三版 · AI 参谋真机验证**：HUAWEI PCE-W30 上装包跑通，修掉 2 个真机阻塞 bug（全角标点豆腐块 / 输入框触摸不聚焦）；动代码，只改面板） ｜ git HEAD：6b0c78a（第四十二版）
+本次更新：本轮做**第四十三版 · AI 参谋真机验证**（真机链路 + 2 个真机 bug 修复，动代码）：
+	· 设备：HUAWEI PCE-W30（MatePad Pro）/ HarmonyOS / Android 12（SDK 31）/ arm64-v8a / 2880×1920 横屏
+	· 装包：--export-debug → adb install -r；aapt2 实测 APK 内 **INTERNET + ACCESS_NETWORK_STATE 均已在**
+	· 真机现象：无 SCRIPT ERROR / 无 FATAL；参谋按钮可见可点；面板可开；配置与 key 持久化正常
+	· **真机 bug ①·全角标点变豆腐块**（阻塞可读性）：中英混排里紧跟 ASCII 的全角标点显示成豆腐块，
+	  **既有 HUD 也有**（ui/DownedOverlay.gd 的「剩余 57 s（第一版单机…」真机截图即是）。根因＝
+	  本工程**没有随包字体**，ThemeDB.fallback_font 是只有拉丁的 Open Sans SemiBold，CJK 全靠 Godot 的
+	  **隐式系统回退**，而它在 HarmonyOS 上不稳定。修法＝显式 FontFile.load_dynamic_font 加载
+	  /system/fonts/HarmonyOS_Sans_SC.ttf（不再依赖回退）。**只修了参谋面板**，全工程见六/七节
+	· **真机 bug ②·输入框触摸不聚焦、软键盘不弹**（阻塞可用性）：点模型/base_url/API key 三个框既不聚焦
+	  也不弹键盘（dumpsys: mShowRequested=false），API key 根本敲不进去。根因＝工程关了
+	  emulate_mouse_from_touch，而 Godot 的 LineEdit 只认 InputEventMouseButton、不认 ScreenTouch
+	  （BaseButton 自己处理触摸，所以按钮一直好的）。修法＝给 LineEdit 补 gui_input → grab_focus()
+· 实测（2026-10-03 真机 + 桌面，退出码均 0）：单元 **33 个脚本 / 1033 项全绿**（32 测试 + 几何门禁 5 项）／
+	  集成冒烟 **229 项全绿**／面板几何自检 **7 项全绿**／网络链路端到端 **34 项全绿**（打到本地 mock）／
+	  **123 个 .gd / 19621 行**（LF 口径）／Main.gd **398 行**（守住 ≤400）
+	· 本轮改动面：ui/AiAdvisorPanel.gd（+109 / −11，531 行）；shots/ 新增 6 张真机截图（含 .import）
+	  本轮之前的抬头（原文保留）最后更新：2026-10-02（**第四十二版 · AI 参谋（局间顾问）第一版**：玩家自备 API key 的局后复盘 + 本地 token 账本 + 游戏内面板；动代码，新增 autoload） ｜ git HEAD：17fc7be（几何基线 6 组重叠定案）→ 本轮提交 6b0c78a（第四十二版；本行是抬头补记，见下一条提交）
 本次更新：本轮做**第四十二版 · AI 参谋（局间顾问）第一版**（新功能，动代码）：
 	· 定位按使用者拍板：**局间顾问**（不做战斗中实时指挥 —— 网络往返 2~8 s，在实时射击里没有位置）；
 	  **PVEVP 开放**，只有竞技 / 严格对抗模式关闭；第一个功能＝**局后复盘**
@@ -93,7 +111,7 @@
   重力/弹道高度（simulate）只保留给间瞄（高弹道越障）
 
 三、当前状态
-· 规模：**123 个 .gd / 19523 行**（2026-10-02 本轮复跑实测，LF 字节口径，不含 addons / gdtoolkit / .godot）；Main.gd **398 行**（守住 ≤400 验收线）
+· 规模：**123 个 .gd / 19621 行**（2026-10-02 本轮复跑实测，LF 字节口径，不含 addons / gdtoolkit / .godot）；Main.gd **398 行**（守住 ≤400 验收线）
   文件数从上一轮的 78 掉到 71 是**归档**造成的（候选 T ④ 移走 13 个零引用 .gd：11 个 1 行空骨架 + 2 个哥布林/史莱姆占位），
   同时新增 6 个（SmokeScreen / SmokeController / MapLayerSource / smoke_test / map_layer_test / probe_height_export）⇒ 78 − 13 + 6 = 71，账对得上
   Main 行数曲线（候选 N 的 ≤400 验收线）：968 → 391（拆分）→ 393 → 385 → 395（L3 后告急）
@@ -125,6 +143,8 @@
 · 数据表（2026-10-01 实测）：data/weapons_data.txt **25 把**、data/vehicles_data.txt **18 辆 × 27 列**（候选 R 已扩到官方全量；第 38 版加了 5 列反坦克导弹字段）、
   data/quest_templates.txt 8 条（表头 + 8 行）——官方任务模板表 8 条已一致（候选 L1~L5 补齐，此前 3 条）
 · 可玩循环：完整（出生 → 移动 → 交火 → 占点 → 胜负 → 重开）
+· 【第四十三版】AI 参谋**真机验证已做**：HUAWEI PCE-W30 / Android 12 上装包启动零报错、权限齐、
+  按钮与面板可用；修掉 2 个真机阻塞 bug（全角标点豆腐块 / 输入框触摸不聚焦）。详见第四十三版段
 · 【第四十二版新增】AI 参谋（局间顾问）：systems/ai/ 9 个模块 + ui/AiAdvisorPanel.gd + autoload AiAdvisor；
   专项自检 tools/ai_transport_check.gd（真 HTTP 端到端 34 项）与 tools/ai_panel_check.gd（面板几何 7 项）
 
@@ -1515,6 +1535,69 @@
 
 
 
+【第四十二版 · AI 参谋（局间顾问）第一版（2026-10-02，动代码 · 新增 autoload）】
+
+> 补记（2026-10-03）：本段由第四十三版收尾时补写 —— 第四十二版当时只改了抬头与三/四/六/七节，
+> 漏了本节的版本段。内容按当时的提交 6b0c78a 与实测数字回填，不改写任何历史。
+
+· 做什么：玩家**自备 API key** 的局间顾问，第一个功能＝**局后复盘**；不填 key 完全不联网、不花 token
+· 代码：systems/ai/ 9 个模块（AiAdvisor 641 行 autoload + 8 个纯逻辑模块）、ui/AiAdvisorPanel.gd（新）、
+  test/ai_advisor_test.gd（106 项）、tools/ 下 hud_rects.gd / ai_mock_server.mjs / ai_transport_check.gd /
+  ai_panel_check.gd
+· 工程侧：project.godot 新增 autoload AiAdvisor；export_presets.cfg 开 INTERNET 与 ACCESS_NETWORK_STATE
+· 实测（当时真跑，退出码均 0）：单元 32 个脚本 / 1033 项全绿（927+106=1033 可对账）／几何门禁 5 项全绿／
+  集成冒烟 229 项全绿／专项自检：网络端到端 34 项 + 面板几何 7 项／123 个 .gd / 19523 行／Main.gd 398 行
+· 提交：6b0c78a（实质）+ 851325b（抬头补记）
+· 当时留给下一轮：真机验证（第四十三版已做）、全工程字体（第四十三版发现并登记）
+
+【第四十三版 · AI 参谋真机验证：修掉 2 个真机阻塞 bug（2026-10-03，动代码 · 只改面板）】
+
+· 设备：HUAWEI PCE-W30（MatePad Pro）/ HarmonyOS / Android 12（SDK 31）/ arm64-v8a / 2880×1920 横屏
+  ｜ 序列号 5JB0224412000317
+· 装包：--export-debug → adb install -r，包名 com.example.jieyu1；aapt2 实测 APK 里
+  **INTERNET + ACCESS_NETWORK_STATE 两条权限都在**（第四十二版加的）
+· 真机现象：无 SCRIPT ERROR / 无 FATAL；参谋按钮在真屏可见可点；面板打得开；配置与 key 持久化正常
+  （预置 user:// 的 ai_advisor.cfg + ai_advisor.key 后，面板显示「DeepSeek 官方 ｜ deepseek-chat」、
+  base_url 回填、当前 key 显示为 sk-m…test —— 说明 key 落盘是混淆串、UI 只露头尾）
+
+① **真机 bug · 全角标点在混排文本里变「豆腐块」**（阻塞可读性）
+   · 现象：面板「未开启（不联网、不花 token）｜ 本次预计约 811 token」里的 ）｜、
+     「用你自己的 API key。不填就…token；所有…」里的 。；都显示成豆腐块。
+     **既有 HUD 也有这毛病**：ui/DownedOverlay.gd 的「被击倒 —— 剩余 57 s（第一版单机没有队友，无法被扶起）」
+     真机截图里「（」就是豆腐块（先于本轮存在）
+   · 排查（逐项排除）：换父容器（_modal 直挂 vs ScrollContainer 里的 VBox）、加不加 font_color 覆盖、
+     开关 autowrap —— 三种变量都不影响结果；**只有换文本才变**：短纯标点串「（）：；｜。，「】」正常，
+     中英混排长串就坏 ⇒ 不是布局问题，是「字体对该文本的覆盖」问题
+   · 根因：**本工程没有随包字体**，ThemeDB.fallback_font =「Open Sans SemiBold」（只有拉丁），
+     CJK 与全角标点全靠 Godot 的**隐式系统回退**；HarmonyOS 上这条回退不稳定 —— 中英混排时被选中的
+     回退字体可能不含该标点。实测解析出的字体 has_char('（') = false。
+     注意：SystemFont.new() + font_names=["HarmonyOS Sans SC"] **不管用** —— 真机解析成的是不含 CJK 的
+     拉丁版「HarmonyOS Sans」（has_char 仍 false），所以第一次尝试没修好
+   · 修法（已生效）：FontFile.load_dynamic_font("/system/fonts/HarmonyOS_Sans_SC.ttf") 显式加载
+     **真含 CJK** 的字体文件（CJK_FONT_FILES 里另有 NotoSansCJK / DroidSansFallback 兜底），
+     基础字体自己就覆盖 CJK，不再依赖回退 ⇒ has_char('（') = true，整屏标点全正常
+   · **只修了参谋面板**；全工程其它 HUD 仍有这个隐患（见六节与七节）
+② **真机 bug · 触摸点输入框不聚焦、软键盘不弹，API key 根本敲不进去**（阻塞可用性）
+   · 现象：点 模型 / base_url / API key 三个框，既不出现光标也不弹键盘；adb 发键事件也进不去；
+     dumpsys input_method 显示 mShowRequested=false mInputShown=false（Godot 从未请求 IME）
+   · 根因：本工程 project.godot 里 emulate_mouse_from_touch = false，而 Godot 的 LineEdit **只在
+     InputEventMouseButton 上取焦点、不认 InputEventScreenTouch**；BaseButton 自己处理触摸，
+     所以按钮 / 复选框一直是好的，**只有输入框坏**
+   · 修法（已生效）：给每个 LineEdit 挂 gui_input，触摸按下就 grab_focus()（见 _wire_touch_focus）；
+     实测之后 mShowRequested=true mInputShown=true，华为拼音键盘正常弹出、文字进得来
+   · 附注：键盘弹出时 Android 的 ADJUST_RESIZE 会顶掉面板下半部分 —— 系统正常行为，本轮未处理
+
+· 实测（2026-10-03，真机 + 桌面，退出码均 0）：单元 **33 个脚本 / 1033 项全绿**（32 测试 + 几何门禁 5 项）／
+  集成冒烟 **229 项全绿**／面板几何自检 **7 项全绿**／网络链路端到端 **34 项全绿**（打到本地 mock）／
+  **123 个 .gd / 19621 行**（LF 口径）／Main.gd **398 行**（守住 ≤400）
+· 本轮改动面：ui/AiAdvisorPanel.gd（+109 / −11，531 行）；shots/ 新增 6 张真机截图（含 .import）
+· 真机证据（截图）：shots/真机_20261003_{ai_参谋首屏, ai_参谋面板, 面板坐标, 字体文件修复,
+  触摸聚焦修好, 预置配置}.png
+· 未做（下一轮）：① **真机上的完整请求没有自动化复现** —— 本轮用 adb reverse + 本地 mock 做了零花费
+  真机链路验证的准备，但复盘按设计只在**一局结束后**触发，无人值守等一局要 8~15 分钟，脚本没等到；
+  建议人工在真机上打一局收尾验收（使用者此前已用真 key 手测通过一次）② 全工程字体（六/七节）
+  ③ 软键盘顶掉面板下半部分要不要专门处理
+
 四、接下来（候选 A~N 已全部完成；✅ 候选 L（L1~L5）、✅ 候选 P（烟雾遮蔽）、✅ 候选 T 除 ⑥ 外的各条
 	亦已完成；**单元测试 32 个脚本 / 1033 项全绿、集成冒烟 229 项全绿**（2026-10-02 本轮真跑，退出码均 0）；
 	docx 第二十章回流这笔账已在第二十七版还清，第二十八版把新做的三项回流了一遍；第二十九版把设计文档的去冲突与集中拍板做完（不动代码）；第三十版做了候选 O 第一轮（4.14 战斗播报 + 4.15 操作提示）
@@ -1598,6 +1681,17 @@
   验收：拍板后 docx 与 GameConfig 两侧口径一致，且集成冒烟仍全绿
 
 六、其他待办（不阻塞，按需）
+· 【新，2026-10-03 第四十三版】**全工程字体隐患（真机实测，不是参谋面板专有）**：本工程没有随包字体，
+  ThemeDB.fallback_font =「Open Sans SemiBold」（只有拉丁），CJK 与全角标点全靠 Godot 的隐式系统回退；
+  HarmonyOS 上该回退不稳定 —— 中英混排文本里紧跟 ASCII 的全角标点会变成豆腐块。既有证据：
+  ui/DownedOverlay.gd 的「被击倒 —— 剩余 57 s（第一版单机没有队友，无法被扶起）」真机截图里
+  「（」就是豆腐块。第四十三版只用「显式加载系统 SC 字体文件」修了参谋面板（见 ui/AiAdvisorPanel.gd
+  的 CJK_FONT_FILES / _build_cjk_font），其余 HUD 未动 —— 全工程怎么修要拍板（见七节）。
+· 【新，2026-10-03 第四十三版】输入框触摸不聚焦是**工程级配置**导致的（emulate_mouse_from_touch=false）：
+  第四十三版给参谋面板的 LineEdit 补了 gui_input → grab_focus() 才修好。已全仓核实：
+  LineEdit / TextEdit / SpinBox **只在 ui/AiAdvisorPanel.gd 出现过**，所以当前没有别的输入框待修；
+  以后新增输入框要照 AiAdvisorPanel._wire_touch_focus 的写法接一次触摸聚焦。
+
 · 【新，2026-10-02 第四十二版】AI 参谋的 API key 目前是**混淆存放**（XOR + base64，盐就在包里），**不是加密** ——
   会逆向的人一定拿得到。正解是 Android Keystore / EncryptedSharedPreferences，需要一个 Godot Android 插件
   （Java/Kotlin），本轮**未做**；已在面板与 AiKeyVault 头部如实写明「这是混淆不是加密」，不谎称安全。
@@ -1862,6 +1956,14 @@
   ㉙ ✅ 已拍板（两套方案已备好，见 22.8.2）。
 · 【新，2026-10-01 第二批，待实测】㉚ 跳弹分档（60/70/80° 与 30%/60%/100% 概率、20%/10%/5% 伤害）与 PVEVP 的控制度加减（+18 / −12）、阈值 70 / 30、赛季 90 天，均为推荐值；
   另：跳弹判定所需的三档全局常量落在 8.2 数据字典，载具数据表不需要新增列（18 辆 × 26 列不变）。
+· 【新，2026-10-03 第四十三版，待拍板】**全工程字体方案**（真机豆腐块问题的根治口径）：
+  A 维持现状（只有参谋面板显式加载系统 SC 字体；其它 HUD 继续吃隐式回退，混排标点仍可能豆腐块）；
+  B 随包塞一份 CJK 字体（跨设备最稳、字形可控，代价是包体 +几 MB 到十几 MB，要挑字形或裁子集）；
+  C 全工程统一改成「运行时加载系统 SC 字体文件 + 兜底链」（改动最小，但依赖设备确实带那份字体）。
+  第四十三版按 A 落地（只修参谋面板），等拍板。
+· 【新，2026-10-03 第四十三版，待拍板】**真机回归怎么做到一次跑完**：复盘按设计只在**一局结束后**触发
+  （这是产品定义，不该为测试改），于是脚本要无人值守等 8~15 分钟。要不要加一个**仅调试包可用**的
+  「立刻结束本局」入口，或让 MATCH_DURATION 能被启动参数覆盖，好让真机回归脚本一次跑完？
 · 【新，2026-10-02 第四十二版，待拍板】AI 参谋的 key 存放方案：
   A 维持现状（本机混淆存放 + 如实告知玩家「这是混淆不是加密」，并建议用受限权限的 key）；
   B 做一个 Godot Android 插件走 Keystore / EncryptedSharedPreferences（多一份 Java/Kotlin 与构建复杂度）。

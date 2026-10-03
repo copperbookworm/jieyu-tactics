@@ -4,3 +4,12 @@
 
 # 本机自带工具目录（只有 4.5.0/parser_with_metadata.pickle，gdlint 命令不可用）
 gdtoolkit/
+
+# 验证 / 对账脚本的工作区临时文件（真机验证与 jieyu-progress-sync 的脚本会在工程根落这些，
+# 而且每次命名都不一样：_verify_unit.log / _vu.txt / _vi.txt / _unit_out.txt / _unit_run.log …）。
+# 教训：2026-10-03 第四十三版提交时误把 _verify_unit.log / _vu.txt / _vi.txt 一起提交了。
+# 用「根锚定 + 通配」一次盖住，不动 addons/ 与 docs/kb/ 下那些合法的 _ 开头文件。
+/_*.log
+/_*.txt
+/tmp_*.log
+/tmp_*.json

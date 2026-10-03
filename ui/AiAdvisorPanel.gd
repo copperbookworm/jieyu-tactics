@@ -14,6 +14,26 @@ extends CanvasLayer
 
 const CatalogScript := preload("res://systems/ai/AiProviderCatalog.gd")
 
+## 面板专用字体：显式给一份带 CJK / 全角标点覆盖的字体，不靠 OS 隐式回退。
+## 起因（2026-10-03 真机实测）：HarmonyOS 上 Godot 的隐式系统回退不稳定 —— 同一字符串里
+## 「（」渲染成豆腐块而「）」正常（既有 ui/DownedOverlay.gd 的「无法被扶起）」就有这毛病）。
+## 那是**工程级既有问题**（本工程没有随包字体，CJK 一直靠 OS 回退），本文件先把参谋面板修好。
+const CJK_FONT_FAMILIES := ["HarmonyOS Sans SC", "Noto Sans CJK SC", "Noto Sans SC",
+	"Source Han Sans CN", "Droid Sans Fallback", "sans-serif"]
+
+## 真机实测（2026-10-03，HUAWEI PCE-W30 / HarmonyOS）：**优先直接加载字体文件**。
+## 踩过的坑：SystemFont(\"HarmonyOS Sans SC\") 实际解析到的是 **不含 CJK 的 Latin 版**
+## \"HarmonyOS Sans\"（get_font_name() 返回的就是它，has_char(（) = false），
+## 于是 CJK 又回到 Godot 那条不可靠的隐式回退上 —— 表现为「同一段中英混排文本里，
+## 紧跟 ASCII 的全角标点变成豆腐块」（短纯标点串反而正常）。
+## 直接读 SC 字体文件后，基础字体本身就覆盖 CJK，不再依赖回退。
+const CJK_FONT_FILES := [
+	"/system/fonts/HarmonyOS_Sans_SC.ttf",
+	"/system/fonts/NotoSansCJK-Regular.ttc",
+	"/system/fonts/NotoSansSC-Regular.otf",
+	"/system/fonts/DroidSansFallbackFull.ttf",
+]
+
 const BUTTON_POS := Vector2(600.0, 300.0)
 const BUTTON_SIZE := Vector2(80.0, 44.0)
 const WINDOW_POS := Vector2(48.0, 16.0)
@@ -21,6 +41,9 @@ const WINDOW_SIZE := Vector2(864.0, 508.0)
 const VIEW := Vector2(960.0, 540.0)
 
 var advisor = null
+var _panel_theme: Theme = null
+var _cjk_font: Font = null
+var _theme_cache: Dictionary = {}
 
 var _button: Button = null
 var _modal: Control = null
@@ -44,6 +67,7 @@ var _provider_ids: Array = []
 func setup(owner_advisor) -> void:
 	advisor = owner_advisor
 	layer = 90
+	_panel_theme = _theme_of(14)
 	_build_button()
 	_build_modal()
 	_refresh()
@@ -54,13 +78,67 @@ func setup(owner_advisor) -> void:
 
 # ────────────────────────────── 入口按钮 ──────────────────────────────
 
+func _build_cjk_font() -> Font:
+	for path in CJK_FONT_FILES:
+		if not FileAccess.file_exists(path):
+			print("[AI 参谋字体] 跳过（不存在）：", path)
+			continue
+		var ff := FontFile.new()
+		var err := ff.load_dynamic_font(path)
+		print("[AI 参谋字体] 尝试 ", path, " 载入err=", err, " 名=", ff.get_font_name(),
+			" has_char（=", ff.has_char(0xFF08))
+		if err == OK:
+			return ff
+	# 桌面开发机没有这些系统字体：退回 SystemFont（桌面本来就渲染正常）
+	var cjk := SystemFont.new()
+	cjk.font_names = PackedStringArray(CJK_FONT_FAMILIES)
+	cjk.allow_system_fallback = true
+	return cjk
+
+
+## ⚠⚠ 关键坑（2026-10-03 真机实测 · HUAWEI PCE-W30 / HarmonyOS，别改回去）：
+## **根因：本工程没有随包字体，Godot 默认字体是 Open Sans SemiBold（只有拉丁），
+## CJK 一直靠 Godot 的「隐式系统回退」渲染 —— 而那条路在 HarmonyOS 上不稳定：
+## 同一段里「拉丁 + 全角标点」混排时，被选中的回退字体可能不含该标点 ⇒ 全角标点变豆腐块。**
+## 真机证据（同一段文本逐项对照）：
+##   · 短纯标点串「（）：；｜。，「】」→ 正常；长混排串「…token）｜ 本次…」→ 豆腐块
+##   · 换父容器（_modal 直挂 / ScrollContainer 里的 VBox）、加不加 font_color 覆盖、
+##     开关 autowrap —— 三种变量都不影响结果，**只有换文本才变**⇒ 问题在「字体对文本的覆盖」
+##   · 解析出来的字体 has_char（) = false（默认 Open Sans，以及 SystemFont 解析到的
+##     **不含 CJK 的拉丁版 "HarmonyOS Sans"**，都是 false）
+## 修法（已生效）：**显式加载系统里那份真含 CJK 的字体文件**（见 CJK_FONT_FILES）——
+## 装的是 HarmonyOS_Sans_SC.ttf，之后 has_char（) = true，整屏标点全正常。
+## 注意：SystemFont.new() + font_names=["HarmonyOS Sans SC"] **不管用**，真机上它解析成拉丁版。
+## 全工程其它 HUD 控件同样有这个隐患（既有 ui/DownedOverlay.gd 的「（第一版单机…」就是豆腐块），
+## 本文件只修了参谋面板；全局换字体是另一件事，已登记进进度文件。
+func _theme_of(size: int) -> Theme:
+	if _theme_cache.has(size):
+		return _theme_cache[size]
+	if _cjk_font == null:
+		_cjk_font = _build_cjk_font()
+	var t := Theme.new()
+	t.default_font = _cjk_font
+	t.default_font_size = size
+	for type_name in ["Label", "Button", "CheckBox", "OptionButton", "LineEdit", "TextEdit"]:
+		t.set_font("font", type_name, _cjk_font)
+	t.set_font("normal_font", "RichTextLabel", _cjk_font)
+	_theme_cache[size] = t
+	return t
+
+
+## 每个工厂函数都给自己的控件显式挂 theme（不靠 _modal 往下继承）：
+## 一是让「这个控件用什么字体」在代码里一眼可见，二是避免以后有人给面板某个父节点换 theme 时
+## 子控件的字体被悄悄改掉。注意：这不是豆腐块的成因（成因见 _build_cjk_font 上方注释）。
+
+
 func _build_button() -> void:
 	_button = Button.new()
+	_button.theme = _panel_theme
 	_button.name = "AiAdvisorButton"
 	_button.text = "参谋"
 	_button.position = BUTTON_POS
 	_button.size = BUTTON_SIZE
-	_button.add_theme_font_size_override("font_size", 16)
+	_button.theme = _theme_of(16)
 	_button.pressed.connect(_on_button_pressed)
 	add_child(_button)
 
@@ -75,6 +153,7 @@ func _on_button_pressed() -> void:
 
 func _build_modal() -> void:
 	_modal = Control.new()
+	_modal.theme = _panel_theme
 	_modal.name = "AiAdvisorModal"
 	_modal.visible = false
 	_modal.position = Vector2.ZERO
@@ -122,8 +201,8 @@ func _build_modal() -> void:
 	box.add_child(_heading("① 开关与供应商"))
 	_enable_box = CheckBox.new()
 	_enable_box.text = "启用 AI 参谋（不勾选时本游戏绝不发起网络请求）"
-	_enable_box.add_theme_font_size_override("font_size", 14)
 	_enable_box.custom_minimum_size = Vector2(0.0, 32.0)
+	_enable_box.theme = _theme_of(14)
 	_enable_box.toggled.connect(_on_enable_toggled)
 	box.add_child(_enable_box)
 
@@ -162,8 +241,8 @@ func _build_modal() -> void:
 	box.add_child(_field("单日 token 上限（0 = 不限）", _budget_day_box))
 	_auto_box = CheckBox.new()
 	_auto_box.text = "一局结束后自动复盘（会直接花你的 token，默认关闭）"
-	_auto_box.add_theme_font_size_override("font_size", 14)
 	_auto_box.custom_minimum_size = Vector2(0.0, 32.0)
+	_auto_box.theme = _theme_of(14)
 	_auto_box.toggled.connect(_on_auto_toggled)
 	box.add_child(_auto_box)
 
@@ -183,7 +262,7 @@ func _build_modal() -> void:
 	_output.fit_content = false
 	_output.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_output.custom_minimum_size = Vector2(800.0, 90.0)
-	_output.add_theme_font_size_override("normal_font_size", 15)
+	_output.theme = _theme_of(15)
 	box.add_child(_output)
 
 	box.add_child(_separator())
@@ -202,13 +281,13 @@ func _build_modal() -> void:
 
 func _title(text: String) -> Label:
 	var l := _body(text)
-	l.add_theme_font_size_override("font_size", 20)
+	l.theme = _theme_of(20)
 	return l
 
 
 func _heading(text: String) -> Label:
 	var l := _body(text)
-	l.add_theme_font_size_override("font_size", 16)
+	l.theme = _theme_of(16)
 	l.add_theme_color_override("font_color", Color(0.62, 0.85, 1.0))
 	return l
 
@@ -218,7 +297,7 @@ func _body(text: String) -> Label:
 	l.text = text
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(800.0, 0.0)
-	l.add_theme_font_size_override("font_size", 14)
+	l.theme = _theme_of(14)
 	return l
 
 
@@ -240,7 +319,7 @@ func _field(label_text: String, control: Control) -> HBoxContainer:
 	var l := Label.new()
 	l.text = label_text
 	l.custom_minimum_size = Vector2(210.0, 0.0)
-	l.add_theme_font_size_override("font_size", 14)
+	l.theme = _theme_of(14)
 	row.add_child(l)
 	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(control)
@@ -251,8 +330,24 @@ func _make_line_edit(placeholder: String) -> LineEdit:
 	var e := LineEdit.new()
 	e.placeholder_text = placeholder
 	e.custom_minimum_size = Vector2(560.0, 34.0)
-	e.add_theme_font_size_override("font_size", 14)
+	e.theme = _theme_of(14)
+	_wire_touch_focus(e)
 	return e
+
+
+## 真机实测（2026-10-03，HUAWEI PCE-W30）：**触摸点输入框不聚焦、软键盘不弹，API key 敲不进去。**
+## 根因：本工程 project.godot 里 emulate_mouse_from_touch = false，而 Godot 的 LineEdit 只在
+## InputEventMouseButton 上取焦点、**不认 InputEventScreenTouch**；BaseButton 自己处理触摸，
+## 所以按钮／复选框一直是好的，只有输入框坏（实机 dumpsys：mShowRequested=false，即从未请求 IME）。
+## 这里给每个 LineEdit 补一次「触摸按下就 grab_focus()」，聚焦后 Godot 自己会弹软键盘。
+func _wire_touch_focus(field: Control) -> void:
+	field.gui_input.connect(_on_field_gui_input.bind(field))
+
+
+func _on_field_gui_input(event: InputEvent, field: Control) -> void:
+	if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+		field.grab_focus()
+		field.accept_event()
 
 
 func _make_provider_box() -> OptionButton:
@@ -261,8 +356,10 @@ func _make_provider_box() -> OptionButton:
 	for i in _provider_ids.size():
 		_provider_box.add_item(CatalogScript.label_of(String(_provider_ids[i])), i)
 	_provider_box.custom_minimum_size = Vector2(560.0, 34.0)
-	_provider_box.add_theme_font_size_override("font_size", 14)
+	_provider_box.theme = _theme_of(14)
 	_provider_box.item_selected.connect(_on_provider_selected)
+	# 下拉列表是独立 Window，不继承 _modal 的主题，得单独挂一份，否则列表项还是豆腐块
+	_provider_box.get_popup().theme = _panel_theme
 	return _provider_box
 
 
@@ -273,6 +370,7 @@ func _make_spin(minimum: int, maximum: int, step: int, value: int) -> SpinBox:
 	s.step = step
 	s.value = value
 	s.custom_minimum_size = Vector2(180.0, 34.0)
+	s.theme = _theme_of(14)
 	return s
 
 
@@ -280,7 +378,7 @@ func _action(text: String, handler: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = Vector2(150.0, 40.0)
-	b.add_theme_font_size_override("font_size", 14)
+	b.theme = _theme_of(14)
 	b.pressed.connect(handler)
 	return b
 

@@ -207,6 +207,39 @@ func _smokes() -> Array:
 
 ## ② 与 ③ 合并：地形层 + 掩体层 + 烟雾层
 ## margin_per_meter 只作用于地形层（准心瞄准用，见 AimCameraController 的注释）
+## 感知节流器（每个单位自己持一个实例）
+##
+## 为什么要「一个单位一个」而不是一张全局表：缓存里存的是「这个单位能不能看到它的目标」，
+## 一旦把不同单位的查询塞进同一张表，就得给「单位 + 目标」拼复合键 —— 既慢又容易串味。
+## 每个单位持一份，语义天然正确（队友换目标时 reset 一下即可）。
+class Throttle extends RefCounted:
+	var period := 4
+	var calls := 0        ## 诊断：真查了几次
+	var hits := 0         ## 诊断：命中缓存几次
+	var _frame := -999999
+	var _result := false
+	var _valid := false
+
+	func _init(frames: int = -1) -> void:
+		period = maxi(frames if frames > 0 else GameConfig.SIGHT_THROTTLE_FRAMES, 1)
+
+	## 换目标 / 换场景时清掉，免得把上一个目标的结果当成这个目标的
+	func reset() -> void:
+		_valid = false
+		_frame = -999999
+
+	func sight(sight, frame: int, origin: Vector2, origin_height: float,
+		target: Vector2, target_height: float, margin_per_meter: float = 0.0) -> bool:
+		if _valid and period > 1 and frame - _frame < period:
+			hits += 1
+			return _result
+		_result = sight.has_sight(origin, origin_height, target, target_height, margin_per_meter)
+		_frame = frame
+		_valid = true
+		calls += 1
+		return _result
+
+
 func has_sight(origin: Vector2, origin_height: float,
 		target: Vector2, target_height: float, margin_per_meter: float = 0.0) -> bool:
 	if terrain_first_blocker(origin, origin_height, target, target_height,

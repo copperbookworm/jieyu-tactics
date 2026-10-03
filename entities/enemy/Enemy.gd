@@ -282,6 +282,10 @@ func blind_aim_target() -> Vector2:
 
 
 ## 能否看到玩家：地形通视（容差在 SightSystem 里）
+## 【为什么敌人不参与通视节流】2026-10-03 试过：敌人 AI + 可见性共用节流器（SightSystem.Throttle）后，
+## 「无通视 → 转入盲射」（docx 4.12.5）的状态转换被推迟最多 SIGHT_THROTTLE_FRAMES 帧，
+## 集成冒烟的三条断言当场变红。行为契约优先于这点开销 ⇒ 敌人保持逐帧查；
+## 省下来的靠队友「目标重挑节流」（Ally._pick_timer）与载具节流（Vehicle._sight_throttle）。
 func _can_see_player() -> bool:
 	if _sight == null or _player == null or _sight.grid == null:
 		return false

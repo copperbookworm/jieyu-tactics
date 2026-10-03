@@ -33,6 +33,8 @@ var is_group_leader := false
 var is_squad_leader := false
 
 var _fire_cooldown := 0.0
+## 目标重挑计时（s）：原来每物理帧都遍历敌组、逐候选查通视；现在 0.1 s 才重挑一次
+var _pick_timer := 0.0
 var _sight = null
 var _player = null
 var _grid = null
@@ -92,7 +94,11 @@ func _physics_process(delta: float) -> void:
 		return
 	if _fire_cooldown > 0.0:
 		_fire_cooldown = maxf(_fire_cooldown - delta, 0.0)
-	_target = _pick_target()
+	# 目标失效立刻重挑；否则按 AI_TARGET_RETRY_INTERVAL 节流（省的是逐候选通视查询）
+	_pick_timer -= delta
+	if _target == null or not is_instance_valid(_target) or _pick_timer <= 0.0:
+		_target = _pick_target()
+		_pick_timer = GameConfig.AI_TARGET_RETRY_INTERVAL
 	if _target != null:
 		velocity = Vector2.ZERO
 		var aim: Vector2 = _target.global_position - global_position

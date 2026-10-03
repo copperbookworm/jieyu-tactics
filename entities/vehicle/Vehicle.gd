@@ -467,13 +467,18 @@ func _ai_update(delta: float) -> void:
 			_fire_ai()
 
 
+## 通视节流器（与 Enemy 同一套口径，见 GameConfig.SIGHT_THROTTLE_FRAMES）
+var _sight_throttle := SightSystem.Throttle.new()
+
+
 func _has_sight_to_player() -> bool:
 	if _sight == null or _sight.grid == null or _player_ref == null:
 		return true   # 没有通视系统时不拦（测试环境）
 	var origin_height := _sight.grid.sample_bilinear(global_position) \
 			+ GameConfig.SOLDIER_EYE_HEIGHT
 	var target_height := _sight.eye_height_at(_player_ref.global_position)
-	return _sight.has_sight(global_position, origin_height,
+	return _sight_throttle.sight(_sight, Engine.get_physics_frames(),
+			global_position, origin_height,
 			_player_ref.global_position, target_height)
 
 

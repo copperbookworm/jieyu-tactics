@@ -19,12 +19,16 @@ const TerrainZoneScript := preload("res://entities/zone/TerrainZone.gd")
 const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
 ## 编成（docx 4.10.8 / 5.8）：组 4 人 · 一小队至少 2 组
 const OrganizationScript := preload("res://systems/match/Organization.gd")
+## 编成命令层（docx 4.10.8）：主线下发给小队长、小队长按模板派发小队内子任务
+const SquadOrdersScript := preload("res://systems/match/SquadOrders.gd")
 
 var terrain_sprite: Sprite2D = null
 ## 本局友好方编成（组 / 小队 / 队长）—— 由 _spawn_allies 建好后写回，供 HUD / 任务链读
 var organization: Dictionary = {}
 ## 本次装配真的建出了多少单位（装配事实，不受战斗结果影响：单位会被打死并 free 掉，
 ## 任务事件还会往 enemy 组里塞穿插兵 Infiltrator# ⇒ 拿「组里还剩几个」当装配断言会假红，2026-10-03 踩过）
+## 本局组任务（编成命令层派发的结果）—— 供 HUD / 参谋 / 队友 AI 读
+var squad_orders: Dictionary = {}
 var spawned_enemy_count := 0
 var spawned_ally_count := 0
 
@@ -49,6 +53,9 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	# 队友（2026-10-02）：3 名强力队友进 friendly 组。集成冒烟已订正过「敌人 2 个」那条过期断言 ——
 	# 队友会先击毙开局步兵，事件驱动的穿插兵也会进 enemy 组，所以那条不再用等值。
 	_spawn_allies(main, _ally_target())
+	# 编成命令层（docx 4.10.8）：主线下发给小队长，小队长按模板把小队内子任务派到每个组。
+	# **必须放在 _spawn_allies 之后** —— 编成是在那里建的，放前面会派发出 0 条任务（踩过）。
+	squad_orders = SquadOrdersScript.issue(organization, main.capture_zones.size(), 0)
 
 
 ## 地形来源（工具链 A）：填了高度图就优先导入；导入失败或没填 → 退回噪声地形
@@ -146,7 +153,6 @@ func _ally_target() -> int:
 func _spawn_allies(main, count: int) -> void:
 	# 编成（docx 4.10.8 / 5.8）：玩家是名册第 0 位，队友从 1 起 —— 把每人的组 / 小队 / 组长身份发下去
 	organization = OrganizationScript.of_friendly_total(1 + count)
-	spawned_ally_count = count
 	spawned_ally_count = count
 	var member_of: Dictionary = organization["member_of"]
 	for i in count:

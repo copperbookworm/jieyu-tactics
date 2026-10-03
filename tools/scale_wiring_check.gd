@@ -97,6 +97,14 @@ func _check_case(i: int) -> void:
 		org = _app.match_host.main.world.organization
 	_check("模式 %s 的编成：%d 组 / %d 小队" % [label, want_g, want_s],
 			[int(org.get("group_count", -99)), int(org.get("squad_count", -99))], [want_g, want_s])
+	# 编成命令层（docx 4.10.8）：每个组一条组任务；主线收件人恒为玩家；0 组拿主线那个节点
+	var orders: Dictionary = w.squad_orders if w != null else {}
+	_check("模式 %s 派发 %d 条组任务（每组一条）" % [label, want_g],
+			int(orders.get("items", []).size()), want_g)
+	_check("模式 %s 主线收件人 = 玩家" % label, int(orders.get("recipient", -1)), 0)
+	_check("模式 %s 玩家所在组的组任务是「占领 A」" % label,
+			String((orders.get("my_order", {}) as Dictionary).get("text", "")),
+			"占领 A" if want_g > 0 else "")
 
 
 ## 数组里名字以 prefix 开头的节点数（WorldSetup 的命名是 Enemy# / Ally#）

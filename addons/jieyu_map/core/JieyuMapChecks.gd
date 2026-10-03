@@ -15,9 +15,10 @@ const SEV_INFO := "INFO"
 
 ## 通视采样步长（米）。与工程项目口径一致：1 m 网格 + SIGHT_MARGIN 容差
 const SIGHT_SAMPLE_STEP_M := 1.0
-## 制高点扫描用的粗步长：它要对全图几万个候选点各投 9 条线，1 m 步长会跑几十秒
-const OVERWATCH_SIGHT_STEP_M := 4.0
 const SIGHT_MAX_SAMPLES := 900
+## 地形 / 掩体检查合用的采样栅格步长（米）：1000 图 → 100×100 采样格。
+## 为什么两个检查共用一张栅格：各扫一遍 100 万格是这份文件最贵的一段（实测从 1.4 s 降到 40 ms）。
+const TERRAIN_RASTER_STEP_M := 10
 
 
 ## ────────────── 入口 ──────────────
@@ -579,28 +580,6 @@ static func _check_terrain_raster(doc: JieyuMapDoc, report: Array, raster: Dicti
 			"相邻节点连线最长无遮挡段 %.0f m（六章：每 %.0f–%.0f m 打断一次；最长段在 %s；"
 			% [worst, JieyuMapSpec.SIGHT_BREAK_MIN_M, JieyuMapSpec.SIGHT_BREAK_MAX_M, worst_pair]
 			+ "采样步长 %d m）" % step, {"longest_open_m": worst, "pair": worst_pair}))
-
-
-## 两点之间是否能直接看到（眼高用 GameConfig.SOLDIER_EYE_HEIGHT，容差 SIGHT_MARGIN）。
-## sample_step_m 越大越快 —— 制高点扫描要跑几万条线，所以它用 4 m；单点判据用 1 m。
-static func _is_open_line(doc: JieyuMapDoc, from_world: Vector2, to_world: Vector2,
-		sample_step_m: float = SIGHT_SAMPLE_STEP_M) -> bool:
-	var distance := from_world.distance_to(to_world)
-	if distance < 1.0:
-		return true
-	var eye := GameConfig.SOLDIER_EYE_HEIGHT
-	var margin := GameConfig.SIGHT_MARGIN
-	var from_h := doc.sample_bilinear(from_world) + eye
-	var to_h := doc.sample_bilinear(to_world) + eye
-	var steps := mini(maxi(int(ceil(distance / sample_step_m)), 1), SIGHT_MAX_SAMPLES)
-	for i in range(1, steps):
-		var t := float(i) / float(steps)
-		var point := from_world.lerp(to_world, t)
-		var sight_height := lerpf(from_h, to_h, t)
-		# 与工程项目同一条判据：视线高度低于地形高度 + 容差 ⇒ 被挡
-		if doc.sample_bilinear(point) + margin > sight_height:
-			return false
-	return true
 
 
 ## ────────────── 制高点覆盖（4.3 第②项 / 12.8.4 约束）──────────────

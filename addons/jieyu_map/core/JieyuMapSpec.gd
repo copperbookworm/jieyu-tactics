@@ -72,7 +72,8 @@ const SIGHT_BREAK_MAX_M := 200.0
 const VEHICLE_CORRIDOR_MIN_M := 8.0     # 载具通道宽度 ≥ 8 m
 const VEHICLE_SLOPE_LIMIT_DEG := -1.0   # 负值 = 取 GameConfig.MAX_SLOPE_DEG（30°）
 const CORRIDOR_FLAT_DEG := 8.0          # 判定「这段路能跑车」的局部坡度上限（比 30° 严）
-const CORRIDOR_SAMPLE_STEP_M := 25.0
+## ⚠ 8 位高度图 1 灰度 ≈ 0.59 m ⇒ 相邻两格的最小高差本身就是约 30.5°，
+## 所以「坡度」一律按跨若干格的平均值量，别用相邻两格（那是量化噪声，不是坡度）。
 ## 掩体密度分级：间距 5–15 米、高 1.5–3 米（城市 / 建筑群）——插件按「建筑群」口径校验
 const URBAN_SPACING_MIN_M := 5.0
 const URBAN_SPACING_MAX_M := 15.0
@@ -84,7 +85,6 @@ const BUILDING_H_TOP_M := 3.0
 const MAX_NODES_PER_OVERWATCH := 2
 ## 制高点覆盖 ≥70% 占领区 → 用「能看见核心圆 70% 采样点」近似
 const OVERWATCH_CORE_COVER_RATIO := 0.70
-const OVERWATCH_SCAN_STEP_M := 5.0      # 制高点扫描抽样步长（1000/5 = 200×200 = 4 万格）
 const OVERWATCH_MIN_ELEV_M := 40.0      # 低于这个高程不算「制高点」
 const OVERWATCH_CORE_SAMPLES := 9       # 核心区采样点（3×3）
 

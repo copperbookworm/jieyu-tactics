@@ -525,9 +525,10 @@
     "type": "building"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.4,
+    "hp": 200.0,
     "id": "wall_01",
     "polygon": [
       [
@@ -550,9 +551,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
+    "hp": 200.0,
     "id": "wall_02",
     "polygon": [
       [
@@ -575,9 +577,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
+    "hp": 200.0,
     "id": "wall_03",
     "polygon": [
       [
@@ -600,9 +603,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
+    "hp": 200.0,
     "id": "wall_04",
     "polygon": [
       [
@@ -625,9 +629,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.6,
+    "hp": 200.0,
     "id": "wall_05",
     "polygon": [
       [
@@ -650,9 +655,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.3,
+    "hp": 200.0,
     "id": "wall_06",
     "polygon": [
       [
@@ -675,9 +681,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.7,
+    "hp": 200.0,
     "id": "wall_07",
     "polygon": [
       [
@@ -700,9 +707,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.0,
+    "hp": 200.0,
     "id": "wall_08",
     "polygon": [
       [
@@ -725,9 +733,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
+    "hp": 200.0,
     "id": "wall_09",
     "polygon": [
       [
@@ -750,9 +759,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.7,
+    "hp": 200.0,
     "id": "wall_10",
     "polygon": [
       [
@@ -775,9 +785,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
+    "hp": 200.0,
     "id": "wall_11",
     "polygon": [
       [
@@ -800,9 +811,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.6,
+    "hp": 200.0,
     "id": "wall_12",
     "polygon": [
       [
@@ -825,9 +837,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
+    "hp": 200.0,
     "id": "wall_13",
     "polygon": [
       [
@@ -850,9 +863,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.4,
+    "hp": 200.0,
     "id": "wall_14",
     "polygon": [
       [
@@ -875,9 +889,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.3,
+    "hp": 200.0,
     "id": "wall_15",
     "polygon": [
       [
@@ -900,9 +915,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
+    "hp": 200.0,
     "id": "wall_16",
     "polygon": [
       [
@@ -925,9 +941,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
+    "hp": 200.0,
     "id": "wall_17",
     "polygon": [
       [
@@ -950,9 +967,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.8,
+    "hp": 200.0,
     "id": "wall_18",
     "polygon": [
       [
@@ -975,9 +993,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
+    "hp": 200.0,
     "id": "wall_19",
     "polygon": [
       [
@@ -1000,9 +1019,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.2,
+    "hp": 200.0,
     "id": "wall_20",
     "polygon": [
       [
@@ -1025,9 +1045,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.1,
+    "hp": 200.0,
     "id": "wall_21",
     "polygon": [
       [
@@ -1050,9 +1071,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.8,
+    "hp": 200.0,
     "id": "wall_22",
     "polygon": [
       [
@@ -1075,9 +1097,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.6,
+    "hp": 200.0,
     "id": "wall_23",
     "polygon": [
       [
@@ -1100,9 +1123,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.4,
+    "hp": 200.0,
     "id": "wall_24",
     "polygon": [
       [
@@ -1125,9 +1149,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 0.9,
+    "hp": 200.0,
     "id": "wall_25",
     "polygon": [
       [
@@ -1150,9 +1175,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.9,
+    "hp": 200.0,
     "id": "wall_26",
     "polygon": [
       [
@@ -1175,9 +1201,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.0,
+    "hp": 200.0,
     "id": "wall_27",
     "polygon": [
       [
@@ -1200,9 +1227,10 @@
     "type": "wall"
   },
   {
-    "destructible": false,
+    "destructible": true,
     "h_low": 0.0,
     "h_top": 1.8,
+    "hp": 200.0,
     "id": "wall_28",
     "polygon": [
       [

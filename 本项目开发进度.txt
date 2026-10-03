@@ -42,6 +42,12 @@
 	  端到端：`generate --recipe recipe_demo.json --validate` 生成 **1000×1000 用 10 s**，
 	  **ERROR 0 / WARN 1（无掩体开阔地 450 m）/ INFO 8**；审阅图 `terrain.png` 30 KB + 快照 1000×1000 已肉眼验过。
 	  插件已写进 `project.godot` 的 `[editor_plugins] enabled`（与 godot_ai 并列），编辑器热重载后无 SCRIPT ERROR。
+	  补记三（查文档缺口后定的口径）：**「哪些地图物件能摧毁」文档只有 `occluders.json` 的 `destructible` 布尔**——
+	  明文耐久的只有沙袋（4.17 / 20.5：耐久 200），建筑只有 4.17 一句「沿用 8.2.6 思路」；
+	  21.2.2 ⑧ 文档自认「建筑本身没有毁伤判定」，22.10 又把建筑毁伤降级为后续版本。
+	  插件据此：**建筑一律 `destructible:false` 且不写 hp**（不凭空发明一套血量），
+	  半高墙（沙袋类）写 `destructible:true` + `hp:200`（对齐 `GameConfig.COVER_HP`）；
+	  校验器新增 WARN「destructible=true 却没有 hp」。示例图实测 28 个可摧毁墙 + 21 座不可摧毁建筑。
 	  上一次抬头（原文保留）最后更新：2026-10-03（**第四十七版 · 游戏外壳**：主场景换成 App.tscn，启动进大厅；模式选择真做三套规则；设置五项补齐两处既有欠账；局内暂停菜单 + HUD 按钮按用途重排；动代码 + 新增主场景） ｜ git HEAD：d6304fa（第四十六版）
 本次更新：本轮做**第四十七版**（使用者拍板四件事：① 大厅做启动入口 ② 模式真做多套规则 ③ 设置五项全做 ④ 局内暂停菜单并顺带重排 HUD 按钮）：
 	· **新主场景 App.tscn**（`res://scenes/app/App.tscn`，一个空 Node + App.gd）：启动先进大厅。

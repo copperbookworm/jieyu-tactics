@@ -197,6 +197,8 @@ func _test_generation() -> void:
 			(a.zones.get("raas_nodes", []) as Array).size())
 	_check_true("生成了遮挡体", a.occluders.size() > 0)
 	_check_true("遮挡体都是 building/wall", _all_occluders_valid(a.occluders))
+	_check_true("可摧毁的遮挡体都带 hp（建筑不可摧毁且无 hp —— 文档没有建筑毁伤规则）",
+			_destructible_have_hp(a.occluders))
 	_check("meta 记录了生成配方", a.meta.has("recipe"), true)
 	_check("meta.recipe.seed 与配方一致", int(a.meta["recipe"]["seed"]), 20260101)
 
@@ -225,6 +227,18 @@ func _all_occluders_valid(occluders: Array) -> bool:
 		if float(item["h_low"]) > float(item["h_top"]):
 			return false
 		if not ["building", "wall"].has(str(item["type"])):
+			return false
+	return true
+
+
+## 12.8.7 口径：destructible=true 必须带 hp；建筑（文档没有毁伤规则）必须是 destructible=false 且无 hp
+func _destructible_have_hp(occluders: Array) -> bool:
+	for item_v in occluders:
+		var item: Dictionary = item_v
+		var destructible := bool(item.get("destructible", false))
+		if destructible and not item.has("hp"):
+			return false
+		if str(item.get("type", "")) == "building" and destructible:
 			return false
 	return true
 

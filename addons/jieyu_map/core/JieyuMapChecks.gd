@@ -337,6 +337,12 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 			report.append(_item(SEV_ERROR, "occluders.height_range",
 					"遮挡体 %s 的 h_low %.1f > h_top %.1f" % [str(item.get("id", "?")), h_low, h_top],
 					{}))
+		# 12.8.7 的 hp 标着「可选」，但 destructible=true 而没有血量就落不了地：
+		# 文档侧至今只有沙袋给了耐久（4.17 / 20.5：200），建筑没有毁伤规则（21.2.2 ⑧ 自认）。
+		if bool(item.get("destructible", false)) and not item.has("hp"):
+			report.append(_item(SEV_WARN, "occluders.destructible_no_hp",
+					"遮挡体 %s 标了 destructible=true 却没有 hp（文档没给这类物件的耐久）"
+					% str(item.get("id", "?")), {}))
 		if h_top >= JieyuMapSpec.BUILDING_H_LOW_M and str(item.get("type", "")) == "building":
 			buildings += 1
 		for point_v in polygon:

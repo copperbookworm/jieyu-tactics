@@ -14,6 +14,11 @@ const WEIGHT_FLATNESS := 3.0
 const WEIGHT_ROAD := 1.5
 const WEIGHT_ELEV_PENALTY := 2.0
 
+## 半高墙（沙袋类）的耐久占位值，对齐工程 `GameConfig.COVER_HP`（200）。
+## 文档侧只有 4.17 / 20.5 一句「耐久 200，清零后退出 occluder 组」，
+## 所以这是**唯一**有据可依的可摧毁物件血量；建筑不写 hp（文档没有这个规则）。
+const SANDBAG_HP := 200.0
+
 
 ## ────────────── 1. 噪声基底（12.8.3）──────────────
 
@@ -515,6 +520,10 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 					or center.y > float(doc.height_px) - 8.0:
 				continue
 			wall_index += 1
+			# 12.8.7 的 destructible / hp 是**可选**字段；文档里唯一有明确耐久的可摧毁物件是沙袋
+			# （4.17 / 20.5：耐久 200，打光退出 occluder 组），所以这里产出的半高墙标成可摧毁。
+			# ⚠ 建筑一律 destructible=false —— 文档至今没有建筑毁伤规则（21.2.2 ⑧ 自认），
+			#   标 true 只会凭空发明一套血量（难崩模式的「建筑毁伤更多」也在第一版被降级）。
 			occluders.append({
 				"id": "wall_%02d" % wall_index,
 				"type": "wall",
@@ -522,7 +531,8 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 						rng.randf_range(1.0, 1.8)),
 				"h_low": 0.0,
 				"h_top": roundf(rng.randf_range(0.8, 2.0) * 10.0) / 10.0,
-				"destructible": false,
+				"destructible": true,
+				"hp": SANDBAG_HP,
 			})
 	return occluders
 

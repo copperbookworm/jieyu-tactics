@@ -1,0 +1,53 @@
+{
+  "_说明": "《解域》地图生成配方（jieyu_map 插件 / tools/jieyu_map_cli.gd generate 都读它）。字段全部可省；省略即用 12.8 的默认口径。",
+  "_怎么用": "godot --headless --path . --script res://tools/jieyu_map_cli.gd -- generate --recipe res://addons/jieyu_map/recipe_demo.json --validate",
+  "map_id": "grassland_demo2",
+  "name": "丘陵草原（插件生成）",
+  "terrain_type": "grassland",
+  "players": 64,
+  "grid_w": 1000,
+  "grid_h": 1000,
+  "seed": 20260101,
+  "max_elevation_m": 150,
+  "octaves": 4,
+  "lacunarity": 2.0,
+  "gain": 0.5,
+  "layers": [
+    { "feature_m": 250, "amp_m": 90 },
+    { "feature_m": 80, "amp_m": 40 },
+    { "feature_m": 25, "amp_m": 15 },
+    { "feature_m": 8, "amp_m": 5 }
+  ],
+  "river_axis": "y",
+  "water_level_m": 8,
+  "river_center_ratio": 0.52,
+  "river_half_width_m": 26,
+  "node_count": 5,
+  "settlement_groups": 3,
+  "buildings_per_group": 7,
+  "mud_max_ratio": 0.10,
+  "snow_min_ratio": 0.62,
+  "grass_max_ratio": 0.55,
+  "roads": [
+    {
+      "name": "东西主干道",
+      "width_m": 10,
+      "max_slope_deg": 8,
+      "path": [[110, 520], [330, 470], [520, 520], [700, 640], [880, 520]]
+    },
+    {
+      "name": "南北支路",
+      "width_m": 8,
+      "max_slope_deg": 8,
+      "path": [[500, 140], [480, 330], [520, 520], [560, 720], [520, 900]]
+    }
+  ],
+  "plateaus": [
+    { "pos": [250, 240], "radius_m": 110, "peak_m": 118, "falloff_m": 170 },
+    { "pos": [760, 300], "radius_m": 90, "peak_m": 104, "falloff_m": 150 },
+    { "pos": [300, 790], "radius_m": 95, "peak_m": 96, "falloff_m": 160 }
+  ],
+  "flatten_areas": [
+    { "pos": [500, 500], "radius_m": 60, "falloff_m": 30 }
+  ]
+}

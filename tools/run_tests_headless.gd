@@ -48,7 +48,10 @@ func _initialize() -> void:
 		var filtered: Array[String] = []
 		for name in names:
 			for want in wanted:
-				if want.contains(name):
+				# 筛选用「脚本名是否包含参数」——历史写法是 want.contains(name)，
+				# 只有参数比脚本名更长时才碰巧命中（如 test/xxx_test.gd），
+				# 传 `-- cover` 这类短关键词会一个都选不出来（筛不出来时假报「没找到脚本」）。
+				if name.contains(want):
 					filtered.append(name)
 		names = filtered
 	if names.is_empty():

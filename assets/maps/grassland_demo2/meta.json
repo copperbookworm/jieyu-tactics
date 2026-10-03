@@ -1,0 +1,121 @@
+{
+  "cell_size_m": 1.0,
+  "content_counts": [
+    22430,
+    180411,
+    69097
+  ],
+  "content_layers": {
+    "material_file": "material.png",
+    "merge_mode": "max_conceal",
+    "name": "terrain_content",
+    "rows_file": "content.png"
+  },
+  "grid": 1000,
+  "map_id": "grassland_demo2",
+  "max_elevation_m": 150.0,
+  "modes": [
+    "pvp_competitive",
+    "pvp_armor",
+    "pvp_casual",
+    "pvevp"
+  ],
+  "name": "丘陵草原（插件生成）",
+  "noise": {
+    "gain": 0.5,
+    "lacunarity": 2.0,
+    "layers": [
+      {
+        "amp_m": 90.0,
+        "feature_m": 250.0
+      },
+      {
+        "amp_m": 40.0,
+        "feature_m": 80.0
+      },
+      {
+        "amp_m": 15.0,
+        "feature_m": 25.0
+      },
+      {
+        "amp_m": 5.0,
+        "feature_m": 8.0
+      }
+    ],
+    "octaves": 4.0,
+    "seed": 20260101,
+    "type": "simplex_smooth"
+  },
+  "players": 64,
+  "recipe": {
+    "buildings_per_group": 7,
+    "generator": "jieyu_map/simplex_smooth",
+    "grid_h": 1000,
+    "grid_w": 1000,
+    "node_count": 5,
+    "river_axis": "y",
+    "seed": 20260101,
+    "settlement_groups": 3,
+    "water_level_m": 8.0
+  },
+  "roads": [
+    {
+      "name": "东西主干道",
+      "path": [
+        [
+          110.0,
+          520.0
+        ],
+        [
+          330.0,
+          470.0
+        ],
+        [
+          520.0,
+          520.0
+        ],
+        [
+          700.0,
+          640.0
+        ],
+        [
+          880.0,
+          520.0
+        ]
+      ],
+      "width_m": 10.0
+    },
+    {
+      "name": "南北支路",
+      "path": [
+        [
+          500.0,
+          140.0
+        ],
+        [
+          480.0,
+          330.0
+        ],
+        [
+          520.0,
+          520.0
+        ],
+        [
+          560.0,
+          720.0
+        ],
+        [
+          520.0,
+          900.0
+        ]
+      ],
+      "width_m": 8.0
+    }
+  ],
+  "sight_margin_m": 0.3,
+  "size_m": [
+    1000.0,
+    1000.0
+  ],
+  "terrain_type": "grassland"
+}

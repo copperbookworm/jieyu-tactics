@@ -1,0 +1,1227 @@
+[
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 4.9,
+    "id": "building_01",
+    "polygon": [
+      [
+        496,
+        879
+      ],
+      [
+        510,
+        879
+      ],
+      [
+        510,
+        891
+      ],
+      [
+        496,
+        891
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.5,
+    "id": "building_02",
+    "polygon": [
+      [
+        533,
+        842
+      ],
+      [
+        544,
+        842
+      ],
+      [
+        544,
+        851
+      ],
+      [
+        533,
+        851
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.2,
+    "id": "building_03",
+    "polygon": [
+      [
+        530,
+        923
+      ],
+      [
+        541,
+        923
+      ],
+      [
+        541,
+        933
+      ],
+      [
+        530,
+        933
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 5.3,
+    "id": "building_04",
+    "polygon": [
+      [
+        546,
+        873
+      ],
+      [
+        560,
+        873
+      ],
+      [
+        560,
+        884
+      ],
+      [
+        546,
+        884
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.1,
+    "id": "building_05",
+    "polygon": [
+      [
+        541,
+        872
+      ],
+      [
+        553,
+        872
+      ],
+      [
+        553,
+        883
+      ],
+      [
+        541,
+        883
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 4.9,
+    "id": "building_06",
+    "polygon": [
+      [
+        585,
+        866
+      ],
+      [
+        596,
+        866
+      ],
+      [
+        596,
+        876
+      ],
+      [
+        585,
+        876
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.4,
+    "id": "building_07",
+    "polygon": [
+      [
+        514,
+        863
+      ],
+      [
+        525,
+        863
+      ],
+      [
+        525,
+        874
+      ],
+      [
+        514,
+        874
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.0,
+    "id": "building_08",
+    "polygon": [
+      [
+        525,
+        837
+      ],
+      [
+        538,
+        837
+      ],
+      [
+        538,
+        849
+      ],
+      [
+        525,
+        849
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 5.8,
+    "id": "building_09",
+    "polygon": [
+      [
+        578,
+        831
+      ],
+      [
+        589,
+        831
+      ],
+      [
+        589,
+        844
+      ],
+      [
+        578,
+        844
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.9,
+    "id": "building_10",
+    "polygon": [
+      [
+        579,
+        855
+      ],
+      [
+        589,
+        855
+      ],
+      [
+        589,
+        864
+      ],
+      [
+        579,
+        864
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 4.6,
+    "id": "building_11",
+    "polygon": [
+      [
+        461,
+        893
+      ],
+      [
+        471,
+        893
+      ],
+      [
+        471,
+        907
+      ],
+      [
+        461,
+        907
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.1,
+    "id": "building_12",
+    "polygon": [
+      [
+        455,
+        841
+      ],
+      [
+        463,
+        841
+      ],
+      [
+        463,
+        852
+      ],
+      [
+        455,
+        852
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 4.3,
+    "id": "building_13",
+    "polygon": [
+      [
+        545,
+        901
+      ],
+      [
+        554,
+        901
+      ],
+      [
+        554,
+        910
+      ],
+      [
+        545,
+        910
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.3,
+    "id": "building_14",
+    "polygon": [
+      [
+        562,
+        825
+      ],
+      [
+        576,
+        825
+      ],
+      [
+        576,
+        834
+      ],
+      [
+        562,
+        834
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.5,
+    "id": "building_15",
+    "polygon": [
+      [
+        458,
+        886
+      ],
+      [
+        470,
+        886
+      ],
+      [
+        470,
+        895
+      ],
+      [
+        458,
+        895
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 5.7,
+    "id": "building_16",
+    "polygon": [
+      [
+        510,
+        932
+      ],
+      [
+        522,
+        932
+      ],
+      [
+        522,
+        946
+      ],
+      [
+        510,
+        946
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 5.0,
+    "id": "building_17",
+    "polygon": [
+      [
+        538,
+        796
+      ],
+      [
+        547,
+        796
+      ],
+      [
+        547,
+        806
+      ],
+      [
+        538,
+        806
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.9,
+    "id": "building_18",
+    "polygon": [
+      [
+        496,
+        843
+      ],
+      [
+        506,
+        843
+      ],
+      [
+        506,
+        855
+      ],
+      [
+        496,
+        855
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 4.1,
+    "id": "building_19",
+    "polygon": [
+      [
+        539,
+        863
+      ],
+      [
+        548,
+        863
+      ],
+      [
+        548,
+        875
+      ],
+      [
+        539,
+        875
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 4.6,
+    "id": "building_20",
+    "polygon": [
+      [
+        523,
+        858
+      ],
+      [
+        536,
+        858
+      ],
+      [
+        536,
+        866
+      ],
+      [
+        523,
+        866
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 3.4,
+    "id": "building_21",
+    "polygon": [
+      [
+        498,
+        859
+      ],
+      [
+        509,
+        859
+      ],
+      [
+        509,
+        868
+      ],
+      [
+        498,
+        868
+      ]
+    ],
+    "type": "building"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.4,
+    "id": "wall_01",
+    "polygon": [
+      [
+        110,
+        501
+      ],
+      [
+        115,
+        501
+      ],
+      [
+        115,
+        505
+      ],
+      [
+        110,
+        505
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.1,
+    "id": "wall_02",
+    "polygon": [
+      [
+        54,
+        530
+      ],
+      [
+        60,
+        530
+      ],
+      [
+        60,
+        532
+      ],
+      [
+        54,
+        532
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.1,
+    "id": "wall_03",
+    "polygon": [
+      [
+        24,
+        450
+      ],
+      [
+        31,
+        450
+      ],
+      [
+        31,
+        453
+      ],
+      [
+        24,
+        453
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.2,
+    "id": "wall_04",
+    "polygon": [
+      [
+        91,
+        442
+      ],
+      [
+        97,
+        442
+      ],
+      [
+        97,
+        445
+      ],
+      [
+        91,
+        445
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.6,
+    "id": "wall_05",
+    "polygon": [
+      [
+        325,
+        526
+      ],
+      [
+        331,
+        526
+      ],
+      [
+        331,
+        529
+      ],
+      [
+        325,
+        529
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.3,
+    "id": "wall_06",
+    "polygon": [
+      [
+        293,
+        551
+      ],
+      [
+        300,
+        551
+      ],
+      [
+        300,
+        554
+      ],
+      [
+        293,
+        554
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.7,
+    "id": "wall_07",
+    "polygon": [
+      [
+        255,
+        535
+      ],
+      [
+        261,
+        535
+      ],
+      [
+        261,
+        538
+      ],
+      [
+        255,
+        538
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.0,
+    "id": "wall_08",
+    "polygon": [
+      [
+        230,
+        496
+      ],
+      [
+        239,
+        496
+      ],
+      [
+        239,
+        499
+      ],
+      [
+        230,
+        499
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.1,
+    "id": "wall_09",
+    "polygon": [
+      [
+        258,
+        476
+      ],
+      [
+        263,
+        476
+      ],
+      [
+        263,
+        479
+      ],
+      [
+        258,
+        479
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.7,
+    "id": "wall_10",
+    "polygon": [
+      [
+        320,
+        455
+      ],
+      [
+        329,
+        455
+      ],
+      [
+        329,
+        458
+      ],
+      [
+        320,
+        458
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.1,
+    "id": "wall_11",
+    "polygon": [
+      [
+        521,
+        476
+      ],
+      [
+        528,
+        476
+      ],
+      [
+        528,
+        479
+      ],
+      [
+        521,
+        479
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.6,
+    "id": "wall_12",
+    "polygon": [
+      [
+        499,
+        514
+      ],
+      [
+        506,
+        514
+      ],
+      [
+        506,
+        517
+      ],
+      [
+        499,
+        517
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.2,
+    "id": "wall_13",
+    "polygon": [
+      [
+        449,
+        496
+      ],
+      [
+        454,
+        496
+      ],
+      [
+        454,
+        499
+      ],
+      [
+        449,
+        499
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.4,
+    "id": "wall_14",
+    "polygon": [
+      [
+        426,
+        444
+      ],
+      [
+        436,
+        444
+      ],
+      [
+        436,
+        447
+      ],
+      [
+        426,
+        447
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.3,
+    "id": "wall_15",
+    "polygon": [
+      [
+        456,
+        398
+      ],
+      [
+        465,
+        398
+      ],
+      [
+        465,
+        400
+      ],
+      [
+        456,
+        400
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.2,
+    "id": "wall_16",
+    "polygon": [
+      [
+        526,
+        414
+      ],
+      [
+        533,
+        414
+      ],
+      [
+        533,
+        418
+      ],
+      [
+        526,
+        418
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.2,
+    "id": "wall_17",
+    "polygon": [
+      [
+        745,
+        538
+      ],
+      [
+        751,
+        538
+      ],
+      [
+        751,
+        541
+      ],
+      [
+        745,
+        541
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.8,
+    "id": "wall_18",
+    "polygon": [
+      [
+        727,
+        594
+      ],
+      [
+        733,
+        594
+      ],
+      [
+        733,
+        597
+      ],
+      [
+        727,
+        597
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.2,
+    "id": "wall_19",
+    "polygon": [
+      [
+        675,
+        558
+      ],
+      [
+        683,
+        558
+      ],
+      [
+        683,
+        560
+      ],
+      [
+        675,
+        560
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.2,
+    "id": "wall_20",
+    "polygon": [
+      [
+        635,
+        521
+      ],
+      [
+        643,
+        521
+      ],
+      [
+        643,
+        524
+      ],
+      [
+        635,
+        524
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.1,
+    "id": "wall_21",
+    "polygon": [
+      [
+        672,
+        462
+      ],
+      [
+        677,
+        462
+      ],
+      [
+        677,
+        465
+      ],
+      [
+        672,
+        465
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.8,
+    "id": "wall_22",
+    "polygon": [
+      [
+        732,
+        491
+      ],
+      [
+        739,
+        491
+      ],
+      [
+        739,
+        494
+      ],
+      [
+        732,
+        494
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.6,
+    "id": "wall_23",
+    "polygon": [
+      [
+        949,
+        468
+      ],
+      [
+        954,
+        468
+      ],
+      [
+        954,
+        470
+      ],
+      [
+        949,
+        470
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.4,
+    "id": "wall_24",
+    "polygon": [
+      [
+        939,
+        512
+      ],
+      [
+        949,
+        512
+      ],
+      [
+        949,
+        516
+      ],
+      [
+        939,
+        516
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 0.9,
+    "id": "wall_25",
+    "polygon": [
+      [
+        888,
+        499
+      ],
+      [
+        895,
+        499
+      ],
+      [
+        895,
+        502
+      ],
+      [
+        888,
+        502
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.9,
+    "id": "wall_26",
+    "polygon": [
+      [
+        885,
+        458
+      ],
+      [
+        891,
+        458
+      ],
+      [
+        891,
+        460
+      ],
+      [
+        885,
+        460
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.0,
+    "id": "wall_27",
+    "polygon": [
+      [
+        909,
+        428
+      ],
+      [
+        915,
+        428
+      ],
+      [
+        915,
+        431
+      ],
+      [
+        909,
+        431
+      ]
+    ],
+    "type": "wall"
+  },
+  {
+    "destructible": false,
+    "h_low": 0.0,
+    "h_top": 1.8,
+    "id": "wall_28",
+    "polygon": [
+      [
+        951,
+        416
+      ],
+      [
+        959,
+        416
+      ],
+      [
+        959,
+        419
+      ],
+      [
+        951,
+        419
+      ]
+    ],
+    "type": "wall"
+  }
+]

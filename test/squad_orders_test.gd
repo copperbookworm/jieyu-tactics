@@ -6,6 +6,7 @@ extends EditorScript
 const OrdersScript := preload("res://systems/match/SquadOrders.gd")
 const OrgScript := preload("res://systems/match/Organization.gd")
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
+const AllyScript := preload("res://entities/ally/Ally.gd")
 
 var _passed := 0
 var _failed := 0
@@ -16,6 +17,8 @@ func _run() -> void:
 	_test_pvevp_no_squad()
 	_test_zone_wrap_and_names()
 	_test_empty()
+	_test_order_targets()
+	_test_ally_goal()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
 		print("！！ 有 %d 项失败，往上翻看期望与实际" % _failed)
@@ -62,6 +65,42 @@ func _test_zone_wrap_and_names() -> void:
 	var d := OrdersScript.issue(org, 3, 2)          # 主线指向 C
 	_check("主线偏移：0 组占领 C", d["orders"][0]["text"], "占领 C")
 	_check("主线偏移：1 组守住 A（循环）", d["orders"][1]["text"], "守住 A")
+
+
+## 组任务 → 世界坐标
+func _test_order_targets() -> void:
+	var d := OrdersScript.issue(OrgScript.of_friendly_total(20), 3, 0)
+	var pos := [Vector2(100, 0), Vector2(200, 0), Vector2(300, 0)]
+	var t := OrdersScript.order_targets(d, pos)
+	_check("5 个组都拿到目标坐标", t.size(), 5)
+	_check("0 组去 A", t[0], Vector2(100, 0))
+	_check("1 组去 B", t[1], Vector2(200, 0))
+	_check("2 组去 C", t[2], Vector2(300, 0))
+	_check("3 组节点不够循环回 A", t[3], Vector2(100, 0))
+	_check("没有节点坐标时给空表（不崩）", OrdersScript.order_targets(d, []).size(), 0)
+
+
+## 队友的目标点：有组任务去节点（组内错开），没有就退回「跟在玩家后方」的旧行为
+func _test_ally_goal() -> void:
+	var ally = AllyScript.new()
+	var player := Node2D.new()
+	player.global_position = Vector2(500, 500)
+	ally._player = player
+	ally.index = 1
+	# 没有组任务 ⇒ 旧行为：玩家后方编队位（逐字不变）
+	var follow := ally._goal_position()
+	_check("没组任务时回到玩家后方编队位", follow,
+			player.global_position + AllyScript.formation_offset(1, ally.follow_distance))
+	# 有组任务 ⇒ 去节点，组内按序号错开
+	ally.order_active = true
+	ally.order_target = Vector2(100, 100)
+	var at_order := ally._goal_position()
+	_check("有组任务时去节点（组内错开）", at_order,
+			Vector2(100, 100) + AllyScript.formation_offset(1, ally.order_slot_radius))
+	_check("错开半径比跟随距离小（围着节点站，不散开）",
+			ally.order_slot_radius < ally.follow_distance, true)
+	ally.free()
+	player.free()
 
 
 func _test_empty() -> void:

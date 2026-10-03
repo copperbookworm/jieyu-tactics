@@ -102,6 +102,11 @@ func _check_case(i: int) -> void:
 	_check("模式 %s 派发 %d 条组任务（每组一条）" % [label, want_g],
 			int(orders.get("items", []).size()), want_g)
 	_check("模式 %s 主线收件人 = 玩家" % label, int(orders.get("recipient", -1)), 0)
+	var assigned := 0
+	for node in get_nodes_in_group("friendly"):
+		if node != null and "order_active" in node and bool(node.order_active):
+			assigned += 1
+	_check("模式 %s 的队友都拿到了组任务并开始执行" % label, assigned, want_a)
 	_check("模式 %s 玩家所在组的组任务是「占领 A」" % label,
 			String((orders.get("my_order", {}) as Dictionary).get("text", "")),
 			"占领 A" if want_g > 0 else "")

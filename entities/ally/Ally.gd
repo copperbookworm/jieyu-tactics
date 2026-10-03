@@ -35,6 +35,13 @@ var is_squad_leader := false
 var _fire_cooldown := 0.0
 ## 目标重挑计时（s）：原来每物理帧都遍历敌组、逐候选查通视；现在 0.1 s 才重挑一次
 var _pick_timer := 0.0
+## 组任务（docx 4.10.8 的「执行层」）：本组被派到的占领节点坐标。
+## 由 WorldSetup 在派发完组任务后写入；order_active = false 时退回「跟随玩家」的旧行为。
+var order_target := Vector2.ZERO
+var order_active := false
+var order_text := ""
+## 组内站位半径（组任务时 4 个人围着节点错开，不叠在一起）
+var order_slot_radius := 4.0
 var _sight = null
 var _player = null
 var _grid = null
@@ -137,10 +144,20 @@ func _has_sight(target) -> bool:
 	return _sight.has_sight(global_position, origin, target.global_position, target_height)
 
 
-func _follow(delta: float) -> void:
+## 本帧该去哪儿：有组任务就去组任务的节点（组内按序号错开，免得 4 个人叠成一个点），
+## 没有就沿用「跟在玩家后方」的编队位（旧行为，order_active = false 时逐字不变）
+func _goal_position() -> Vector2:
+	if order_active:
+		return order_target + formation_offset(index, order_slot_radius)
 	if _player == null:
+		return global_position
+	return _player.global_position + formation_offset(index, follow_distance)
+
+
+func _follow(delta: float) -> void:
+	if _player == null and not order_active:
 		return
-	var goal: Vector2 = _player.global_position + formation_offset(index, follow_distance)
+	var goal: Vector2 = _goal_position()
 	var to_goal := goal - global_position
 	if to_goal.length() <= 1.5:
 		velocity = Vector2.ZERO

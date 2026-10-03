@@ -8,6 +8,13 @@ extends Control
 var _quests: Array = []
 var _flash_time := 0.0
 var _flash_text := ""
+## 组任务（docx 4.10.8 执行层）：显示「你所在组被派到了什么」。
+## 只往**已有的那一个 Label** 里多拼一行 —— 不新增控件，所以两条几何门禁都不受影响。
+## 每帧从 world.squad_orders 同步（HudBuilder 注入 main），因此不必改 Main.gd（它守着 ≤400 行）。
+const SquadOrdersScript := preload("res://systems/match/SquadOrders.gd")
+
+var main = null
+var _squad_order := ""
 
 var _label: Label = null
 
@@ -30,6 +37,15 @@ func set_quests(quest_list: Array) -> void:
 	queue_redraw()
 
 
+## 组任务行（空串 = 不显示）
+func set_squad_order(text: String) -> void:
+	if text == _squad_order:
+		return
+	_squad_order = text
+	_refresh_label()
+	queue_redraw()
+
+
 func show_completed(reward: int, quest_name: String) -> void:
 	_flash_time = GameConfig.TASK_COMPLETE_FLASH
 	_flash_text = "完成：%s  +%d 战力分" % [quest_name, reward]
@@ -44,6 +60,17 @@ func show_failed(quest_name: String) -> void:
 	if _label != null:
 		_label.text = _flash_text
 	queue_redraw()
+
+
+## 每帧从世界的编成命令层同步组任务文本（找不到就什么都不做）
+func _sync_squad_order() -> void:
+	var world = main.world if main != null else null
+	if world == null:
+		return
+	var data: Dictionary = world.squad_orders
+	if data.is_empty():
+		return
+	set_squad_order(SquadOrdersScript.summary_text(data))
 
 
 func _refresh_label() -> void:
@@ -62,10 +89,15 @@ func _refresh_label() -> void:
 			line += "  剩 %d s" % int(float(quest["time_left"]))
 		line += "  +%d" % int(quest["reward"])
 		lines.append(line)
+	# 组任务（docx 4.10.8）：主线到了小队长手里，他按模板派给每个组；
+	# 玩家看自己那一组的任务就够了（其余组的任务由各自的组长执行，不塞进卡片）
+	if _squad_order != "":
+		lines.append("[组任务] %s" % _squad_order)
 	_label.text = "\n".join(lines)
 
 
 func _process(delta: float) -> void:
+	_sync_squad_order()
 	if _flash_time <= 0.0:
 		return
 	_flash_time = maxf(_flash_time - delta, 0.0)

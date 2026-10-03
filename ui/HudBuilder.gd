@@ -162,6 +162,7 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 
 	quest_card = QuestCard.new()
 	quest_card.name = "QuestCard"
+	quest_card.main = main          # 组任务行每帧从这里读 world.squad_orders
 	layer.add_child(quest_card)
 
 	# 报点键（右下角、开火键上方）＋ 报点结果提示

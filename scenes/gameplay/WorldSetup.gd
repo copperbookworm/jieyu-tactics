@@ -56,6 +56,7 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	# 编成命令层（docx 4.10.8）：主线下发给小队长，小队长按模板把小队内子任务派到每个组。
 	# **必须放在 _spawn_allies 之后** —— 编成是在那里建的，放前面会派发出 0 条任务（踩过）。
 	squad_orders = SquadOrdersScript.issue(organization, main.capture_zones.size(), 0)
+	_apply_squad_orders(main)
 
 
 ## 地形来源（工具链 A）：填了高度图就优先导入；导入失败或没填 → 退回噪声地形
@@ -145,6 +146,28 @@ func _build_camera(main) -> void:
 ## 队友数：模式定义了就用模式的（PVP 20 v 20 要 19 名 / PVEVP 4P 要 3 名），
 ## 没有模式（单独跑 Main.tscn 的测试、兵棋模式）就退回 GameConfig.ALLY_SQUAD_SIZE = 3
 ## —— 这条回落保证「单跑 Main.tscn」的集成冒烟与几何门禁一行都不用改。
+## 把组任务发给每个队友：组 0/1/2… 各自去自己那个节点（docx 4.10.8 的执行层）。
+## 只有「组任务」存在、且该组有坐标时才置 order_active —— 否则队友保持跟随玩家（旧行为）。
+func _apply_squad_orders(main) -> void:
+	var positions: Array = []
+	for zone in main.capture_zones:
+		if zone is Node2D:
+			positions.append((zone as Node2D).global_position)
+	var targets := SquadOrdersScript.order_targets(squad_orders, positions)
+	var ord: Dictionary = squad_orders.get("orders", {})
+	for node in get_tree().get_nodes_in_group("friendly"):
+		var ally = node
+		if ally == null or not ("group_index" in ally):
+			continue
+		var g := int(ally.group_index)
+		if not targets.has(g):
+			continue
+		ally.order_target = targets[g]
+		ally.order_active = true
+		var entry: Dictionary = ord.get(g, {})
+		ally.order_text = String(entry.get("text", ""))
+
+
 func _ally_target() -> int:
 	var n := MatchRulesScript.ally_count()
 	return n if n > 0 else GameConfig.ALLY_SQUAD_SIZE

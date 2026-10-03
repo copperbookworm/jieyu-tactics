@@ -61,6 +61,22 @@ static func zone_name(zone_index: int) -> String:
 	return "节点 %d" % (zone_index + 1)
 
 
+## 组任务 → 世界坐标：把「第几组打哪个节点」翻成坐标，供队友 AI / 地图标记用。
+## zone_positions 是占领节点的世界坐标（按下标对齐）。越界或不存在的组直接跳过。
+static func order_targets(data: Dictionary, zone_positions: Array) -> Dictionary:
+	var out := {}
+	if zone_positions.is_empty():
+		return out
+	var ord: Dictionary = data.get("orders", {})
+	for g in ord.keys():
+		var entry: Dictionary = ord[g]
+		var zone := int(entry.get("zone", 0))
+		if zone < 0 or zone >= zone_positions.size():
+			continue
+		out[int(g)] = zone_positions[zone]
+	return out
+
+
 ## 界面用的一句话（玩家那一组的组任务）
 static func summary_text(data: Dictionary) -> String:
 	var mine: Dictionary = data.get("my_order", {})

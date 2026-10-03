@@ -133,14 +133,31 @@ func _spawn_allies(main, count: int) -> void:
 		main.add_child(ally)
 
 
+## 敌人出生：demo 只给了 2 个点位，而人数口径（docx 5.8）要 20（PVP）/ 30（PVEVP）。
+## 点位用完之后**循环复用**，并沿圆周散开，免得十几个敌人叠成一堆（叠在一起会让性能采样失真：
+## 通视 DDA 与命中判定都变成近似零距离的退化情况）。
+## 前 points.size() 个与旧实现逐字一致（位置、命名都不变）⇒ 默认 2 敌的场景回归面为零。
 func _spawn_enemies(main, enemy_count: int) -> void:
 	var points := MapGenerator.demo_enemy_points()
-	for index in mini(enemy_count, points.size()):
+	if points.is_empty():
+		return
+	for index in enemy_count:
 		var enemy := Enemy.new()
 		enemy.name = "Enemy%d" % index
-		enemy.global_position = points[index]
+		enemy.global_position = _enemy_spawn_position(points, index)
 		enemy.setup(main.sight, main.player, main.camera, main.grid)
 		main.add_child(enemy)
+
+
+## 第 index 个敌人的出生点：前 N 个用 demo 点（与旧实现一致），之后循环复用 + 圆周散开
+static func _enemy_spawn_position(points: Array, index: int) -> Vector2:
+	if index < points.size():
+		return points[index]
+	var ring := index - points.size()
+	var base: Vector2 = points[ring % points.size()]
+	var lap := ring / points.size()
+	var angle := TAU * float(ring % 12) / 12.0 + float(lap) * 0.37
+	return base + Vector2(cos(angle), sin(angle)) * (14.0 + 9.0 * float(lap))
 
 
 ## 掩体（docx 4.7 第③级）：第一版按 demo 点放沙袋（挡通视也挡子弹，见 Cover.gd）

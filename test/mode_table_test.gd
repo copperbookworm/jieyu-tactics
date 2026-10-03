@@ -18,6 +18,7 @@ func _run() -> void:
 	_test_pvevp_win_rule()
 	_test_durations_track_game_config()
 	_test_cycling_skips_locked()
+	_test_headcount()
 	_test_unknown_mode_is_safe()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
@@ -71,8 +72,12 @@ func _test_fields_complete() -> void:
 		var name := String(entry["name"])
 		for key in ["name", "tag", "desc", "flags", "source", "win_rule"]:
 			_check_true("%s：有 %s 字段" % [name, key], String(entry.get(key, "")) != "")
-		# 每模式敌人数**不该**存在：docx 没有人数的口径（待拍板清单第 13 条）
-		_check_true("%s：表里不放凭空编的每模式敌人数" % name, not entry.has("enemy_count"))
+		# 每模式人数（2026-10-03 使用者拍板 · docx 5.8 与模式表新增的「人数 / 编成」列）：
+		# 第四十七版曾以「docx 没有人数口径」为由不放，那条理由现在不成立
+		_check_true("%s：有人数口径字段（拍板后入表）" % name,
+			entry.has("enemy_count") and entry.has("ally_count"))
+		_check_true("%s：敌人数在 0~30 之间" % name,
+			int(entry["enemy_count"]) >= 0 and int(entry["enemy_count"]) <= 30)
 		_check_true("%s：说明里有 docx 出处" % name,
 				String(entry["source"]).contains("docx"))
 	_check_true("可选的模式一定有置灰理由字段（可空）",
@@ -135,6 +140,32 @@ func _test_cycling_skips_locked() -> void:
 			ModeTableScript.prev_available(first), ModeTableScript.Mode.PVEVP)
 	_check("循环：置灰模式的 next 落到第一个可选模式",
 			ModeTableScript.next_available(ModeTableScript.Mode.WARGAME), ModeTableScript.Mode.PVP_RANKED)
+
+
+## 人数与编成（docx 5.8 + 4.10.8 · 2026-10-03 使用者拍板）
+func _test_headcount() -> void:
+	var pvp := [ModeTableScript.Mode.PVP_RANKED, ModeTableScript.Mode.PVP_CASUAL,
+		ModeTableScript.Mode.ARMORED, ModeTableScript.Mode.HARDCORE]
+	for mode_id in pvp:
+		_check("5.8：%s = 20 v 20（玩家 + 19 队友）" % ModeTableScript.name_of(mode_id),
+			[ModeTableScript.enemy_count(mode_id), ModeTableScript.ally_count(mode_id)], [20, 19])
+		_check_true("5.8：%s 的人数已定义" % ModeTableScript.name_of(mode_id),
+			ModeTableScript.counts_defined(mode_id))
+	_check("5.8：PVEVP = 4P v 30E（玩家 + 3 队友）",
+		[ModeTableScript.enemy_count(ModeTableScript.Mode.PVEVP),
+		ModeTableScript.ally_count(ModeTableScript.Mode.PVEVP)], [30, 3])
+	_check("5.8：兵棋人数未定（0 / 0）",
+		[ModeTableScript.enemy_count(ModeTableScript.Mode.WARGAME),
+		ModeTableScript.ally_count(ModeTableScript.Mode.WARGAME)], [0, 0])
+	_check_true("5.8：兵棋 counts_defined 为 false（调用方要回落到玩家设置）",
+		not ModeTableScript.counts_defined(ModeTableScript.Mode.WARGAME))
+	_check("4.10.8：组 = 4 人", ModeTableScript.GROUP_SIZE, 4)
+	_check("4.10.8：一小队至少 2 组", ModeTableScript.MIN_GROUPS_PER_SQUAD, 2)
+	_check("4.10.8：20 人 = 5 个组", ModeTableScript.group_count(20), 5)
+	_check("4.10.8：PVEVP 的 4P = 1 个组", ModeTableScript.group_count(4), 1)
+	_check("4.10.8：5 个组 = 至少 2 个小队（2 组 + 3 组）", ModeTableScript.squad_count(5), 2)
+	_check("4.10.8：1 个组编不成小队（0）", ModeTableScript.squad_count(1), 0)
+	_check("4.10.8：人数为 0 时组数为 0（未定义不是一组）", ModeTableScript.group_count(0), 0)
 
 
 func _test_unknown_mode_is_safe() -> void:

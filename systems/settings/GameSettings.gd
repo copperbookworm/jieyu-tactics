@@ -22,7 +22,8 @@ const VOLUME_MAX := 1.0
 const MUTE_DB := -60.0
 ## 敌人数可调范围（对齐 docx 5.5 的人数口径示例与第一版规模）
 const ENEMY_MIN := 0
-const ENEMY_MAX := 8
+## 8 → 30（2026-10-03）：PVEVP 的人数口径是 4P v 30E，调试/覆盖路径要能够到 30
+const ENEMY_MAX := 30
 
 var config_path := CONFIG_PATH
 

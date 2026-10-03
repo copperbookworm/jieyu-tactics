@@ -53,7 +53,7 @@
 
 <h1>《解域》jieyu-1 · 架构 · 进度 · 路线图</h1>
 <p class="sub">工作副本 <code>D:\Godot4.7_Proj\jieyu-1</code>（Godot 4.7.1 · 纯 2D 俯视 · 960×540）
-· 实测日期 <b>2026-10-03</b> · 对应 <b>第四十七版 · 游戏外壳</b> · git HEAD <code>ce06436</code></p>
+· 实测日期 <b>2026-10-03</b> · 对应 <b>第四十八版 · 规模性能采样</b> · 上一轮 <code>ce06436</code>（第四十七版 · 游戏外壳）</p>
 <div class="legend">
   <span><b style="color:var(--ok)">●</b> 已落地并验收</span>
   <span><b style="color:var(--wip)">●</b> 部分落地 / 有未完项</span>
@@ -65,12 +65,12 @@
 
 <h2>一、体检卡（全部本轮真跑 / 真数）</h2>
 <div class="grid g6">
-  <div class="kpi"><div class="n">149</div><div class="l">个 .gd / <b>24974 行</b>（LF 字节口径）</div></div>
+  <div class="kpi"><div class="n">150</div><div class="l">个 .gd / <b>25395 行</b>（LF 字节口径）</div></div>
   <div class="kpi"><div class="n">398</div><div class="l">Main.gd 行数（硬线 ≤400，守住）</div></div>
   <div class="kpi"><div class="n">39 / 1337</div><div class="l">测试脚本 / 断言（全绿，退出码 0）</div></div>
   <div class="kpi"><div class="n blue">5 + 25</div><div class="l">几何门禁：HUD 5 + 外壳五屏 25</div></div>
   <div class="kpi"><div class="n blue">230</div><div class="l">集成冒烟项（真实例化 Main.tscn）</div></div>
-  <div class="kpi"><div class="n new">47</div><div class="l">版本轮次（本页随版本同步）</div></div>
+  <div class="kpi"><div class="n new">48</div><div class="l">版本轮次（本页随版本同步）</div></div>
 </div>
 <div class="note">
   <b>口径（别用别的数）</b>：行数一律 <b>LF 字节数</b>（pwsh 的 <code>Get-Content</code> 在中文 UTF-8 上会少数约 6%，
@@ -196,8 +196,10 @@
 <div class="note">
   <b>每模式人数是 2026-10-03 使用者新拍的</b>（docx 5.8 + 模式表新增「人数 / 编成」列）：这条**推翻**了第四十七版
   「刻意不设每模式敌人数」的处置（当时的理由是 docx 没有人数口径 —— 现在口径由使用者给定）。
-  <b>工程尚未落地</b>：敌人可调 <b>1~8</b>（默认 2）、队友<b>固定 3 名</b>、<b>没有编成系统</b>、
-  40 个 AI 战斗单位的性能<b>未测</b> —— 已登记在 docx 20.3 ⑮ / 20.5，落地要单开一轮且先做性能采样。
+  <b>工程尚未落地</b>：敌人可调 <b>1~8</b>（默认 2）、队友<b>固定 3 名</b>、<b>没有编成系统</b>。
+  性能<b>已实测</b>（第四十八版 · tools/scale_probe.gd）：20v20 脚本侧 <b>9.79 ms/帧</b> ＝ 一帧预算的 <b>59~61%</b>
+  （PVEVP 30E 6.40 ms；均为 debug 构建、不含渲染与物理服务器），瓶颈是 <b>has_sight ≈ 256 µs/次</b>。
+  结论＝能起来但余量不足 ⇒ 下一步先做真机帧时间，再决定通视降频。详见 docs/性能预算.md。
   <b>默认模式＝PVP 休闲</b>：它是唯一「既有占领规则 + AI 参谋开放 + 关友伤」的组合，与第四十六版为止的行为最接近，回归面为零。
 </div>
 

@@ -20,9 +20,9 @@ extends RefCounted
 ##   competitive   -> AiAdvisor.competitive（关掉 AI 参谋）
 ##   friendly_fire -> Player.shoot 的目标列表（友军可被误伤）
 ##   win_rule / duration_s / overtime_s -> MatchFlow
-## 兵种 / 载具 / 敌人数都不在这里——那是玩家配置，走 GameSettings 与模式选择界面。
-## 也**刻意不放**每模式敌人数：docx 全篇没有人数口径（待拍板清单第 13 条），
-## 凭空给每个模式编一个数字就是「文档没落地」。
+## 兵种 / 载具走玩家配置（GameSettings 与模式选择界面）。
+## 每模式人数（enemy_count / ally_count）在 2026-10-03 由使用者拍板后入表（docx 5.8 + 模式表新增列）——
+## 第四十七版曾以「docx 没有人数口径」为由不放，那条理由现在不成立了。
 
 enum Mode { PVP_RANKED, PVP_CASUAL, PVEVP, ARMORED, HARDCORE, WARGAME }
 
@@ -49,6 +49,7 @@ static func _build() -> Array:
 	return [
 		{
 			"id": Mode.PVP_RANKED,
+			"enemy_count": 20, "ally_count": 19,
 			"name": "PVP 竞技",
 			"tag": "竞技 · 严格对抗",
 			"available": true,
@@ -64,6 +65,7 @@ static func _build() -> Array:
 		},
 		{
 			"id": Mode.PVP_CASUAL,
+			"enemy_count": 20, "ally_count": 19,
 			"name": "PVP 休闲",
 			"tag": "休闲",
 			"available": true,
@@ -78,6 +80,7 @@ static func _build() -> Array:
 		},
 		{
 			"id": Mode.PVEVP,
+			"enemy_count": 30, "ally_count": 3,
 			"name": "PVEVP",
 			"tag": "单人 PVE（占位）",
 			"available": true,
@@ -92,6 +95,7 @@ static func _build() -> Array:
 		},
 		{
 			"id": Mode.ARMORED,
+			"enemy_count": 20, "ally_count": 19,
 			"name": "PVP 装甲对抗",
 			"tag": "后续版本",
 			"available": false,
@@ -107,6 +111,7 @@ static func _build() -> Array:
 		},
 		{
 			"id": Mode.HARDCORE,
+			"enemy_count": 20, "ally_count": 19,
 			"name": "困难模式",
 			"tag": "后续版本",
 			"available": false,
@@ -122,6 +127,7 @@ static func _build() -> Array:
 		},
 		{
 			"id": Mode.WARGAME,
+			"enemy_count": 0, "ally_count": 0,
 			"name": "兵棋模式",
 			"tag": "后续版本",
 			"available": false,
@@ -216,6 +222,41 @@ static func overtime_s(mode_id: int) -> float:
 ## 无平局、无加时的模式（PVEVP）：MatchFlow 据此跳过加时段
 static func uses_overtime(mode_id: int) -> bool:
 	return overtime_s(mode_id) > 0.0
+
+
+## 每模式人数（2026-10-03 使用者拍板 · docx 5.8 与模式表新增的「人数 / 编成」列）：
+##   PVP 各模式 20 v 20（玩家 + 19 队友 vs 20 敌）；PVEVP 4P v 30E（玩家 + 3 队友 vs 30 敌）；
+##   兵棋 0 / 0 = 文档未定（待拍板），调用方要按「未定义」处理。
+## ⚠ 这两位只是**数据**：本轮（性能采样）还没有接线到 MatchHost / WorldSetup。
+## 编成（2026-10-03 使用者拍板 · docx 4.10.8 / 5.8）：**组（战斗小组）＝ 4 人**，是比小队更基础的作战单元；
+## **一小队至少 2 组**（≥ 8 人），组数不要求相等。据此：20 人 = 5 组 = 2 个小队（2 组 + 3 组）；PVEVP 的 4P = 1 组、不构成小队。
+const GROUP_SIZE := 4
+const MIN_GROUPS_PER_SQUAD := 2
+
+
+## 人数 → 组数（向上取整：不足一组也算一组）
+static func group_count(people: int) -> int:
+	if people <= 0:
+		return 0
+	return int(ceil(float(people) / float(GROUP_SIZE)))
+
+
+## 组数 → 至少能编几个小队（余下的组并入最后一个；不足 2 组＝编不成小队）
+static func squad_count(groups: int) -> int:
+	return groups / MIN_GROUPS_PER_SQUAD
+
+
+static func enemy_count(mode_id: int) -> int:
+	return int(value_of(mode_id, "enemy_count", 0))
+
+
+static func ally_count(mode_id: int) -> int:
+	return int(value_of(mode_id, "ally_count", 0))
+
+
+## 人数是否已定义（兵棋模式 = false ⇒ 调用方回落到玩家设置）
+static func counts_defined(mode_id: int) -> bool:
+	return enemy_count(mode_id) > 0
 
 
 static func available_ids() -> Array:

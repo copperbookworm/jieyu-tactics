@@ -13,6 +13,7 @@ extends "res://ui/screens/ScreenBase.gd"
 
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
 const RoleTableScript := preload("res://data/config/RoleTable.gd")
+const SettingsScript := preload("res://systems/settings/GameSettings.gd")
 
 const COLUMN_WIDTH := 292.0
 const ACTION_SIZE := Vector2(260.0, 40.0)
@@ -151,7 +152,7 @@ func _build_content(body: VBoxContainer) -> void:
 	_vehicle_option.item_selected.connect(_on_vehicle_selected)
 	col3.add_child(UiKit.control_row("载具", _vehicle_option))
 
-	_enemy_spin = UiKit.spin(1, 8, s.default_enemy_count if s != null else 2)
+	_enemy_spin = UiKit.spin(1, SettingsScript.ENEMY_MAX, s.default_enemy_count if s != null else 2)
 	_enemy_spin.name = "EnemySpin"
 	_enemy_spin.value_changed.connect(_on_enemy_changed)
 	col3.add_child(UiKit.control_row("敌人数", _enemy_spin))

@@ -186,6 +186,14 @@ func _fire() -> void:
 		var victim = result["target"]
 		if victim.has_method("take_damage"):
 			victim.take_damage(fire_damage)
+	elif result.get("cover_hit", false):
+		# 队友的子弹同样能打坏掩体（与玩家/敌人一致）；建筑结构值要重武器才扣得动
+		var cover = result.get("cover")
+		if cover != null and cover.has_method("take_damage"):
+			cover.take_damage(fire_damage)
+			var structure := float(result.get("structure_damage", 0.0))
+			if structure > 0.0 and cover.has_method("take_structure_damage"):
+				cover.take_structure_damage(structure)
 
 
 func take_damage(amount: float) -> void:

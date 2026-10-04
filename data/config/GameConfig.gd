@@ -279,6 +279,10 @@ const INDIRECT_BLAST_MIN_DAMAGE := 25.0   # 边缘伤害（半径处，线性衰
 const INDIRECT_AMMO := 4                  # 发，第一版固定 4 发
 const INDIRECT_COOLDOWN := 3.0            # s，发射间隔
 const INDIRECT_SNAP_RADIUS := 12.0        # m，间瞄落点吸附到报点标记的半径（4.11.4 杀伤链）
+## 间瞄（榴弹炮 / 迫击炮）对**建筑**的结构伤害（弹种口径，2026-10-03 拍板）。
+## 取 420 = data/vehicles_data.txt 里 155mm 自行火炮 sph 的 gun_structure_damage ——
+## 间瞄就是那条炮打出去的，所以同一个数。玩家没有「自己那一行」可查时用这个值兜底。
+const INDIRECT_STRUCTURE_DAMAGE := 420.0
 
 # ────────────── 掩体与依托（docx 4.7 第③级检测 · C2 矮掩体与架枪/依托）─────────────
 ## 第一版掩体是轴对齐矩形（沙袋/矮墙），只挡通视、不挡子弹（已知取舍，子弹穿掩体留待后续）
@@ -302,6 +306,10 @@ const RUBBLE_LIFETIME := 0.0            # s，0 ＝ 留到本局结束
 const STRUCTURE_HP_SMALL := 800.0       # 小屋 / 哨所
 const STRUCTURE_HP_HOUSE := 1200.0      # 标准建筑（锚点）
 const STRUCTURE_HP_REINFORCED := 3000.0 # 加固 / 多层（困难模式与后续版本用）
+## 爆炸对建筑的结构伤害**衰减系数**：爆心给满，半径处按这个比例收尾。
+## 取 0.35 而不是对人也用的「25/90 ≈ 0.28」：炮击有 10 m 半径散布，衰减太狠会让
+## 「打偏一点就毫无意义」；拆楼靠的是落在附近，不是正中。
+const BLAST_STRUCTURE_FALLOFF := 0.35
 const COVER_SIGHT_SLACK := 0.15         # m，视线高度需高出掩体顶这么多才算「看得过去」
 const PRONE_SIGHT_HEIGHT := 0.6         # m，卧姿视线高度（C2「矮掩体」：少 1 m 看不到东西）
 const SUPPORT_RANGE := 2.5              # m，离掩体多近算「依托/架枪」

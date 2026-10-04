@@ -239,6 +239,11 @@ func _on_fire() -> void:
 		if cover != null and cover.has_method("take_damage"):
 			cover.take_damage(player.damage_at(result["distance"])
 					* RoleTable.damage_scale(player_role))
+			# 建筑结构值（2026-10-03 拍板）：普通子弹 structure_damage = 0 ⇒ 对建筑毫无作用；
+			# 重武器才扣得动（1200 结构值、主炮 280 ⇒ 4~5 发一栋）
+			var structure := float(result.get("structure_damage", 0.0))
+			if structure > 0.0 and cover.has_method("take_structure_damage"):
+				cover.take_structure_damage(structure)
 	elif result["hit"]:
 		var enemy := result["target"] as Enemy
 		if enemy != null:

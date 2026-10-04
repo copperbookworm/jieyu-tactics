@@ -374,9 +374,11 @@ func shoot(direction: Vector2, enemies: Array) -> Dictionary:
 	var spread_rad := deg_to_rad(effective_spread_moa() / 60.0)
 	var dir := direction.rotated(randf_range(-spread_rad, spread_rad))
 	# 弹道结算（直瞄不做弹道高度，见 BallisticsSystem）。
+	# structure_damage：本枪对建筑 / 工事的伤害（普通子弹恒为 0，重武器才有）——
+	# 由弹种表给出，Main 结算掩体命中时用它扣建筑结构值。
 	var result := BallisticsSystem.resolve_shot(
 			global_position, dir, weapon_range(), enemies,
-			GameConfig.ENEMY_HIT_RADIUS, sight, sight_eye_height())
+			GameConfig.ENEMY_HIT_RADIUS, sight, sight_eye_height(), structure_damage())
 	result["fired"] = true
 	# 12.7.3 / 12.7.4：枪口火光 + 弹着点特效 —— 由开枪的人自己放，Main 一行都不用加（≤400 是硬线）
 	EffectSpawner.muzzle_at(self, global_position + dir * GameConfig.MUZZLE_OFFSET, dir)
@@ -457,6 +459,13 @@ func weapon_range() -> float:
 
 func weapon_field(key: String, fallback: float) -> float:
 	return WeaponTable.number(weapon, key, fallback)
+
+
+## 本枪对建筑 / 工事的伤害（弹种口径，见 data/weapons_data.txt 的 structure_damage 列）。
+## 普通子弹恒为 0 —— 所以小口径武器拆不了楼；重武器（主炮 / 火箭 / 榴弹）才有值。
+## ⚠ 故意**不乘** RoleTable.damage_scale：兵种倍率是「对人伤害」的档，不该放大拆楼能力。
+func structure_damage() -> float:
+	return WeaponTable.number(weapon, "structure_damage", 0.0)
 
 
 ## 伤害随距离线性衰减（7.2 / 武器表口径：起点内满伤、终点外最低伤）

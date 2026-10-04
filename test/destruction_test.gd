@@ -13,6 +13,8 @@ extends EditorScript
 const CoverScript := preload("res://entities/cover/Cover.gd")
 const RubblePatchScript := preload("res://entities/zone/RubblePatch.gd")
 const TerrainZonesScript := preload("res://systems/terrain/TerrainZones.gd")
+const WeaponTableScript := preload("res://systems/weapons/WeaponTable.gd")
+const VehicleTableScript := preload("res://systems/vehicles/VehicleTable.gd")
 
 
 func _run() -> void:
@@ -21,6 +23,7 @@ func _run() -> void:
 	_test_material_parser()
 	_test_sight_and_speed()
 	_test_openings()
+	_test_structure_damage_sources()
 
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
@@ -342,3 +345,91 @@ func _test_openings() -> void:
 			eye, ground), false)
 	fresh.free()
 	cover.free()
+
+
+## ────────── ⑥ 建筑结构值的结算来源（2026-10-03 拍板：普通子弹恒为 0）──────────
+
+func _test_structure_damage_sources() -> void:
+	# ① 建筑不吃子弹伤害：absorbs_bullets=false ⇒ take_damage 完全无效
+	var building = CoverScript.new()
+	building.half_size = Vector2(6.0, 5.0)
+	building.position = Vector2(500.0, 500.0)
+	building.height = 4.0
+	building.max_hp = GameConfig.STRUCTURE_HP_HOUSE
+	building.hp = building.max_hp
+	building.absorbs_bullets = false
+	_check("建筑默认 1200 结构值", building.hp, GameConfig.STRUCTURE_HP_HOUSE)
+	# 步枪 62 伤害 × 20 发 —— 按老口径（不分弹种）正好拆掉一栋楼
+	for i in 20:
+		building.take_damage(62.0)
+	_check_near("普通子弹打 20 发：建筑结构值一点没掉（拍板：子弹对建筑伤害为 0）",
+			building.hp, GameConfig.STRUCTURE_HP_HOUSE, 0.001)
+	_check("普通子弹打 20 发：建筑还完好", building.destroyed, false)
+
+	# ② 换重武器：主炮 280 ⇒ 5 发拆一栋标准建筑（1200 / 280 = 4.29）
+	var tank_gun := WeaponTableScript.structure_damage_of("m107barrettm82")
+	building.take_structure_damage(280.0 * 4.0)
+	_check_near("主炮 4 发 × 280 = 1120 < 1200：还没倒", building.hp, 80.0, 0.001)
+	_check("还没倒（受损段）", building.destroyed, false)
+	_check_true("受损段：顶高变矮（4.0 → %.2f）" % building.effective_height(),
+			building.effective_height() < building.height)
+	building.take_structure_damage(280.0)
+	_check("第 5 发：建筑被摧毁", building.destroyed, true)
+	_check_near("摧毁段：顶高归零", building.effective_height(), 0.0, 0.001)
+	_check("摧毁后退出 occluder 组（不再挡通视与子弹）",
+			building.is_in_group(GameConfig.OCCLUDER_GROUP), false)
+
+	# ③ 沙袋（吃子弹）：200 耐久，近距 62 伤害 → 4 发打坏（保留老手感）
+	var sandbag = CoverScript.new()
+	sandbag.half_size = Vector2(3.6, 1.1)
+	sandbag.position = Vector2(600.0, 600.0)
+	sandbag.height = 1.1
+	sandbag.max_hp = GameConfig.COVER_HP
+	sandbag.hp = sandbag.max_hp
+	sandbag.absorbs_bullets = true
+	for i in 3:
+		sandbag.take_damage(62.0)
+	_check("沙袋吃子弹：3 发（186 < 200）还没坏", sandbag.destroyed, false)
+	sandbag.take_damage(62.0)
+	_check("沙袋第 4 发打坏（与老手感一致）", sandbag.destroyed, true)
+
+	# ④ 弹种表：普通子弹必须恒为 0 —— 否则「拆楼是重武器的活」这条规则就是假的
+	_check("步枪（m4a1）对建筑伤害 = 0", WeaponTableScript.structure_damage_of("m4a1"), 0.0)
+	_check("轻机枪（m249saw）对建筑伤害 = 0", WeaponTableScript.structure_damage_of("m249saw"), 0.0)
+	_check("7.62 通用机枪（m240）对建筑伤害 = 0（口径不够就是打不动墙）",
+			WeaponTableScript.structure_damage_of("m240"), 0.0)
+	_check_true("12.7mm 反器材步枪（M82）能伤到建筑（%d）"
+			% int(WeaponTableScript.structure_damage_of("m107barrettm82")),
+			WeaponTableScript.structure_damage_of("m107barrettm82") > 0.0)
+	_check_true("40mm 枪榴弹（m320）> 反器材步枪",
+			WeaponTableScript.structure_damage_of("m320")
+			> WeaponTableScript.structure_damage_of("m107barrettm82"))
+	_check_true("反坦克火箭（at4，%d）> 12.7mm" % int(WeaponTableScript.structure_damage_of("at4rpg7")),
+			WeaponTableScript.structure_damage_of("at4rpg7")
+			> WeaponTableScript.structure_damage_of("m107barrettm82"))
+	_check_true("反坦克导弹（javelin，%d）最狠" % int(WeaponTableScript.structure_damage_of("12javelin")),
+			WeaponTableScript.structure_damage_of("12javelin")
+			>= WeaponTableScript.structure_damage_of("at4rpg7"))
+	# 锚点口径：反坦克火箭 600 ⇒ 2 发拆标准建筑（1200），正好落在「2–3 发」那一档
+	_check_true("反坦克火箭 2 发能拆标准建筑（1200）",
+			WeaponTableScript.structure_damage_of("at4rpg7") * 2.0 >= GameConfig.STRUCTURE_HP_HOUSE)
+	_check_true("反坦克火箭拆小屋（800）只需 2 发以内（拍板锚点：2–3 发一栋）",
+			WeaponTableScript.structure_damage_of("at4rpg7") * 2.0 >= GameConfig.STRUCTURE_HP_SMALL)
+
+	# ⑤ 载具表：主炮 / 榴弹炮 / 机炮三档分得开（gun_structure_damage 收的是车辆行）
+	var mbt := VehicleTableScript.gun_structure_damage(VehicleTableScript.get_vehicle("mbt_t1"))
+	var ifv := VehicleTableScript.gun_structure_damage(VehicleTableScript.get_vehicle("ifv_a"))
+	var sph := VehicleTableScript.gun_structure_damage(VehicleTableScript.get_vehicle("sph_spha"))
+	var atgm := VehicleTableScript.atgm_structure_damage(VehicleTableScript.get_vehicle("ifv_a"))
+	_check_true("坦克主炮 (%d) > 机炮 (%d)" % [int(mbt), int(ifv)], mbt > ifv)
+	_check_true("自行榴弹炮 (%d) > 坦克主炮 (%d)" % [int(sph), int(mbt)], sph > mbt)
+	_check_true("机炮对建筑伤害很低（%d < 100）" % int(ifv), ifv < 100.0)
+	_check_true("反坦克导弹 (%d) > 坦克主炮 (%d)" % [int(atgm), int(mbt)], atgm > mbt)
+	_check_near("坦克主炮 4 发正好把标准建筑打到 80（1200 − 4×280）",
+			GameConfig.STRUCTURE_HP_HOUSE - mbt * 4.0, 80.0, 0.001)
+	# ⑥ 间瞄兜底值必须与榴弹炮那一行同档（同一个数来源）
+	_check_near("间瞄结构伤害 = 155mm 榴弹炮的 gun_structure_damage",
+			GameConfig.INDIRECT_STRUCTURE_DAMAGE, sph, 0.001)
+
+	building.free()
+	sandbag.free()

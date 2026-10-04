@@ -253,6 +253,8 @@ func _build_covers(main) -> void:
 		# 开口（窗 / 门洞，2026-10-03 拍板①）：只有打中开口才伤得到建筑里面。
 		# 地图数据里是**本地坐标** + **相对地面**的高度区间，Cover.pierces_at() 用同一套口径。
 		cover.openings = _normalized_openings(entry.get("openings", []), cover.height)
+		# 建筑 / 掩体是否「吃普通子弹」：false ⇒ 弹种伤害只走 structure_damage 那一档
+		cover.absorbs_bullets = bool(entry.get("absorbs_bullets", true))
 		var destructible := bool(entry.get("destructible", true))
 		main.add_child(cover)
 		# 不可摧毁的遮挡体（例如按老口径标的建筑）退出可破坏链路：

@@ -155,6 +155,9 @@ func _check_structure() -> void:
 	_check("占领节点 3 个", _main.capture_zones.size(), 3)
 	# 掩体 = DEMO_NODES（5 个节点）× 每点 4 个沙袋 = 20（见 MapGenerator.demo_cover_points）
 	_check("掩体 20 个（5 个节点 × 4）", get_nodes_in_group("occluder").size(), 20)
+	# 说明：Main.tscn 的高度图是 assets/maps/map_demo_height.png，那个目录下**没有** occluders.json
+	# ⇒ 这里走的是 demo 摆位（20 个默认沙袋），地图数据那条链路由 jieyu_map_test._test_world_setup_covers()
+	# 用真实存在的示例图（grassland_demo2）覆盖；本文件只钉「demo 摆位没被破坏」。
 	# 2026-10-02 订正：这条原来是「敌人 2 个」的等值断言，现在不再成立 ——
 	# 实测 enemy 组是 [Enemy1, Infiltrator1..3]：① 开局 2 名步兵里可能有人被**队友**先击毙；
 	# ② T-S6 的事件驱动穿插兵（Infiltrator*）也会进这个组。所以改成「至少 2 个 + 成员必须是敌兵类」，

@@ -58,11 +58,17 @@ static func simulate(distance_m: float, muzzle_velocity: float,
 ## 命中 = 枪口沿 direction 的水平射线穿过的第一个敌人圆 + max_range 截断。
 ## 掩体层（docx 4.7 第③级 / C2 矮掩体）：传入 sight 后子弹会被沙袋截断——
 ## 站姿眼高 1.6 m 能打过 1.1 m 的沙袋，趴下 0.6 m 就打不过，与通视同一套高度规则。
-## 返回 {hit, target, distance, point, ground_hit, cover_hit}
+## 返回 {hit, target, distance, point, ground_hit, cover_hit, cover, structure_damage}
+## 【2026-10-03 拍板】加了 structure_damage（对建筑 / 工事的伤害）参数：
+##   -1 = 用缺省（0，即「打不动建筑」）——**普通子弹恒为 0**，所以小口径武器拆不了楼；
+##   调用方按自己的弹种传（步兵查 weapons_data.txt 的 structure_damage，
+##   载具查 vehicles_data.txt 的 gun_structure_damage / atgm_structure_damage）。
+## 返回值里带上它，结算方不必再查一次表。
 static func resolve_shot(origin: Vector2, direction: Vector2, max_range: float,
 		enemies: Array, hit_radius: float = GameConfig.ENEMY_HIT_RADIUS,
 		sight: SightSystem = null,
-		shooter_eye_height: float = GameConfig.SOLDIER_EYE_HEIGHT) -> Dictionary:
+		shooter_eye_height: float = GameConfig.SOLDIER_EYE_HEIGHT,
+		structure_damage: float = -1.0) -> Dictionary:
 	var dir := direction.normalized()
 	var best: Node2D = null
 	var best_distance := max_range
@@ -95,18 +101,19 @@ static func resolve_shot(origin: Vector2, direction: Vector2, max_range: float,
 				cover_distance = origin.distance_to(hit)
 				cover_point = hit
 				cover_node = cover_info["node"]
+	var resolved_structure := maxf(structure_damage, 0.0)
 	if cover_distance < best_distance:
 		# 把 cover 节点带回去：调用方据此扣掩体耐久（可破坏掩体）
 		return {"hit": false, "target": null, "distance": cover_distance,
 				"point": cover_point, "ground_hit": false, "cover_hit": true,
-				"cover": cover_node}
+				"cover": cover_node, "structure_damage": resolved_structure}
 	if best != null:
 		return {"hit": true, "target": best, "distance": best_distance,
 				"point": origin + dir * best_distance, "ground_hit": false,
-				"cover_hit": false, "cover": null}
+				"cover_hit": false, "cover": null, "structure_damage": resolved_structure}
 	return {"hit": false, "target": null, "distance": max_range,
 			"point": origin + dir * max_range, "ground_hit": false, "cover_hit": false,
-			"cover": null}
+			"cover": null, "structure_damage": resolved_structure}
 
 
 ## 7.4 的闭式解（无阻力基准，g = 重力）：

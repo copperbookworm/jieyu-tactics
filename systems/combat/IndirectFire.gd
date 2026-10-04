@@ -11,6 +11,11 @@ signal shell_landed(target: Vector2)
 
 var ammo := GameConfig.INDIRECT_AMMO
 
+## 对建筑 / 工事的结构伤害（弹种口径，2026-10-03 拍板：155mm 榴弹炮 = 420）。
+## 由调用方（Main / 车载）从自己那一行的 structure_damage 灌进来；
+## 缺省 0 = 打不动建筑，与「默认必须落在『打不动』那一侧」同一条约定。
+var structure_damage := 0.0
+
 var _pending: Array = []
 var _cooldown := 0.0
 var _player: Node2D = null
@@ -62,6 +67,7 @@ func fire_at(target: Vector2) -> bool:
 		"direction": (target - _player.global_position).normalized(),
 		"origin": _player.global_position,
 		"origin_height": _origin_height(),
+		"structure_damage": structure_damage,
 	})
 	shell_fired.emit(target, flight)
 	return true
@@ -164,6 +170,11 @@ func _explode(target: Vector2) -> void:
 		var cover_damage := blast_damage_at(cover_distance)
 		if cover_damage > 0.0:
 			cover.take_damage(cover_damage)
+		# 建筑结构值：炮击是**弹种口径**的伤害，且不吃开口规则（拍板：炮弹不管门窗）
+		if cover.has_method("take_structure_damage"):
+			var structure := structure_blast_at(cover_distance, structure_damage)
+			if structure > 0.0:
+				cover.take_structure_damage(structure)
 	# 候选 L2：工事（敌方 FOB）同样吃爆炸伤害——间瞄本来就是砸固定目标的手段
 	for node in loop.get_nodes_in_group("fob_enemy"):
 		var fob = node
@@ -175,10 +186,23 @@ func _explode(target: Vector2) -> void:
 			fob.take_damage(fob_damage)
 
 
-## 爆心向外线性衰减：爆心 90 → 半径处 25；半径外 0
+## 爆心向外线性衰减：爆心 90 → 半径处 25；半径外 0。
+## 这是**对人**的爆炸伤害；对建筑 / 工事走 structure_blast_at()（弹种口径，2026-10-03 拍板）。
 static func blast_damage_at(distance: float,
 		radius: float = GameConfig.INDIRECT_BLAST_RADIUS) -> float:
 	if distance >= radius:
 		return 0.0
 	return lerpf(GameConfig.INDIRECT_BLAST_DAMAGE, GameConfig.INDIRECT_BLAST_MIN_DAMAGE,
+			clampf(distance / radius, 0.0, 1.0))
+
+
+## 对建筑 / 工事的爆炸伤害（弹种口径）：爆心给满、半径处按 BLAST_STRUCTURE_FALLOFF 收尾。
+## **不吃开口规则**（炮击按落点圈 ∩ footprint 结算）：所以它直接按 cover 的距离扣结构值，
+## 与直射「必须打中窗 / 门洞才能伤到里面」是两套口径 —— 这是拍板时有意为之的。
+static func structure_blast_at(distance: float, structure_damage: float,
+		radius: float = GameConfig.INDIRECT_BLAST_RADIUS) -> float:
+	if structure_damage <= 0.0 or distance >= radius:
+		return 0.0
+	var falloff := clampf(GameConfig.BLAST_STRUCTURE_FALLOFF, 0.0, 1.0)
+	return lerpf(structure_damage, structure_damage * falloff,
 			clampf(distance / radius, 0.0, 1.0))

@@ -42,14 +42,35 @@ var openings: Array = []
 ## 摧毁时发（WorldSetup 拿它落残痕）。参数是自己，免得接收方还要闭包捕获
 signal destroyed_now(cover)
 
+## 吃不吃普通子弹（掩体耐久口径）：沙袋/半高墙 = true；
+## **建筑 = false**（2026-10-03 拍板：普通子弹对建筑伤害恒为 0）——
+## 建筑只走 take_structure_damage()，由弹种表决定谁能拆。
+@export var absorbs_bullets := true
+
 
 func _ready() -> void:
 	hp = max_hp
 	add_to_group(GameConfig.OCCLUDER_GROUP)
 
 
-## 承受伤害（双方子弹都能打坏它）；耐久清零后退出 occluder 组 ⇒ 不再挡通视与子弹
+## 承受伤害（双方子弹都能打坏它）；耐久清零后退出 occluder 组 ⇒ 不再挡通视与子弹。
+## 【口径提醒】amount 是**子弹伤害**口径（沙袋 200 耐久）。
+## 2026-10-03 拍板「普通子弹对建筑伤害恒为 0」：absorbs_bullets=false 的物件（建筑）
+## 直接忽略这条路径 —— 它只走 take_structure_damage()。
 func take_damage(amount: float) -> void:
+	if not absorbs_bullets:
+		return
+	_apply_damage(amount)
+
+
+## 承受**结构伤害**（弹种口径，见 data/weapons_data.txt 的 structure_damage 列与
+## data/vehicles_data.txt 的 gun_structure_damage 列；普通子弹恒为 0）。
+## 与 take_damage 共用同一条三段状态机，区别只在「谁有资格扣这个血」。
+func take_structure_damage(amount: float) -> void:
+	_apply_damage(amount)
+
+
+func _apply_damage(amount: float) -> void:
 	if destroyed or amount <= 0.0:
 		return
 	hp = maxf(hp - amount, 0.0)

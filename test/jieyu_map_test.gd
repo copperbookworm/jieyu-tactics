@@ -16,6 +16,8 @@ const UI_MAP_ID := "unit_ui_map"
 ## 面板代码引用的脚本（无头下也能实例化 Control；不依赖任何编辑器 API）
 const DOCK_SCRIPT := preload("res://addons/jieyu_map/editor/JieyuMapDock.gd")
 const CANVAS_SCRIPT := preload("res://addons/jieyu_map/editor/JieyuMapCanvas.gd")
+## 2026-10-03 第三轮：地图数据 → 运行时 Cover 的转换要用它（无 class_name，必须 preload）
+const WorldSetupScript := preload("res://scenes/gameplay/WorldSetup.gd")
 
 
 func _run() -> void:
@@ -210,6 +212,8 @@ func _test_generation() -> void:
 			_buildings_have_openings(a.occluders, 2))
 	_check_true("开口类型合法、几何贴在墙面上、高度区间自洽",
 			_openings_valid(a.occluders))
+	# 2026-10-03 第三轮：地图数据 → 运行时 Cover 的那一段转换（WorldSetup 的两支纯函数）
+	_test_world_setup_covers()
 	_check("meta 记录了生成配方", a.meta.has("recipe"), true)
 	_check("meta.recipe.seed 与配方一致", int(a.meta["recipe"]["seed"]), 20260101)
 
@@ -274,6 +278,79 @@ func _all_have_damage_profiles(occluders: Array) -> bool:
 			if not states.has(state):
 				return false
 	return true
+
+
+## 2026-10-03 第三轮：地图数据 → 运行时 Cover 的转换（直接调 WorldSetup 的两支纯函数）。
+## 为什么不去跑一遍完整 WorldSetup：那需要实例化 Main 主场景，代价大且会被 demo 摆位兜底逻辑干扰。
+## 这里要钉的是**真源数据**上的转换结果：h_top=0 要换成掩体实际顶高、坐标要变成 Vector2。
+func _test_world_setup_covers() -> void:
+	var world_setup := WorldSetupScript.new()
+	# ① 示例图（真实存在的那一份）里有 occluders.json ⇒ 应该读得到条目
+	var stub := Node.new()
+	stub.set_script(_stub_main_script())
+	stub.set("map_height_image", "res://assets/maps/grassland_demo2/heightmap.png")
+	var entries: Array = world_setup.call("_load_occluders", stub)
+	_check_true("WorldSetup 能从示例图目录读出 occluders.json（%d 条）" % entries.size(),
+			entries.size() > 0)
+	stub.free()
+	if entries.is_empty():
+		world_setup.free()
+		return
+
+	# ② 挑一栋建筑，把它的 openings 走一遍归一化
+	var building: Dictionary = {}
+	for entry_v in entries:
+		if str((entry_v as Dictionary).get("type", "")) == "building":
+			building = entry_v
+			break
+	_check_true("示例图里有建筑条目", not building.is_empty())
+	if building.is_empty():
+		world_setup.free()
+		return
+	var raw_openings: Array = building.get("openings", [])
+	_check_true("建筑条目带 openings（%d 个）" % raw_openings.size(), raw_openings.size() >= 2)
+	var normalized: Array = world_setup.call("_normalized_openings", raw_openings,
+			float(building.get("h_top", 0.0)))
+	_check("归一化后开口数不变", normalized.size(), raw_openings.size())
+	var first: Dictionary = normalized[0] if normalized.size() > 0 else {}
+	_check_true("归一化后 center 是 Vector2（JSON 里是 [x,y] 数组）", first.get("center") is Vector2)
+	_check_true("归一化后 half_size 是 Vector2", first.get("half_size") is Vector2)
+	# h_top = 0 是地图数据里的约定值「到掩体顶」⇒ 归一化时必须换成实际顶高
+	var top_values: Array = []
+	for opening_v in normalized:
+		top_values.append(float((opening_v as Dictionary).get("h_top", 0.0)))
+	_check_true("h_top=0 被换成掩体实际顶高（%.1f）" % float(building.get("h_top", 0.0)),
+			top_values.has(float(building.get("h_top", 0.0))))
+	_check_true("归一化后不存在 h_top=0（约定值不能漏到运行时）", not top_values.has(0.0))
+	_check("建筑 h_top=%s ⇒ 开口 h_top 跟着变" % str(building.get("h_top", "")),
+			normalized.is_empty(), false)
+
+	# ③ 建筑不吃子弹、半高墙吃子弹（absorbs_bullets 字段）
+	_check("建筑 absorbs_bullets = false（普通子弹打不动它）",
+			bool(building.get("absorbs_bullets", true)), false)
+	var wall: Dictionary = {}
+	for entry_v in entries:
+		if str((entry_v as Dictionary).get("type", "")) == "wall":
+			wall = entry_v
+			break
+	if not wall.is_empty():
+		_check("半高墙 absorbs_bullets = true（子弹 4 发打坏，老手感不变）",
+				bool(wall.get("absorbs_bullets", false)), true)
+	# ④ 反推地图目录：<id>_height.png 与 <id>/heightmap.png 两种都要认
+	_check("从 .../grassland_demo2/heightmap.png 反推 id",
+			WorldSetupScript._map_id_from_path("res://assets/maps/grassland_demo2/heightmap.png"),
+			"grassland_demo2")
+	_check("从 .../demo2_height.png 反推 id",
+			WorldSetupScript._map_id_from_path("res://assets/maps/demo2_height.png"), "demo2")
+	world_setup.free()
+
+
+## 造一个只有 map_height_image 属性的替身（WorldSetup._load_occluders 只用这一个字段）
+func _stub_main_script() -> GDScript:
+	var script := GDScript.new()
+	script.source_code = "extends Node\n@export var map_height_image := \"\"\n"
+	script.reload()
+	return script
 
 
 ## 场上全部开口的总数（面板测试按总数比对：一次落笔会走两次 _apply_brush_at）

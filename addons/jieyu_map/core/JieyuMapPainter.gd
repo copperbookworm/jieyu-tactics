@@ -209,6 +209,8 @@ static func add_occluder(doc: JieyuMapDoc, center: Vector2, half_x: float, half_
 		else:
 			item["hp"] = JieyuMapSpec.SANDBAG_HP
 		item["damage_profiles"] = JieyuMapGen.damage_profiles_for(is_building)
+	# 2026-10-03 拍板「普通子弹对建筑伤害恒为 0」：建筑不吃子弹伤害，只吃弹种口径的结构伤害
+	item["absorbs_bullets"] = not is_building
 	# 拍板①开口：建筑默认一窗一门；半高墙默认留一条缝（4.6 铁律：不能完全封闭）
 	item["openings"] = JieyuMapGen.default_openings_for(half_x, half_y) if is_building \
 			else JieyuMapGen.default_openings_for_wall(half_x, half_y)

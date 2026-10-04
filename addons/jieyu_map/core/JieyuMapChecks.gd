@@ -326,6 +326,7 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 			report.append(_item(SEV_ERROR, "occluders.item", "occluders 里有非对象项", {}))
 			continue
 		var item: Dictionary = item_v
+		var item_id := str(item.get("id", "?"))
 		var polygon: Variant = item.get("polygon", null)
 		if not (polygon is Array) or (polygon as Array).size() < 3:
 			report.append(_item(SEV_ERROR, "occluders.polygon",
@@ -344,6 +345,15 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 					% str(item.get("id", "?")), {}))
 		_check_damage_profiles(item, report)
 		_check_openings(item, report)
+		# 「普通子弹对建筑伤害恒为 0」⇒ 建筑不该吃子弹伤害
+		if str(item.get("type", "")) == "building" and bool(item.get("absorbs_bullets", true)):
+			report.append(_item(SEV_WARN, "occluders.building_absorbs_bullets",
+					"建筑 %s 标了 absorbs_bullets=true：普通子弹会直接扣它的血，"
+					% item_id + "与「普通子弹对建筑伤害恒为 0」冲突", {}))
+		elif str(item.get("type", "")) != "building" \
+				and not bool(item.get("absorbs_bullets", true)):
+			report.append(_item(SEV_INFO, "occluders.cover_ignores_bullets",
+					"遮挡体 %s 标了 absorbs_bullets=false：子弹打不掉它，只能靠重武器" % item_id, {}))
 		if h_top >= JieyuMapSpec.BUILDING_H_LOW_M and str(item.get("type", "")) == "building":
 			buildings += 1
 		for point_v in polygon:

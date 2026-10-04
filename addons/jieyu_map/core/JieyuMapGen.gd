@@ -505,6 +505,9 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 				# 锚点与工程的 FOB 结构值同档（1200）。
 				"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
 				"hp": building_hp_for_footprint(half_x * 2.0, half_y * 2.0),
+				# 2026-10-03 拍板「普通子弹对建筑伤害恒为 0」：建筑不吃子弹伤害，
+				# 只吃弹种口径的结构伤害（structure_damage 列）。
+				"absorbs_bullets": false,
 				# 拍板①开口：默认一窗一门（六章「每个占领点 3 个以上入口/射击窗」）
 				"openings": default_openings_for(half_x, half_y),
 			}
@@ -535,6 +538,8 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 				"h_top": roundf(rng.randf_range(0.8, 2.0) * 10.0) / 10.0,
 				"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
 				"hp": JieyuMapSpec.SANDBAG_HP,
+				# 沙袋/半高墙**吃子弹伤害**（4.17 / 20.5：耐久 200，打光退出 occluder 组）
+				"absorbs_bullets": true,
 				# 4.6 铁律「不能完全封闭、必须留有暴露面」⇒ 半高墙默认留一条缝
 				"openings": default_openings_for_wall(wall_half_x, wall_half_y),
 			})

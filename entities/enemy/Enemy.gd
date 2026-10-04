@@ -32,6 +32,9 @@ enum AIState { PATROL, COMBAT, BLIND_FIRE }
 ## 🧪 想开「敌人打不死我」的测试态：改成 0.0（与 GameConfig.ENEMY_DAMAGE_SCALE 是两套开关，
 ## 这里是「每个敌人的单发伤害」，那边是「所有敌人伤害的总倍率」）。
 @export var fire_damage: float = 20.0
+## 敌人对建筑 / 工事的伤害（弹种口径）。步兵武器恒为 0 ⇒ 敌人**拆不了楼**，只能打人。
+## 将来给敌人配重武器（火箭 / 机枪阵地）时，把它设成 weapons_data.txt 里对应的 structure_damage 即可。
+@export var structure_damage: float = 0.0
 
 var alive := true
 ## AI 开关（候选 Q）：被坦克乘员化时关掉，弃车后重新打开
@@ -346,7 +349,7 @@ func _try_fire(delta: float, aim_at: Vector2, blind: bool = false) -> void:
 		hit_radius *= target_unit.hit_radius_scale() * target_unit.exposure_scale()
 	var result := BallisticsSystem.resolve_shot(
 			global_position, direction, GameConfig.WEAPON_MAX_RANGE, [_player], hit_radius,
-			_sight, GameConfig.SOLDIER_EYE_HEIGHT)
+			_sight, GameConfig.SOLDIER_EYE_HEIGHT, structure_damage)
 	var tracer := Tracer.new()
 	tracer.setup(global_position, direction, result["distance"])
 	get_tree().current_scene.add_child(tracer)
@@ -364,6 +367,9 @@ func _try_fire(delta: float, aim_at: Vector2, blind: bool = false) -> void:
 		var cover = result.get("cover")
 		if cover != null and cover.has_method("take_damage"):
 			cover.take_damage(fire_damage * GameConfig.ENEMY_DAMAGE_SCALE)
+			# 建筑结构值：步兵武器 structure_damage = 0 ⇒ 对建筑毫无作用（与玩家同一口径）
+			if structure_damage > 0.0 and cover.has_method("take_structure_damage"):
+				cover.take_structure_damage(structure_damage * GameConfig.ENEMY_DAMAGE_SCALE)
 		return
 	if result["hit"]:
 		# 盲射：命中判定成立后再按 −70% 抽一次（4.12.5 / 4.12.8 ④）

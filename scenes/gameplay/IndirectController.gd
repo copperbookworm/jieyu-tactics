@@ -23,6 +23,10 @@ func setup(main_node, player, sight) -> void:
 	fire.name = "IndirectFire"
 	main.add_child(fire)
 	fire.setup(player, sight)
+	# 间瞄是「那条炮」打出去的 ⇒ 对建筑的伤害取同一门炮的 gun_structure_damage
+	# （155mm 自行火炮 = 420，见 data/vehicles_data.txt；GameConfig 里是同一档的兜底值）。
+	# 2026-10-03 拍板：炮击**不吃开口规则**（按落点圈 ∩ footprint 结算，不管门窗）。
+	fire.structure_damage = GameConfig.INDIRECT_STRUCTURE_DAMAGE
 	fire.shell_landed.connect(_on_landed)
 	overlay = IndirectOverlayScript.new()
 	overlay.name = "IndirectOverlay"

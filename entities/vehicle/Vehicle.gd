@@ -426,7 +426,9 @@ func fire(targets: Array) -> Dictionary:
 			else VehicleTable.number(data, "main_range", 800.0))
 	# 从炮口沿「炮塔朝向」打——炮塔与车体分离后，射击方向不再等于车体朝向（8.2.6）
 	var result := BallisticsSystem.resolve_shot(muzzle_position(), turret_facing, range_m,
-			targets, GameConfig.ENEMY_HIT_RADIUS, _sight, GameConfig.SOLDIER_EYE_HEIGHT)
+			targets, GameConfig.ENEMY_HIT_RADIUS, _sight, GameConfig.SOLDIER_EYE_HEIGHT,
+			(atgm_value("atgm_structure_damage", 0.0) if atgm
+			else VehicleTable.number(data, "gun_structure_damage", 0.0)))
 	result["fired"] = true
 	result["damage"] = (atgm_value("atgm_damage", 400.0) if atgm
 			else VehicleTable.number(data, "gun_damage", 30.0))
@@ -490,8 +492,20 @@ func _fire_ai() -> void:
 	_turret_recoil = 1.0
 	var result := BallisticsSystem.resolve_shot(muzzle_position(), turret_facing,
 			VehicleTable.number(data, "main_range", 800.0), [_player_ref],
-			GameConfig.ENEMY_HIT_RADIUS, _sight, GameConfig.SOLDIER_EYE_HEIGHT)
+			GameConfig.ENEMY_HIT_RADIUS, _sight, GameConfig.SOLDIER_EYE_HEIGHT,
+			VehicleTable.number(data, "gun_structure_damage", 0.0))
 	weapon_fired.emit(muzzle_position(), turret_facing, float(result["distance"]))
+	if result.get("cover_hit", false):
+		# 载具炮弹砸在掩体 / 建筑上：结构值走弹种口径（坦克 280 ⇒ 4~5 发一栋标准建筑）
+		var cover = result.get("cover")
+		if cover != null and cover.has_method("take_damage"):
+			cover.take_damage(VehicleTable.number(data, "gun_damage", 30.0)
+					* GameConfig.ENEMY_DAMAGE_SCALE
+					* GameConfig.ENEMY_VEHICLE_DAMAGE_SCALE)
+			var structure := float(result.get("structure_damage", 0.0))
+			if structure > 0.0 and cover.has_method("take_structure_damage"):
+				cover.take_structure_damage(structure * GameConfig.ENEMY_VEHICLE_DAMAGE_SCALE)
+		return
 	if result["hit"]:
 		var target = result["target"]
 		if target != null and target.has_method("take_damage"):

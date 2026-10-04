@@ -179,6 +179,18 @@ func fire() -> void:
 	EffectSpawner.impact_at(vehicle, result.get("point", vehicle.global_position),
 			EffectSpawner.IMPACT_UNIT if result["hit"] else EffectSpawner.IMPACT_GROUND)
 	Sfx.play("missile" if atgm else "cannon")   # 10 章：导弹 / 主炮
+	if result.get("cover_hit", false):
+		# 炮打在掩体 / 建筑上（2026-10-03 拍板）：掩体耐久走 gun_damage，建筑结构值走
+		# gun_structure_damage / atgm_structure_damage（坦克 280 ⇒ 4~5 发拆一栋标准建筑）。
+		# 注意这条分支必须在 `not result["hit"]` 之前 —— 打中掩体时 hit 就是 false。
+		var cover = result.get("cover")
+		if cover != null and cover.has_method("take_damage"):
+			cover.take_damage(float(result["damage"]))
+			var structure := float(result.get("structure_damage", 0.0))
+			if structure > 0.0 and cover.has_method("take_structure_damage"):
+				cover.take_structure_damage(structure)
+				main.hud.show_hint("炮击建筑：结构 −%d" % int(structure))
+		return
 	if not result["hit"]:
 		return
 	var target = result["target"]

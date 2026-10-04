@@ -35,6 +35,8 @@ var default_role := RoleTable.Role.RIFLEMAN
 var default_vehicle := "ifv_a"
 var default_enemy_count := 2
 var default_map_seed := GameConfig.DEFAULT_MAP_SEED
+## 对局地图：res:// 下的高度图路径；空串 = 用工程内置示范图（Main 的 @export 默认）
+var default_map_image := ""
 
 var _last_error := ""
 
@@ -78,6 +80,7 @@ func match_options() -> Dictionary:
 		"vehicle": default_vehicle,
 		"enemy_count": default_enemy_count,
 		"map_seed": default_map_seed,
+		"map_image": default_map_image,
 	}
 
 
@@ -90,6 +93,7 @@ func reset_defaults() -> void:
 	default_vehicle = "ifv_a"
 	default_enemy_count = 2
 	default_map_seed = GameConfig.DEFAULT_MAP_SEED
+	default_map_image = ""
 
 
 func load_from_disk() -> bool:
@@ -111,6 +115,7 @@ func load_from_disk() -> bool:
 	default_enemy_count = clampi(int(cfg.get_value("match", "enemy_count", default_enemy_count)),
 			ENEMY_MIN, ENEMY_MAX)
 	default_map_seed = int(cfg.get_value("match", "map_seed", default_map_seed))
+	default_map_image = String(cfg.get_value("match", "map_image", default_map_image))
 	# 模式表里没有的 id（旧存档 / 手工改坏）→ 退回默认，别让界面拿到空条目
 	if ModeTableScript.index_of(default_mode) < 0:
 		default_mode = ModeTableScript.default_mode_id()
@@ -128,6 +133,7 @@ func save_to_disk() -> bool:
 	cfg.set_value("match", "vehicle", default_vehicle)
 	cfg.set_value("match", "enemy_count", default_enemy_count)
 	cfg.set_value("match", "map_seed", default_map_seed)
+	cfg.set_value("match", "map_image", default_map_image)
 	var err := cfg.save(config_path)
 	if err != OK:
 		_last_error = "写入失败（错误 %d）" % err

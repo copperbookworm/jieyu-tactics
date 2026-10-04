@@ -64,9 +64,11 @@ func _test_defaults() -> void:
 	_check("默认敌人数＝2", s.default_enemy_count, 2)
 	_check("默认地图种子＝GameConfig.DEFAULT_MAP_SEED",
 			s.default_map_seed, GameConfig.DEFAULT_MAP_SEED)
+	_check("默认地图＝空串（＝工程内置示范图）", s.default_map_image, "")
 	var opts: Dictionary = s.match_options()
-	_check("对局参数：五个键", opts.size(), 5)
+	_check("对局参数：六个键", opts.size(), 6)
 	_check("对局参数里的模式与字段一致", opts["mode"], s.default_mode)
+	_check("对局参数里的地图与字段一致", opts["map_image"], s.default_map_image)
 
 
 func _test_volume_math() -> void:
@@ -95,6 +97,7 @@ func _test_roundtrip() -> void:
 	a.default_vehicle = "mbt_t1"
 	a.default_enemy_count = 5
 	a.default_map_seed = 12345
+	a.default_map_image = "res://assets/maps/qingling_corridor/heightmap.png"
 	_check_true("存盘成功", a.save_to_disk())
 	_check_true("存档文件真的写出来了", FileAccess.file_exists(TMP))
 
@@ -108,6 +111,7 @@ func _test_roundtrip() -> void:
 	_check("默认载具读回", b.default_vehicle, "mbt_t1")
 	_check("敌人数读回", b.default_enemy_count, 5)
 	_check("地图种子读回", b.default_map_seed, 12345)
+	_check("地图读回", b.default_map_image, "res://assets/maps/qingling_corridor/heightmap.png")
 
 
 func _test_missing_file() -> void:
@@ -152,3 +156,4 @@ func _test_reset() -> void:
 	_check("复位：静音", s.muted, false)
 	_check("复位：敌人数", s.default_enemy_count, 2)
 	_check("复位：模式", s.default_mode, ModeTableScript.default_mode_id())
+	_check("复位：地图回到内置示范图", s.default_map_image, "")

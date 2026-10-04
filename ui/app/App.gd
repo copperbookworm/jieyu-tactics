@@ -184,6 +184,7 @@ func start_match(mode_id: int) -> void:
 		"vehicle": settings.default_vehicle,
 		"enemy_count": settings.default_enemy_count,
 		"map_seed": settings.default_map_seed,
+		"map_image": settings.default_map_image,
 	}
 	if not match_host.start(MAIN_SCENE, options):
 		_teardown_match()

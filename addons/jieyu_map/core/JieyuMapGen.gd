@@ -468,51 +468,26 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 	if groups <= 0:
 		groups = 1 if nodes.is_empty() else maxi(1, int(nodes.size() * 0.6))
 	var buildings_per_group := int(recipe.get("buildings_per_group", 7))
-	for g in groups:
-		var anchor := _pick_settlement_anchor(scores, cols, rows, sample_step, nodes, g, rng)
-		if anchor.x < 0.0:
-			continue
-		var placed := 0
-		var attempts := 0
-		while placed < buildings_per_group and attempts < buildings_per_group * 12:
-			attempts += 1
-			var angle := rng.randf() * TAU
-			var radius := rng.randf_range(JieyuMapSpec.URBAN_SPACING_MIN_M,
-					JieyuMapSpec.URBAN_SPACING_MAX_M * float(buildings_per_group) * 0.8)
-			var center := anchor + Vector2(cos(angle), sin(angle)) * radius
-			if center.x < 15.0 or center.y < 15.0 \
-					or center.x > float(doc.width) - 15.0 \
-					or center.y > float(doc.height_px) - 15.0:
+	# 2026-10-04：配方可以给**显式建筑群锚点**（settlements[]）。
+	# 为什么需要：自动布点只保证「避开核心区 + 落在可建地」，
+	# 保证不了六章的「最长无掩体可通行直线 ≤ 300 m」—— 实测青岭走廊第一版在东北角
+	# 留了一条 620 m 的横向开阔带。这条指标只有地图作者能靠「在这儿摆一撮房子」满足。
+	# settlements 与自动锚点是**替换**关系（给了就不跑自动选择），不是叠加。
+	var explicit_settlements: Array = recipe.get("settlements", [])
+	if not explicit_settlements.is_empty():
+		for entry_v in explicit_settlements:
+			var entry: Dictionary = entry_v
+			_place_buildings(occluders, doc, nodes, vec2(entry.get("pos", [0, 0])),
+					int(entry.get("buildings", buildings_per_group)),
+					maxf(float(entry.get("spread_m", 60.0)), JieyuMapSpec.URBAN_SPACING_MIN_M),
+					rng)
+	else:
+		for g in groups:
+			var anchor := _pick_settlement_anchor(scores, cols, rows, sample_step, nodes, g, rng)
+			if anchor.x < 0.0:
 				continue
-			var near_core := false
-			for node_v in nodes:
-				if vec2((node_v as Dictionary).get("pos", [0, 0])).distance_to(center) \
-						< JieyuMapSpec.CORE_RADIUS_M + 5.0:
-					near_core = true
-					break
-			if near_core:
-				continue   # 4.2 / 六章：核心占领区不堆建筑，别把判定器变迷宫
-			var half_x := float(roundi(rng.randf_range(4.0, 7.0)))
-			var half_y := float(roundi(rng.randf_range(4.0, 7.0)))
-			var building := {
-				"id": "building_%02d" % (occluders.size() + 1),
-				"type": "building",
-				"polygon": rect_polygon(center, half_x, half_y),
-				"h_low": 0.0,
-				"h_top": roundf(rng.randf_range(3.0, 6.0) * 10.0) / 10.0,
-				# 2026-10-03 拍板①：一律 destructible = true；
-				# 拍板②：结构值按占地 tiering（小屋 800 / 标准 1200 / 加固 3000），
-				# 锚点与工程的 FOB 结构值同档（1200）。
-				"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
-				"hp": building_hp_for_footprint(half_x * 2.0, half_y * 2.0),
-				# 2026-10-03 拍板「普通子弹对建筑伤害恒为 0」：建筑不吃子弹伤害，
-				# 只吃弹种口径的结构伤害（structure_damage 列）。
-				"absorbs_bullets": false,
-				# 拍板①开口：默认一窗一门（六章「每个占领点 3 个以上入口/射击窗」）
-				"openings": default_openings_for(half_x, half_y),
-			}
-			occluders.append(building)
-			placed += 1
+			_place_buildings(occluders, doc, nodes, anchor, buildings_per_group,
+					JieyuMapSpec.URBAN_SPACING_MAX_M * float(buildings_per_group) * 0.8, rng)
 	# 沿节点外围再撒一圈半高墙（0.5–2 m：人高掩体，可由高程或遮挡层承担）
 	for node_v in nodes:
 		var pos := vec2((node_v as Dictionary).get("pos", [0, 0]))
@@ -524,6 +499,8 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 			if center.x < 8.0 or center.y < 8.0 \
 					or center.x > float(doc.width) - 8.0 \
 					or center.y > float(doc.height_px) - 8.0:
+				continue
+			if not _far_enough(occluders, center):
 				continue
 			wall_index += 1
 			var wall_half_x := float(roundi(rng.randf_range(2.5, 5.0)))
@@ -543,8 +520,106 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 				# 4.6 铁律「不能完全封闭、必须留有暴露面」⇒ 半高墙默认留一条缝
 				"openings": default_openings_for_wall(wall_half_x, wall_half_y),
 			})
+	# 2026-10-04：配方可给**显式半高墙 / 田埂**（walls[]，每条 {pos, half_size, h_top}）。
+	# 为什么需要：六章的「每 150–200 m 打断长视线」在一张开阔的 1 km 图上，
+	# 光靠建筑群（8–14 m 见方、簇状分布）补不齐 —— 田埂 / 沙袋线是更轻的一档：
+	# 只挡视线与子弹、不阻挡人员通行（4.17），而且它同样进 covered 栅格。
+	var explicit_walls: Array = recipe.get("walls", [])
+	for wall_v in explicit_walls:
+		var wall_entry: Dictionary = wall_v
+		var wall_center := vec2(wall_entry.get("pos", [0, 0]))
+		var wall_half := vec2(wall_entry.get("half_size", [4.0, 1.5]))
+		if wall_center.x - wall_half.x < 8.0 or wall_center.y - wall_half.y < 8.0 \
+				or wall_center.x + wall_half.x > float(doc.width) - 8.0 \
+				or wall_center.y + wall_half.y > float(doc.height_px) - 8.0:
+			continue
+		if not _far_enough(occluders, wall_center):
+			continue
+		wall_index += 1
+		occluders.append({
+			"id": "wall_%02d" % wall_index,
+			"type": "wall",
+			"polygon": rect_polygon(wall_center, wall_half.x, wall_half.y),
+			"h_low": 0.0,
+			"h_top": float(wall_entry.get("h_top", 1.2)),
+			"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
+			"hp": JieyuMapSpec.SANDBAG_HP,
+			"absorbs_bullets": true,
+			"openings": default_openings_for_wall(wall_half.x, wall_half.y),
+		})
 	_apply_damage_profiles(occluders)
 	return occluders
+
+
+## 六章：遮挡体间距 ≥ 5 m（校验器按**中心距**判；贴在一起会穿模、也会堵死枪线）。
+## 自动散点很容易撞出几对 —— 实测青岭走廊第一版 6 对 <5 m。落笔前统一在这里挡掉。
+## 建筑、节点外围沙袋圈、显式田埂三条路径都要过它，否则「建筑 vs 沙袋」还是会贴在一起。
+static func _far_enough(occluders: Array, center: Vector2) -> bool:
+	for item_v in occluders:
+		var polygon: Variant = (item_v as Dictionary).get("polygon", null)
+		if not (polygon is Array) or (polygon as Array).size() < 3:
+			continue
+		var sum := Vector2.ZERO
+		for point_v in polygon:
+			sum += vec2(point_v)
+		if (sum / float((polygon as Array).size())).distance_to(center) \
+				< JieyuMapSpec.URBAN_SPACING_MIN_M:
+			return false
+	return true
+
+
+## 在锚点周围撒一撮建筑（自动布点与显式 settlements[] 共用的一段）。
+## 三条硬约束都在这里：① 不越图边 15 m；② 不落进任何节点核心区（core + 5 m，4.2 / 六章）；
+## ③ 矩形中心先取整再用（rect_polygon 的口径，开口才不会漂到墙外）。
+## spread_m 是撒点半径上限；自动锚点用「建筑数 × 15 m × 0.8」，显式锚点由配方给。
+static func _place_buildings(occluders: Array, doc: JieyuMapDoc, nodes: Array,
+		anchor: Vector2, count: int, spread_m: float, rng: RandomNumberGenerator) -> int:
+	var placed := 0
+	var attempts := 0
+	while placed < count and attempts < count * 30:
+		attempts += 1
+		var angle := rng.randf() * TAU
+		var radius := rng.randf_range(JieyuMapSpec.URBAN_SPACING_MIN_M, spread_m)
+		var center := anchor + Vector2(cos(angle), sin(angle)) * radius
+		if center.x < 15.0 or center.y < 15.0 \
+				or center.x > float(doc.width) - 15.0 \
+				or center.y > float(doc.height_px) - 15.0:
+			continue
+		var near_core := false
+		for node_v in nodes:
+			if vec2((node_v as Dictionary).get("pos", [0, 0])).distance_to(center) \
+					< JieyuMapSpec.CORE_RADIUS_M + 5.0:
+				near_core = true
+				break
+		if near_core:
+			continue   # 4.2 / 六章：核心占领区不堆建筑，别把判定器变迷宫
+		if not _far_enough(occluders, center):
+			continue
+		var half_x := float(roundi(rng.randf_range(4.0, 7.0)))
+		var half_y := float(roundi(rng.randf_range(4.0, 7.0)))
+		occluders.append({
+			"id": "building_%02d" % (occluders.size() + 1),
+			"type": "building",
+			"polygon": rect_polygon(center, half_x, half_y),
+			"h_low": 0.0,
+			# 顶高取六章的「掩体密度分级：间距 5–15 m、高 1.5–3 m（城市 / 建筑群）」
+			# —— 这对常量（BUILDING_H_LOW_M / BUILDING_H_TOP_M）以前只在校验器的说明文字里用，
+			# 生成器自己却写 3–6 m，等于校验器替工程说了一句假话。2026-10-04 对齐。
+			"h_top": roundf(rng.randf_range(JieyuMapSpec.BUILDING_H_LOW_M,
+					JieyuMapSpec.BUILDING_H_TOP_M) * 10.0) / 10.0,
+			# 2026-10-03 拍板①：一律 destructible = true；
+			# 拍板②：结构值按占地 tiering（小屋 800 / 标准 1200 / 加固 3000），
+			# 锚点与工程的 FOB 结构值同档（1200）。
+			"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
+			"hp": building_hp_for_footprint(half_x * 2.0, half_y * 2.0),
+			# 2026-10-03 拍板「普通子弹对建筑伤害恒为 0」：建筑不吃子弹伤害，
+			# 只吃弹种口径的结构伤害（structure_damage 列）。
+			"absorbs_bullets": false,
+			# 拍板①开口：默认一窗一门（六章「每个占领点 3 个以上入口/射击窗」）
+			"openings": default_openings_for(half_x, half_y),
+		})
+		placed += 1
+	return placed
 
 
 ## 建筑结构值：按占地分三档（拍板②的「标准档 1200」）
@@ -833,10 +908,16 @@ static func from_recipe(map_id: String, recipe: Dictionary) -> JieyuMapDoc:
 	var nodes: Array = recipe.get("raas_nodes", [])
 	if nodes.is_empty():
 		nodes = generate_nodes(doc, int(recipe.get("node_count", 5)), seed_value)
-		for node_v in nodes:
-			# 节点区压平（12.8.4「白旗点周边的掩体」的自动近似）
-			JieyuMapPainter.flatten_disc(doc, vec2((node_v as Dictionary)["pos"]),
-					JieyuMapSpec.CORE_RADIUS_M * 2.0, 25.0, -1.0)
+	# 节点区压平（12.8.4「白旗点周边的掩体」的自动近似）。
+	# ⚠ 必须放在**道路之后**：道路是「沿程坡度受控」的路基，在陡坡上会把走廊抬成一条
+	# 高于两侧的堤（这是有意的 —— 六章要求载具通道能走通）。若这条堤正好穿过节点核心，
+	# 核心格就会出现远超 30° 的陡坎 —— 2026-10-04 实测青岭走廊 N1 核心格 79.3°，
+	# 校验器报 node.core_not_passable。
+	# ⚠ 显式给的 raas_nodes 以前**不压平**（只有自动布点才压平）—— 这是个不对称：
+	# 手写节点的图反而更容易在核心格踩到陡坎。2026-10-04 修正为两条分支都压平。
+	for node_v in nodes:
+		JieyuMapPainter.flatten_disc(doc, vec2((node_v as Dictionary)["pos"]),
+				JieyuMapSpec.CORE_RADIUS_M * 2.0, 25.0, -1.0)
 	doc.zones = build_zones(nodes, grid_w, grid_h, seed_value)
 	if recipe.has("spawn_areas"):
 		doc.zones["spawn_areas"] = (recipe["spawn_areas"] as Array).duplicate(true)

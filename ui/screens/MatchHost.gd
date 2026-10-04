@@ -51,6 +51,11 @@ func start(main_scene_path: String, options: Dictionary) -> bool:
 	main.enemy_count = mode_enemies if mode_enemies > 0 \
 			else int(options.get("enemy_count", main.enemy_count))
 	main.map_seed = int(options.get("map_seed", main.map_seed))
+	# 地图（2026-10-04 第一张正式地图）：空串 = 用 Main.tscn 的 @export 默认（工程内置示范图）。
+	# 显式选了地图才覆盖 —— 单跑 Main.tscn 的测试与 demo 摆位完全不受影响。
+	var map_image := String(options.get("map_image", ""))
+	if not map_image.is_empty():
+		main.map_height_image = map_image
 	main.map_preview_mode = false
 	add_child(main)
 	_apply_mode_rules()

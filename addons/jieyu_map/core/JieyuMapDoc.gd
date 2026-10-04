@@ -326,19 +326,29 @@ func save(map_id_override: String = "") -> Error:
 	# 工作层（草稿）。值可以是 PackedByteArray（灰度层）或 Image（彩色层，如 content.png）
 	for layer_name in layers.keys():
 		var payload: Variant = layers[layer_name]
+		var layer_image: Image = null
 		if payload is Image:
 			var direct: Image = payload
-			if direct.get_width() == width and direct.get_height() == height_px:
-				direct.save_png(JieyuMapSpec.layer_file_path(id, "%s.png" % layer_name))
-			continue
-		var view := _as_byte_view(payload)
-		if view.size() != width * height_px:
-			continue
-		var layer_image := Image.create_from_data(width, height_px, false, Image.FORMAT_L8, view)
-		layer_image.save_png(JieyuMapSpec.layer_file_path(id, "%s.png" % layer_name))
-		# 内容材质图也按 12.8.1 的文件名放到地图根目录（工程侧按约定名找）
+			if direct.get_width() != width or direct.get_height() != height_px:
+				continue
+			direct.save_png(JieyuMapSpec.layer_file_path(id, "%s.png" % layer_name))
+			layer_image = direct
+		else:
+			var view := _as_byte_view(payload)
+			if view.size() != width * height_px:
+				continue
+			layer_image = Image.create_from_data(width, height_px, false, Image.FORMAT_L8, view)
+			layer_image.save_png(JieyuMapSpec.layer_file_path(id, "%s.png" % layer_name))
+		# 内容材质图也按 12.8.1 的文件名放到地图根目录（工程侧 WorldSetup 按这个约定名找）。
+		# ⚠ 历史坑（2026-10-04 修）：这段原写在 payload is Image 分支的 continue 之后，
+		# 而 content_material 恰恰是 Image ⇒ 根目录那份 material.png 从来没写出来过：
+		# meta.json 声明了内容层、层里也有像素，工程侧却一直读不到、静默退回 demo 地形区。
 		if layer_name == "content_material":
 			layer_image.save_png(JieyuMapSpec.file_path(id, JieyuMapSpec.FILE_MATERIAL))
+		elif layer_name == "content_rows":
+			# 行序方案（方案 A）的那张彩图同理：meta.content_layers.rows_file 声明的是
+			# 根目录的 content.png，那就得真的写到根目录，否则声明与产物对不上。
+			layer_image.save_png(JieyuMapSpec.file_path(id, JieyuMapSpec.FILE_CONTENT_ROWS))
 
 	# 工程既有的「单张扁平高度图」入口也带上，方便直接改 Main 的 map_height_image 试跑
 	image.save_png(JieyuMapSpec.DEFAULT_MAP_ROOT + id + "_height.png")

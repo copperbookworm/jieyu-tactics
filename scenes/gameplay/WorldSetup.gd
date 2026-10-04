@@ -405,9 +405,18 @@ func _terrain_zone_entries(main) -> Array:
 	if map_id.is_empty():
 		return MapGenerator.demo_terrain_zones()
 	var path := "res://assets/maps/%s/material.png" % map_id
-	if not FileAccess.file_exists(path):
+	if not FileAccess.file_exists(path) and not ResourceLoader.exists(path, "Texture2D"):
 		return MapGenerator.demo_terrain_zones()
-	var image := Image.load_from_file(ProjectSettings.globalize_path(path))
+	# 与高度图同一条纪律（候选 T ①）：优先走「导入后的资源」。
+	# 导出后 PNG 会被打成 .ctex 封进包里，Image.load_from_file(res://…) 读不到原图
+	# （Godot 还会为此打 WARNING「this will not work on export」）。
+	var image: Image = null
+	if ResourceLoader.exists(path, "Texture2D"):
+		var texture := ResourceLoader.load(path, "Texture2D") as Texture2D
+		if texture != null:
+			image = texture.get_image()
+	if image == null and FileAccess.file_exists(path):
+		image = Image.load_from_file(ProjectSettings.globalize_path(path))
 	if image == null:
 		push_warning("[地图] material.png 读不到，退回 demo 地形区：%s" % path)
 		return MapGenerator.demo_terrain_zones()

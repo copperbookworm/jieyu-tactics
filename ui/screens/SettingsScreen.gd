@@ -14,6 +14,8 @@ extends "res://ui/screens/ScreenBase.gd"
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
 const RoleTableScript := preload("res://data/config/RoleTable.gd")
 const SettingsScript := preload("res://systems/settings/GameSettings.gd")
+## 地图列表来自插件的地图目录（12.8.1）；这里只读 meta.json 的名字，不加载高度图
+const MapDocScript := preload("res://addons/jieyu_map/core/JieyuMapDoc.gd")
 
 const COLUMN_WIDTH := 292.0
 const ACTION_SIZE := Vector2(260.0, 40.0)
@@ -28,11 +30,13 @@ var _role_option: OptionButton = null
 var _vehicle_option: OptionButton = null
 var _enemy_spin: SpinBox = null
 var _seed_spin: SpinBox = null
+var _map_option: OptionButton = null
 var _data_note: Label = null
 
 var _mode_ids: Array = []
 var _role_ids: Array = []
 var _vehicle_ids: Array = []
+var _map_entries: Array = []
 
 
 func screen_id() -> String:
@@ -107,6 +111,20 @@ func _build_content(body: VBoxContainer) -> void:
 	col2.add_child(UiKit.wrapped(
 			"AI 参谋在局后复盘。不填 API key 就完全不联网、不花 token。",
 			UiKit.SMALL_SIZE, UiKit.COLOR_DIM))
+	# 本地数据（2026-10-04 从第 3 列搬来）：清账本与清 key 本来就是 AI 参谋这一块的东西，
+	# 而第 3 列加了「地图」一行后整屏被几何门禁判出屏 —— 搬过来既合语义又腾出高度。
+	col2.add_child(UiKit.divider())
+	col2.add_child(UiKit.label("本地数据", UiKit.HEADING_SIZE, UiKit.COLOR_ACCENT))
+	var clear_ledger := UiKit.button("清空 AI 用量账本", ACTION_SIZE)
+	clear_ledger.name = "ClearLedgerButton"
+	clear_ledger.pressed.connect(_on_clear_ledger)
+	col2.add_child(clear_ledger)
+	var clear_key := UiKit.button("清除 API key", ACTION_SIZE)
+	clear_key.name = "ClearKeyButton"
+	clear_key.pressed.connect(_on_clear_key)
+	col2.add_child(clear_key)
+	_data_note = UiKit.wrapped("", UiKit.SMALL_SIZE)
+	col2.add_child(_data_note)
 	col2.add_child(UiKit.spacer(0.0, true))
 
 	# ── 列 3：对局默认 / 本地数据 ─────────────────────────────────
@@ -163,18 +181,18 @@ func _build_content(body: VBoxContainer) -> void:
 	_seed_spin.value_changed.connect(_on_seed_changed)
 	col3.add_child(UiKit.control_row("地图种子", _seed_spin))
 
-	col3.add_child(UiKit.divider())
-	col3.add_child(UiKit.label("本地数据", UiKit.HEADING_SIZE, UiKit.COLOR_ACCENT))
-	var clear_ledger := UiKit.button("清空 AI 用量账本", ACTION_SIZE)
-	clear_ledger.name = "ClearLedgerButton"
-	clear_ledger.pressed.connect(_on_clear_ledger)
-	col3.add_child(clear_ledger)
-	var clear_key := UiKit.button("清除 API key", ACTION_SIZE)
-	clear_key.name = "ClearKeyButton"
-	clear_key.pressed.connect(_on_clear_key)
-	col3.add_child(clear_key)
-	_data_note = UiKit.wrapped("", UiKit.SMALL_SIZE)
-	col3.add_child(_data_note)
+	# 地图（2026-10-04）：第一张正式地图「青岭走廊」就是从这里选进对局的。
+	# 第一项是空串 = 工程内置示范图（Main 的 @export 默认）⇒ 不选就不动既有装配与既有测试。
+	_map_entries = _collect_maps()
+	var map_labels: Array = []
+	for entry_v in _map_entries:
+		map_labels.append(str((entry_v as Dictionary)["label"]))
+	_map_option = UiKit.option_button(map_labels,
+			_map_index_of(s.default_map_image if s != null else ""))
+	_map_option.name = "MapOption"
+	_map_option.item_selected.connect(_on_map_selected)
+	col3.add_child(UiKit.control_row("地图", _map_option))
+
 	col3.add_child(UiKit.spacer(0.0, true))
 
 	_refresh_notes()
@@ -209,6 +227,8 @@ func _sync_from_settings() -> void:
 		_enemy_spin.set_value_no_signal(s.default_enemy_count)
 	if _seed_spin != null:
 		_seed_spin.set_value_no_signal(s.default_map_seed)
+	if _map_option != null:
+		_map_option.select(_map_index_of(s.default_map_image))
 
 
 func _refresh_notes() -> void:
@@ -275,6 +295,47 @@ func _on_enemy_changed(value: float) -> void:
 func _on_seed_changed(value: float) -> void:
 	ctx.settings.default_map_seed = int(round(value))
 	_commit()
+
+
+func _on_map_selected(index: int) -> void:
+	if ctx == null or index < 0 or index >= _map_entries.size():
+		return
+	ctx.settings.default_map_image = str((_map_entries[index] as Dictionary)["path"])
+	_commit()
+
+
+## 可选地图：第一项永远是「内置示范图」（路径空串）。
+## 只读 meta.json 取名字，**不加载高度图** —— 1000×1000 的图每张要几十毫秒，界面组装不该等它。
+func _collect_maps() -> Array:
+	var entries: Array = [{"label": "内置示范图", "path": ""}]
+	for map_id in MapDocScript.list_map_dirs():
+		entries.append({
+			"label": _map_label(map_id),
+			"path": "res://assets/maps/%s/heightmap.png" % map_id,
+		})
+	return entries
+
+
+func _map_label(map_id: String) -> String:
+	var path := "res://assets/maps/%s/meta.json" % map_id
+	if FileAccess.file_exists(path):
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file != null:
+			var parsed: Variant = JSON.parse_string(file.get_as_text())
+			file.close()
+			if parsed is Dictionary:
+				var map_name := str((parsed as Dictionary).get("name", "")).strip_edges()
+				if not map_name.is_empty():
+					return map_name
+	return map_id
+
+
+## 路径 → 下拉项下标；找不到（比如地图被删了）退回第一项，绝不让界面拿到空选
+func _map_index_of(image_path: String) -> int:
+	for i in _map_entries.size():
+		if str((_map_entries[i] as Dictionary)["path"]) == image_path:
+			return i
+	return 0
 
 
 func _on_open_advisor() -> void:

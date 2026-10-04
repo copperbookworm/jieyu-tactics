@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_checks()
 	_test_save_and_load()
 	_test_panel()
+	_test_qingling_corridor()
 
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
@@ -232,6 +233,111 @@ func _test_generation() -> void:
 	_check_true("河北岸明显更高（y=5 → %.1f m）" % bank_above, bank_above > channel + 20.0)
 	_check_true("河南岸明显更高（y=%d → %.1f m）" % [GRID_N - 5, bank_below],
 			bank_below > channel + 20.0)
+
+	# 2026-10-04：显式给的 raas_nodes 过去**不压平核心**（只有自动布点才压平），而道路是
+	# 「沿程坡度受控」的路基 —— 在陡坡上会把走廊抬成一条高于两侧的堤。路基若穿过节点核心，
+	# 核心格就会出现远超 30° 的陡坎（实测青岭走廊 N1 核心格 79.3°，校验器报 node.core_not_passable）。
+	# 现在两条分支都在道路之后压平：压平是「把圆内高度铺成同一个值」，所以核心半径内高差必须是 0。
+	var explicit := JieyuMapGen.from_recipe("unit_test_explicit_nodes", {
+		"seed": 20261004, "grid_w": 300, "grid_h": 300,
+		"raas_nodes": [{"id": "N1", "name": "甲", "pos": [150, 150]}],
+		"roads": [{"name": "路基", "width_m": 8,
+			"path": [[150, 20], [150, 150], [150, 280]]}],
+	})
+	var flat_min := INF
+	var flat_max := -INF
+	for dy in range(-10, 11):
+		for dx in range(-10, 11):
+			var sample := explicit.height_at(150 + dx, 150 + dy)
+			flat_min = minf(flat_min, sample)
+			flat_max = maxf(flat_max, sample)
+	_check_near("显式节点的核心半径内被铺平（高差应为 0）", flat_max - flat_min, 0.0, 0.6)
+
+	# 2026-10-04：配方可给显式建筑群锚点（settlements[]）与显式田埂（walls[]）。
+	# 背景：六章的「最长无掩体直线 ≤ 300 m」靠自动散点满足不了 —— 手写地图必须能指定
+	# 「在哪儿摆村子 / 田埂」。三条落笔路径（建筑 / 节点沙袋圈 / 田埂）都要过 5 m 间距。
+	var crafted := JieyuMapGen.from_recipe("unit_test_crafted", {
+		"seed": 5, "grid_w": 300, "grid_h": 300,
+		"raas_nodes": [{"id": "N1", "name": "甲", "pos": [150, 150]}],
+		"settlements": [{"pos": [80, 80], "buildings": 3, "spread_m": 20}],
+		"walls": [{"pos": [230, 230], "half_size": [6, 2], "h_top": 1.2}],
+	})
+	var buildings_near := 0
+	var wall_near := 0
+	for item_v in crafted.occluders:
+		var item: Dictionary = item_v
+		var sum := Vector2.ZERO
+		for point_v in item["polygon"]:
+			sum += JieyuMapGen.vec2(point_v)
+		var center: Vector2 = sum / float((item["polygon"] as Array).size())
+		if str(item["type"]) == "building" and center.distance_to(Vector2(80, 80)) <= 30.0:
+			buildings_near += 1
+		elif str(item["type"]) == "wall" and center.distance_to(Vector2(230, 230)) <= 1.0:
+			wall_near += 1
+	_check("显式建筑群锚点：30 m 内 3 栋", buildings_near, 3)
+	_check("显式田埂：指定位置 1 条", wall_near, 1)
+	# 自动布点也必须满足 5 m 中心距（校验器 occluders.overlap 就是这个口径）
+	var auto_doc := JieyuMapGen.from_recipe("unit_test_gap", {
+		"seed": 9, "grid_w": 400, "grid_h": 400, "node_count": 3,
+		"settlement_groups": 2, "buildings_per_group": 8,
+	})
+	_check_true("自动布点也不产生 <5 m 的遮挡体对（实测最小 %.2f m）"
+			% _min_occluder_gap(auto_doc.occluders),
+			_min_occluder_gap(auto_doc.occluders) >= JieyuMapSpec.URBAN_SPACING_MIN_M)
+
+
+## 第一张正式地图（2026-10-04）：仓库里的**当前产物**必须始终校验全绿、且能被工程侧读进世界。
+## 这条测的不是生成器，是交付物本身 —— 谁手改坏了 JSON / 漏了一张图，这里就会红。
+func _test_qingling_corridor() -> void:
+	var doc := JieyuMapDoc.load_from_dir("qingling_corridor")
+	_check_true("青岭走廊能读出来", doc != null)
+	if doc == null:
+		return
+	var nodes: Array = doc.zones.get("raas_nodes", [])
+	_check("青岭走廊五节点", nodes.size(), 5)
+	var names: Array = []
+	for node_v in nodes:
+		names.append(str((node_v as Dictionary).get("name", "")).strip_edges())
+	_check_true("每个节点都有名字（报点要用）", not names.has(""))
+	var report := JieyuMapChecks.run(doc)
+	_check("青岭走廊校验：ERROR 数", JieyuMapChecks.count_level(report, JieyuMapChecks.SEV_ERROR), 0)
+	_check("青岭走廊校验：WARN 数", JieyuMapChecks.count_level(report, JieyuMapChecks.SEV_WARN), 0)
+	# 工程侧要读的三样：掩体（occluders.json）/ 内容层（material.png）/ 扁平高度图
+	var world_setup := WorldSetupScript.new()
+	var stub := Node.new()
+	stub.set_script(_stub_main_script())
+	stub.set("map_height_image", "res://assets/maps/qingling_corridor/heightmap.png")
+	var entries: Array = world_setup.call("_load_occluders", stub)
+	_check_true("青岭走廊掩体能被 WorldSetup 读出来（%d 条）" % entries.size(), entries.size() >= 100)
+	_check_true("根目录有 material.png（工程按这个约定名找）",
+			FileAccess.file_exists("res://assets/maps/qingling_corridor/material.png")
+			or ResourceLoader.exists("res://assets/maps/qingling_corridor/material.png", "Texture2D"))
+	var content_zones: Array = world_setup.call("_terrain_zone_entries", stub)
+	var total_cells := 0
+	for zone_v in content_zones:
+		total_cells += int((zone_v as Dictionary).get("cells", 0))
+	_check_true("内容层真的读进来了（%d 片 / %d 格，不是 demo 三片摆位）"
+			% [content_zones.size(), total_cells], total_cells > 50000)
+	stub.free()
+	world_setup.free()
+
+
+## 遮挡体两两中心距的最小值（校验器 occluders.overlap 用的是同一个口径）
+func _min_occluder_gap(occluders: Array) -> float:
+	var centers: Array[Vector2] = []
+	for item_v in occluders:
+		var polygon: Variant = (item_v as Dictionary).get("polygon", null)
+		if not (polygon is Array) or (polygon as Array).size() < 3:
+			continue
+		var sum := Vector2.ZERO
+		for point_v in polygon:
+			sum += JieyuMapGen.vec2(point_v)
+		centers.append(sum / float((polygon as Array).size()))
+	var smallest := INF
+	for i in centers.size():
+		for j in range(i + 1, centers.size()):
+			smallest = minf(smallest, centers[i].distance_to(centers[j]))
+	return 0.0 if is_inf(smallest) else smallest
 
 
 func _all_occluders_valid(occluders: Array) -> bool:

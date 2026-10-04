@@ -312,6 +312,8 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 	var centers: Array[Vector2] = []
 	var inside_core := 0
 	var buildings := 0
+	var building_h_min := INF
+	var building_h_max := 0.0
 	var node_positions: Array[Vector2] = []
 	for node_v in doc.zones.get("raas_nodes", []):
 		node_positions.append(JieyuMapGen.vec2((node_v as Dictionary).get("pos", [0, 0])))
@@ -356,6 +358,8 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 					"遮挡体 %s 标了 absorbs_bullets=false：子弹打不掉它，只能靠重武器" % item_id, {}))
 		if h_top >= JieyuMapSpec.BUILDING_H_LOW_M and str(item.get("type", "")) == "building":
 			buildings += 1
+			building_h_min = minf(building_h_min, h_top)
+			building_h_max = maxf(building_h_max, h_top)
 		for point_v in polygon:
 			var point := JieyuMapGen.vec2(point_v)
 			if point.x < -0.5 or point.y < -0.5 \
@@ -393,11 +397,15 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 				"有 %d 对遮挡体间距 < %.0f m（建筑会穿模，也会把枪线堵死）"
 				% [pairs, JieyuMapSpec.URBAN_SPACING_MIN_M], {"pairs": pairs}))
 	if buildings > 0:
+		# 顶高报**实测值**而不是规格常量：报常量会在有人手改 JSON 之后继续说假话。
 		report.append(_item(SEV_INFO, "occluders.density",
-				"建筑 %d 座 / 遮挡体共 %d 个；建筑群口径间距 %.0f–%.0f m、高 %.1f–%.1f m"
+				"建筑 %d 座 / 遮挡体共 %d 个；建筑群口径间距 %.0f–%.0f m、实测顶高 %.1f–%.1f m（六章分级 %.1f–%.1f m）"
 				% [buildings, doc.occluders.size(), JieyuMapSpec.URBAN_SPACING_MIN_M,
-				JieyuMapSpec.URBAN_SPACING_MAX_M, JieyuMapSpec.BUILDING_H_LOW_M,
-				JieyuMapSpec.BUILDING_H_TOP_M], {"buildings": buildings}))
+				JieyuMapSpec.URBAN_SPACING_MAX_M,
+				0.0 if is_inf(building_h_min) else building_h_min, building_h_max,
+				JieyuMapSpec.BUILDING_H_LOW_M, JieyuMapSpec.BUILDING_H_TOP_M],
+				{"buildings": buildings, "h_min": 0.0 if is_inf(building_h_min) else building_h_min,
+				"h_max": building_h_max}))
 
 
 ## 三段的阈值表（拍板④）：查「三行齐不齐、比例合不合法、摧毁行有没有残痕」

@@ -1,0 +1,163 @@
+{
+  "cell_size_m": 1.0,
+  "content_counts": [
+    32956,
+    197626,
+    64404
+  ],
+  "content_layers": {
+    "material_file": "material.png",
+    "merge_mode": "max_conceal",
+    "name": "terrain_content",
+    "rows_file": "content.png"
+  },
+  "grid": 1000,
+  "map_id": "qingling_corridor",
+  "max_elevation_m": 150.0,
+  "modes": [
+    "pvp_competitive",
+    "pvp_armor",
+    "pvp_casual",
+    "pvevp"
+  ],
+  "name": "青岭走廊",
+  "noise": {
+    "gain": 0.5,
+    "lacunarity": 2.0,
+    "layers": [
+      {
+        "amp_m": 92.0,
+        "feature_m": 260.0
+      },
+      {
+        "amp_m": 38.0,
+        "feature_m": 82.0
+      },
+      {
+        "amp_m": 14.0,
+        "feature_m": 26.0
+      },
+      {
+        "amp_m": 5.0,
+        "feature_m": 9.0
+      }
+    ],
+    "octaves": 4.0,
+    "seed": 20261004,
+    "type": "simplex_smooth"
+  },
+  "players": 40,
+  "recipe": {
+    "buildings_per_group": 7,
+    "generator": "jieyu_map/simplex_smooth",
+    "grid_h": 1000,
+    "grid_w": 1000,
+    "node_count": 5,
+    "river_axis": "x",
+    "seed": 20261004,
+    "settlement_groups": 0,
+    "water_level_m": 10.0
+  },
+  "roads": [
+    {
+      "name": "东西主干道",
+      "path": [
+        [
+          120.0,
+          505.0
+        ],
+        [
+          210.0,
+          470.0
+        ],
+        [
+          300.0,
+          430.0
+        ],
+        [
+          400.0,
+          455.0
+        ],
+        [
+          510.0,
+          520.0
+        ],
+        [
+          610.0,
+          590.0
+        ],
+        [
+          700.0,
+          665.0
+        ],
+        [
+          790.0,
+          600.0
+        ],
+        [
+          880.0,
+          505.0
+        ]
+      ],
+      "width_m": 10.0
+    },
+    {
+      "name": "南北支路",
+      "path": [
+        [
+          520.0,
+          120.0
+        ],
+        [
+          500.0,
+          300.0
+        ],
+        [
+          515.0,
+          430.0
+        ],
+        [
+          545.0,
+          565.0
+        ],
+        [
+          620.0,
+          700.0
+        ],
+        [
+          690.0,
+          880.0
+        ]
+      ],
+      "width_m": 8.0
+    },
+    {
+      "name": "西岸支路",
+      "path": [
+        [
+          120.0,
+          300.0
+        ],
+        [
+          130.0,
+          500.0
+        ],
+        [
+          200.0,
+          670.0
+        ],
+        [
+          330.0,
+          745.0
+        ]
+      ],
+      "width_m": 8.0
+    }
+  ],
+  "sight_margin_m": 0.3,
+  "size_m": [
+    1000.0,
+    1000.0
+  ],
+  "terrain_type": "grassland"
+}

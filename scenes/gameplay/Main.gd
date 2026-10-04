@@ -16,18 +16,21 @@ const LaneControllerScript := preload("res://scenes/gameplay/LaneController.gd")
 const SmokeControllerScript := preload("res://scenes/gameplay/SmokeController.gd")
 ## 数据表健康自检（2026-10-01）：三张 .txt 表不在导出包里时，降级全是静默的 —— 见 BootCheck.gd
 const BootCheckScript := preload("res://scenes/gameplay/BootCheck.gd")
+## 玩家步兵射击链（2026-10-04 从 Main 拆出）：直接原因是 Main 被上一轮的结构值接线顶到 403 行、破了 ≤400 硬线
+const PlayerFireControllerScript := preload("res://scenes/gameplay/PlayerFireController.gd")
 
 ## 第一版主场景装配（挂在 Main.tscn 的根节点上）
 ## 地形、玩家、相机、敌人、HUD 全部在 _ready 里用代码创建——
 ## 场景文件只需要一个空 Node2D + 本脚本，避免手改 .tscn
 ##
 ## 【候选 N · 职责拆分（2026-09-30）】本文件从 968 行瘦到 400 行以内，只剩四件事：
-##   ① 配置：@export 开关 ② 装配：new 出各系统与六个子模块 ③ 信号接线：全在 _wire_signals()
+##   ① 配置：@export 开关 ② 装配：new 出各系统与七个子模块 ③ 信号接线：全在 _wire_signals()
 ##   ④ 战局流程：分数 / 任务结算 / 占领胜负 / 输入
 ## 分工：世界建场 → WorldSetup ｜ HUD 构建与刷新 → HudBuilder
 ##       载具（上下车·换座·操炮·开火）→ VehicleController ｜ 报点标记链 → MarkController
 ##       补给护送（派车 + 抵达回告）→ SupplyController ｜ 侧翼通路（派穿插兵 + 穿线判定）→ LaneController
 ##       间瞄链（选点 / 发射 / 落弹）→ IndirectController
+##       玩家步兵开火链（开火门禁 / 目标组装 / 伤害与压制）→ PlayerFireController
 ## 拆分时的字段改名（模块要读，所以从私有变公开）：_score → score、
 ##   _capture_zones → capture_zones、_terrain_sprite.texture → terrain_texture、_indirect → indirect
 ## 子模块一律用鸭子类型拿本节点（Main 没有 class_name），所以这里的字段就是模块的接口。
@@ -61,6 +64,7 @@ var hud = null              # HudBuilder
 var supply_ctl = null       # SupplyController（候选 L3）
 var lane_ctl = null         # LaneController（候选 L4）
 var smoke_ctl = null        # SmokeController（候选 P）
+var fire_ctl = null         # PlayerFireController（玩家步兵开火链）
 
 ## 各系统
 var quests: QuestSystem = null
@@ -86,6 +90,11 @@ func _ready() -> void:
 	vehicles.name = "VehicleController"
 	add_child(vehicles)
 	vehicles.setup(self, player, sight, vehicle_id)
+	# 玩家步兵开火链（2026-10-04 从 Main 拆出）：门禁 → 目标组装 → 伤害与压制结算
+	fire_ctl = PlayerFireControllerScript.new()
+	fire_ctl.name = "PlayerFireController"
+	add_child(fire_ctl)
+	fire_ctl.setup(self)
 	# 报点 / 标记（docx 4.11.2）：标记系统要在建 HUD 之前建好（小地图要引用它）
 	marks = MarkSystem.new()
 	marks.name = "MarkSystem"
@@ -158,7 +167,7 @@ func _check_data_tables() -> void:
 ## 信号接线表：控件、战术地图、事件总线、玩家的回调全部集中在这一处，便于以后查「谁接了谁」
 func _wire_signals() -> void:
 	# HUD 控件
-	hud.fire_button.fired.connect(_on_fire)
+	hud.fire_button.fired.connect(fire_ctl.fire)
 	hud.focus_button.focus_changed.connect(hud.apply_focus)
 	hud.mark_wheel.mark_requested.connect(mark_ctl.place_at_crosshair)
 	hud.command_wheel.command_requested.connect(mark_ctl.send_command)   # 4.13 快捷指令
@@ -196,81 +205,6 @@ func _on_reload_started() -> void:
 # 换弹完成 → 刷新 HUD。
 func _on_reload_finished() -> void:
 	hud.update_ammo()
-
-
-func _on_fire() -> void:
-	if player == null or grid == null or camera_controller == null:
-		# 只在「按了开火键却什么都没发生」时打印，方便真机用 logcat 定位是哪一段拦下的
-		print("[开火] 未执行：装配没就绪（player=%s grid=%s camera_controller=%s）" % [
-				str(player != null), str(grid != null), str(camera_controller != null)])
-		return
-	# 开图期间不能开火（docx 4.11.7 ①）
-	if hud != null and hud.is_map_open():
-		print("[开火] 未执行：战术地图开着")
-		return
-	# 人在载具里：步兵的枪收起来；只有武器位能开炮（8.1 座位分工）
-	if vehicles.vehicle != null and vehicles.vehicle.is_occupied():
-		if vehicles.is_gunner(player):
-			vehicles.fire()
-		else:
-			print("[开火] 载具分支：坐在驾驶位，不出炮")
-			hud.show_hint("驾驶位不能开炮——先按「换座」到武器位")
-		return
-	var direction := camera_controller.crosshair_world - player.global_position
-	if direction.length() < 0.001:
-		direction = player.facing
-	else:
-		direction = direction.normalized()
-	var enemies := get_tree().get_nodes_in_group("enemy")
-	# 候选 L2：敌方 FOB（工事）也在可打目标里——它自带 3 m 命中半径（BallisticsSystem 按 hit_radius() 取）。
-	# 压制列表仍然只用 enemy 组（压制是打步兵的手感机制，不该被工事带偏）
-	var targets: Array = enemies.duplicate()
-	targets.append_array(get_tree().get_nodes_in_group("fob_enemy"))
-	var result := player.shoot(direction, targets)
-	# 被射速冷却 / 换弹拦下时什么都不做：触屏会把一次点按变成 touch + 模拟鼠标两次调用，
-	# 第二次本来就该被拦（原来是继续打印 0.0 m 并画一条零长曳光，纯噪音）
-	if not result.get("fired", false):
-		return
-	print("[开火] 距离=%.1fm 命中=%s" % [result["distance"], str(result["hit"])])
-	spawn_tracer(player.global_position, direction, result["distance"])
-	if result.get("cover_hit", false):
-		# 子弹打在掩体上：扣掩体耐久（打光就破，之后不再挡通视与子弹）
-		var cover = result.get("cover")
-		if cover != null and cover.has_method("take_damage"):
-			cover.take_damage(player.damage_at(result["distance"])
-					* RoleTable.damage_scale(player_role))
-			# 建筑结构值（2026-10-03 拍板）：普通子弹 structure_damage = 0 ⇒ 对建筑毫无作用；
-			# 重武器才扣得动（1200 结构值、主炮 280 ⇒ 4~5 发一栋）
-			var structure := float(result.get("structure_damage", 0.0))
-			if structure > 0.0 and cover.has_method("take_structure_damage"):
-				cover.take_structure_damage(structure)
-	elif result["hit"]:
-		var enemy := result["target"] as Enemy
-		if enemy != null:
-			# 先记压制再结算伤害：被打死时 alive=false，add_suppression 会直接返回（2026-09-28 修）
-			enemy.add_suppression(GameConfig.SUPPRESSION_HIT_BONUS)
-			enemy.take_damage(player.damage_at(result["distance"])
-					* RoleTable.damage_scale(player_role))
-		elif result["target"] != null and result["target"].has_method("take_damage"):
-			# 不是步兵就是工事（FOB）：照样按武器伤害 × 兵种倍率扣
-			result["target"].take_damage(player.damage_at(result["distance"])
-					* RoleTable.damage_scale(player_role))
-	_suppress_enemies(enemies, direction)
-
-
-## 玩家火力对敌人的压制（docx 7.3 反向）：命中额外叠加，未命中按「弹道离它多近」计算
-func _suppress_enemies(enemies: Array, direction: Vector2) -> void:
-	if player == null:
-		return
-	for node in enemies:
-		var enemy := node as Enemy
-		if enemy == null or not enemy.alive:
-			continue
-		var factor := SuppressionSystem.near_miss_factor(player.global_position, direction,
-				enemy.global_position)
-		if factor <= 0.0:
-			continue
-		enemy.add_suppression(SuppressionSystem.per_shot_amount(factor))
 
 
 ## 画一条曳光（步兵与载具共用；敌方载具开炮也接在这里）

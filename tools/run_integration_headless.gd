@@ -135,16 +135,21 @@ func _check_structure() -> void:
 			not _main.map_preview_mode)
 	_check_true("Main 已 _ready：玩家 / 地形网格 / 相机控制器都在",
 			_main.player != null and _main.grid != null and _main.camera_controller != null)
-	_check_true("八个子模块都建好了（候选 N 的 4 个 + 间瞄 / 补给 / 通路 / 烟雾）",
+	_check_true("九个子模块都建好了（候选 N 的 4 个 + 间瞄 / 补给 / 通路 / 烟雾 / 玩家开火）",
 			_main.world != null and _main.vehicles != null and _main.mark_ctl != null
 			and _main.hud != null and _main.supply_ctl != null and _main.lane_ctl != null
-			and _main.smoke_ctl != null and _main.indirect_ctl != null)
+			and _main.smoke_ctl != null and _main.indirect_ctl != null
+			and _main.fire_ctl != null)
 	_check_true("子模块都挂在 Main 下",
 			_main.world.get_parent() == _main and _main.vehicles.get_parent() == _main
 			and _main.mark_ctl.get_parent() == _main and _main.hud.get_parent() == _main
 			and _main.supply_ctl.get_parent() == _main
 			and _main.lane_ctl.get_parent() == _main
-			and _main.smoke_ctl.get_parent() == _main)
+			and _main.smoke_ctl.get_parent() == _main
+			and _main.fire_ctl.get_parent() == _main)
+	# 2026-10-04：开火键必须接到**玩家开火模块**上（Main 里已经没有 _on_fire 可接了）
+	_check_true("开火键接到 PlayerFireController.fire（拆分后接线没断）",
+			_main.hud.fire_button.fired.is_connected(_main.fire_ctl.fire))
 	_check_true("实体仍挂在 Main 下（不是挂在模块下）",
 			_main.get_node_or_null("Terrain") != null
 			and _main.get_node_or_null("Player") != null
@@ -248,12 +253,12 @@ func _check_interactions() -> void:
 	_main.vehicles.fire()
 	_check("武器位开炮：消耗一发（直调控制器）", v.ammo(), ammo_before - 1)
 	# 【2026-10-01 补覆盖】上面那条走的是 vehicles.fire()，而玩家按开火键走的是
-	# FireButton.fired → Main._on_fire() → vehicles.fire()。以前只测前半段，
+	# FireButton.fired → PlayerFireController.fire() → vehicles.fire()。以前只测前半段，
 	# 于是「开火键在武器位打不出炮」这类问题测试全绿也照样漏（排查 bug 时发现的覆盖缺口）。
 	v._fire_cooldown = 0.0
 	var ammo_via_callback: int = v.ammo()
 	_main.hud.fire_button.fired.emit()
-	_check("武器位开炮：走玩家那条路（fired 信号 → Main._on_fire）也消耗一发",
+	_check("武器位开炮：走玩家那条路（fired 信号 → PlayerFireController.fire）也消耗一发",
 			v.ammo(), ammo_via_callback - 1)
 	# 报废后武器位必须给回话，而不是静默什么都不做
 	v.take_hit(99999.0, 99999.0, Vector2.RIGHT)
@@ -299,7 +304,7 @@ func _check_interactions() -> void:
 	_check_true("击倒事件 → 战力分 +1 且标签刷新",
 			_main.score >= 1 and _main.hud.score_label.text.contains("战力分"))
 	var children_before: int = _main.get_child_count()
-	_main._on_fire()
+	_main.fire_ctl.fire()
 	_check_true("步兵开火：画了一条曳光（Main 子节点 +1）",
 			_main.get_child_count() > children_before)
 	_main.player.take_damage(25.0)

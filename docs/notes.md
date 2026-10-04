@@ -126,6 +126,11 @@
   `scenes/gameplay/{WorldSetup,VehicleController}.gd`、`systems/marks/MarkController.gd`、`ui/HudBuilder.gd`
   （都刻意不写 `class_name`，Main 用 preload 引用、各自持 Main 引用走鸭子类型；模块要读的字段已改公开）。
   继续加功能时优先往这四个模块里放，别把 Main 喂胖（`.gdlintrc` max-file-lines 1000）。
+- **架构现状（2026-10-04，第五十六版）**：`Main.gd` **337 行**（不是 398/403），子模块**九个**：
+  `scenes/gameplay/` 下 WorldSetup / VehicleController / IndirectController / SupplyController /
+  LaneController / SmokeController / **PlayerFireController**（玩家步兵开火链，本轮拆出），
+  `systems/marks/MarkController.gd`、`ui/HudBuilder.gd`。
+  Main.gd 的硬线是 **≤400**：第五十一版被结构值接线顶到 403（破了），第五十六版拆出开火链才收回 337。
 
 ## 5. 本机（DSH 这台机）环境备忘
 

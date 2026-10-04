@@ -117,6 +117,8 @@ func _process(delta: float) -> bool:
 				_check_downed_not_targeted()
 				_check_finish_off_pose()
 				# 候选 O 第三轮：被击倒时的视角（会把玩家打死，必须是最后一项）
+				# 2026-10-04 炸药 / 工程兵：会挪玩家与炸掉一个掩体，放最后一段（被击倒之前）
+				_check_explosive()
 				_check_downed()
 				print("—— 集成冒烟：通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 				if _failed > 0:
@@ -135,18 +137,23 @@ func _check_structure() -> void:
 			not _main.map_preview_mode)
 	_check_true("Main 已 _ready：玩家 / 地形网格 / 相机控制器都在",
 			_main.player != null and _main.grid != null and _main.camera_controller != null)
-	_check_true("九个子模块都建好了（候选 N 的 4 个 + 间瞄 / 补给 / 通路 / 烟雾 / 玩家开火）",
+	_check_true("十个模块都建好了（候选 N 的 4 个 + 间瞄 / 补给 / 通路 / 烟雾 / 玩家开火 / 炸药）",
 			_main.world != null and _main.vehicles != null and _main.mark_ctl != null
 			and _main.hud != null and _main.supply_ctl != null and _main.lane_ctl != null
 			and _main.smoke_ctl != null and _main.indirect_ctl != null
-			and _main.fire_ctl != null)
+			and _main.fire_ctl != null
+			and _main.explosive_ctl != null)
 	_check_true("子模块都挂在 Main 下",
 			_main.world.get_parent() == _main and _main.vehicles.get_parent() == _main
 			and _main.mark_ctl.get_parent() == _main and _main.hud.get_parent() == _main
 			and _main.supply_ctl.get_parent() == _main
 			and _main.lane_ctl.get_parent() == _main
 			and _main.smoke_ctl.get_parent() == _main
-			and _main.fire_ctl.get_parent() == _main)
+			and _main.fire_ctl.get_parent() == _main
+			and _main.explosive_ctl.get_parent() == _main)
+	# 2026-10-04：爆破键必须接到炸药模块上（炸药 / 工程兵）
+	_check_true("爆破键接到 ExplosiveController.toggle",
+			_main.hud.explosive_button.pressed.is_connected(_main.explosive_ctl.toggle))
 	# 2026-10-04：开火键必须接到**玩家开火模块**上（Main 里已经没有 _on_fire 可接了）
 	_check_true("开火键接到 PlayerFireController.fire（拆分后接线没断）",
 			_main.hud.fire_button.fired.is_connected(_main.fire_ctl.fire))
@@ -1286,3 +1293,45 @@ func _check(title: String, actual: Variant, expected: Variant) -> void:
 
 func _check_true(title: String, condition: bool) -> void:
 	_check(title, condition, true)
+
+
+# ────────────── ⑩ 炸药 / 工程兵（2026-10-04 使用者拍板）──────────────
+
+## 端到端：工程兵按「爆破」在准心落点放一枚 → 再按一次遥控起爆 → 掩体吃结构值。
+## 为什么放最后一段：它会挪玩家、还会当场炸掉一个掩体，不能污染上面那些结算结论。
+func _check_explosive() -> void:
+	_check_true("爆破键在 HUD 上（(700,340)：3×3 集群与摇杆触摸圈之外）",
+			_main.hud.explosive_button != null)
+	# 切到工程兵（携带 2 发）
+	_main.player_role = RoleTable.Role.ENGINEER
+	_main.player.apply_role(_main.player_role)
+	_check("工程兵：携带 2 发炸药", _main.explosive_ctl.total(), 2)
+	_check("开局满装：剩余 = 携带", _main.explosive_ctl.remaining(), 2)
+	# 先钉「超距拒绝」：准心放到 500 m 外，按了必须不消耗、也不放
+	_main.camera_controller.crosshair_world = _main.player.global_position + Vector2(500.0, 0.0)
+	_main.explosive_ctl.toggle()
+	_check_true("超距（500 m）拒绝放置：没有待爆药", not _main.explosive_ctl.is_armed())
+	_check("超距拒绝不消耗发数", _main.explosive_ctl.remaining(), 2)
+	# 找一个还完好的掩体，把玩家挪到它旁边、准心对准它
+	var cover = null
+	for node in get_nodes_in_group("occluder"):
+		if not bool(node.get("destroyed")):
+			cover = node
+			break
+	if cover == null:
+		_check_true("场上有可用的掩体可炸", false)
+		return
+	_main.player.global_position = (cover as Node2D).global_position + Vector2(5.0, 0.0)
+	_main.camera_controller.crosshair_world = (cover as Node2D).global_position
+	var hp_before := float(cover.get("hp"))
+	_main.explosive_ctl.toggle()          # 在准心落点放
+	_check_true("工程兵：在准心落点放下一枚", _main.explosive_ctl.is_armed())
+	_check("放置消耗 1 发（2 → 1）", _main.explosive_ctl.remaining(), 1)
+	_main.explosive_ctl.toggle()          # 遥控起爆
+	_check_true("遥控起爆：掩体吃到结构值（或直接摧毁）",
+			bool(cover.get("destroyed")) or float(cover.get("hp")) < hp_before)
+	_check_true("起爆后没有残留待爆药", not _main.explosive_ctl.is_armed())
+	_check("起爆本身不再消耗发数（剩余仍是 1）", _main.explosive_ctl.remaining(), 1)
+	# 收尾：切回步枪兵 —— 别让后面的检查读到工程兵（换武器 / 携带量都不同）
+	_main.player_role = RoleTable.Role.RIFLEMAN
+	_main.player.apply_role(_main.player_role)

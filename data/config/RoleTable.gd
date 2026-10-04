@@ -13,7 +13,8 @@ extends RefCounted
 ## 侦察兵按 4.11.4 应为「目标指示（call for fire）」：90 s 时效 + 稳定观测 1.5 s + 20 s 冷却
 ## + 可被间瞄选为目标；第一版只落地最核心的 90 s 时效，其余随间瞄/兵种系统一起做。
 
-enum Role { RIFLEMAN, SCOUT, MARKSMAN }
+## 2026-10-04：新增 ENGINEER（工程兵）—— 它是「炸药」这条链的携带者，见 charges_for()
+enum Role { RIFLEMAN, SCOUT, MARKSMAN, ENGINEER }
 
 const ROLES := [
 	{
@@ -42,6 +43,16 @@ const ROLES := [
 		"damage_scale": 1.0,
 		"mark_duration": GameConfig.MARK_DURATION,
 		"note": "5.8mm 精确射手步枪（官方表：70/45、500 m、MOA 1.5）",
+	},
+	{
+		"id": Role.ENGINEER,
+		"name": "工程兵",
+		"weapon": "M870",
+		"weapons": ["remington870", "m17"],
+		"damage_scale": 1.0,
+		"mark_duration": GameConfig.MARK_DURATION,
+		"charges": 2,
+		"note": "带 2 发炸药（2026-10-04 拍板：准心落点放置 + 遥控起爆）；主武器取 12 号霰弹枪（破门）",
 	},
 ]
 
@@ -81,3 +92,9 @@ static func mark_duration(role: int) -> float:
 ## 兵种携带的武器 id 列表（第一版：主武器 + 副武器；换枪就靠它）
 static func weapon_ids(role: int) -> Array:
 	return get_role(role).get("weapons", [])
+
+
+## 兵种携带的炸药发数（2026-10-04 拍板：工程兵 2 发，其余 0）。
+## 数值只写在这里 —— ExplosiveController 读它，不自己存一份。
+static func charges_for(role: int) -> int:
+	return int(get_role(role).get("charges", 0))

@@ -18,19 +18,22 @@ const SmokeControllerScript := preload("res://scenes/gameplay/SmokeController.gd
 const BootCheckScript := preload("res://scenes/gameplay/BootCheck.gd")
 ## 玩家步兵射击链（2026-10-04 从 Main 拆出）：直接原因是 Main 被上一轮的结构值接线顶到 403 行、破了 ≤400 硬线
 const PlayerFireControllerScript := preload("res://scenes/gameplay/PlayerFireController.gd")
+## 炸药 / 工程兵（2026-10-04 拍板）：准心落点放置 + 遥控起爆
+const ExplosiveControllerScript := preload("res://scenes/gameplay/ExplosiveController.gd")
 
 ## 第一版主场景装配（挂在 Main.tscn 的根节点上）
 ## 地形、玩家、相机、敌人、HUD 全部在 _ready 里用代码创建——
 ## 场景文件只需要一个空 Node2D + 本脚本，避免手改 .tscn
 ##
 ## 【候选 N · 职责拆分（2026-09-30）】本文件从 968 行瘦到 400 行以内，只剩四件事：
-##   ① 配置：@export 开关 ② 装配：new 出各系统与七个子模块 ③ 信号接线：全在 _wire_signals()
+##   ① 配置：@export 开关 ② 装配：new 出各系统与八个模块 ③ 信号接线：全在 _wire_signals()
 ##   ④ 战局流程：分数 / 任务结算 / 占领胜负 / 输入
 ## 分工：世界建场 → WorldSetup ｜ HUD 构建与刷新 → HudBuilder
 ##       载具（上下车·换座·操炮·开火）→ VehicleController ｜ 报点标记链 → MarkController
 ##       补给护送（派车 + 抵达回告）→ SupplyController ｜ 侧翼通路（派穿插兵 + 穿线判定）→ LaneController
 ##       间瞄链（选点 / 发射 / 落弹）→ IndirectController
 ##       玩家步兵开火链（开火门禁 / 目标组装 / 伤害与压制）→ PlayerFireController
+##       炸药 / 工程兵（放置 / 遥控起爆 / 爆炸结算）→ ExplosiveController
 ## 拆分时的字段改名（模块要读，所以从私有变公开）：_score → score、
 ##   _capture_zones → capture_zones、_terrain_sprite.texture → terrain_texture、_indirect → indirect
 ## 子模块一律用鸭子类型拿本节点（Main 没有 class_name），所以这里的字段就是模块的接口。
@@ -65,6 +68,7 @@ var supply_ctl = null       # SupplyController（候选 L3）
 var lane_ctl = null         # LaneController（候选 L4）
 var smoke_ctl = null        # SmokeController（候选 P）
 var fire_ctl = null         # PlayerFireController（玩家步兵开火链）
+var explosive_ctl = null    # ExplosiveController（炸药 / 工程兵）
 
 ## 各系统
 var quests: QuestSystem = null
@@ -95,6 +99,12 @@ func _ready() -> void:
 	fire_ctl.name = "PlayerFireController"
 	add_child(fire_ctl)
 	fire_ctl.setup(self)
+	# 炸药 / 工程兵（2026-10-04 拍板）：必须**在 HUD 之前**建好 ——
+	# HudBuilder.update_role() 组装标签时要读 explosive_ctl.remaining()
+	explosive_ctl = ExplosiveControllerScript.new()
+	explosive_ctl.name = "ExplosiveController"
+	add_child(explosive_ctl)
+	explosive_ctl.setup(self)
 	# 报点 / 标记（docx 4.11.2）：标记系统要在建 HUD 之前建好（小地图要引用它）
 	marks = MarkSystem.new()
 	marks.name = "MarkSystem"
@@ -176,6 +186,7 @@ func _wire_signals() -> void:
 	hud.posture_button.pressed.connect(_cycle_posture)
 	hud.indirect_button.pressed.connect(indirect_ctl.request_targeting)
 	hud.smoke_button.pressed.connect(smoke_ctl.deploy)
+	hud.explosive_button.pressed.connect(explosive_ctl.toggle)
 	hud.weapon_button.pressed.connect(_switch_weapon)
 	hud.vehicle_button.pressed.connect(vehicles.toggle)
 	hud.seat_button.pressed.connect(vehicles.switch_seat)

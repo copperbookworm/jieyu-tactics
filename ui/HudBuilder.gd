@@ -52,6 +52,8 @@ var posture_button: Button = null
 var indirect_button: Button = null
 ## 烟雾（候选 P，docx 4.12）：步兵投烟雾弹 / 在载具里放发烟器
 var smoke_button: Button = null
+## 爆破键（2026-10-04 炸药 / 工程兵）：按一下放、再按一下遥控起爆
+var explosive_button: Button = null
 var weapon_button: Button = null
 var vehicle_button: Button = null
 var seat_button: Button = null
@@ -281,6 +283,18 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	layer.add_child(smoke_button)
 	_tint(smoke_button, GROUP_FIRE, "列3 火力：烟雾弹 / 载具发烟器（4.12）")
 
+	# 爆破（2026-10-04 炸药 / 工程兵）：按一下在准心落点放，再按一下遥控起爆。
+	# 位置 (700,340) 是拿 tools/hud_rects.gd 的实测输出挑的：3×3 集群（实际底界 294）与
+	# 左下摇杆触摸圈（上沿 296）都满了，右侧 700..780 × 340..380 这块没有任何控件
+	# （火力键 800,380 起、聚焦键 680,420 起、角色文字框止于 y=221），所以与既有一切无交集。
+	explosive_button = Button.new()
+	explosive_button.name = "ExplosiveButton"
+	explosive_button.text = "爆破"
+	explosive_button.size = Vector2(80.0, 40.0)
+	explosive_button.position = Vector2(700.0, 340.0)
+	layer.add_child(explosive_button)
+	_tint(explosive_button, GROUP_FIRE, "炸药：准心落点放置 → 再按一次遥控起爆（工程兵携带 2 发）")
+
 	# 换枪按钮（C3：切枪 1.04 s，期间不能开火）
 	weapon_button = Button.new()
 	weapon_button.name = "WeaponButton"
@@ -498,12 +512,16 @@ func update_role() -> void:
 			vehicle.selected_ammo(), vehicle.selected_total(),
 			vehicle.hp, vehicle.max_hp, vehicle.armor_summary("front")]
 		return
-	role_label.text = "%s ｜ %s ｜ 标记 %.0f s\n%s%s ｜ 连发 %d 发 ｜ 散布 ×%.2f ｜ 间瞄 %d 发" % [
+	# 炸药余量（2026-10-04）：工程兵才 >0；读的是控制器实时算出的剩余，不另存一份
+	var charges := 0
+	if main.explosive_ctl != null:
+		charges = main.explosive_ctl.remaining()
+	role_label.text = "%s ｜ %s ｜ 标记 %.0f s\n%s%s ｜ 连发 %d 发 ｜ 散布 ×%.2f ｜ 间瞄 %d 发 ｜ 爆破 %d 发" % [
 		RoleTable.role_name(main.player_role), main.player.weapon_name(),
 		RoleTable.mark_duration(main.player_role), main.player.posture_name(),
 		"（依托）" if main.player.is_supported() else "",
 		main.player.burst_shots(), main.player.effective_spread_moa() / GameConfig.WEAPON_MOA,
-		0 if main.indirect == null else main.indirect.ammo]
+		0 if main.indirect == null else main.indirect.ammo, charges]
 
 
 ## 聚焦开关：准心收窄 + 散布收紧 + 屏幕边缘暗角；画面不放大，全局视野不损失。

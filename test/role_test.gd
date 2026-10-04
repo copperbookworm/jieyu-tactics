@@ -36,16 +36,18 @@ func _check_true(title: String, condition: bool) -> void:
 
 
 func _test_table() -> void:
-	_check("兵种表：3 个兵种", RoleTable.count(), 3)
+	_check("兵种表：4 个兵种（2026-10-04 加工程兵）", RoleTable.count(), 4)
 	_check("兵种表：默认兵种名", RoleTable.role_name(RoleTable.Role.RIFLEMAN), "步枪兵")
-	_check("兵种表：循环切换回到起点", RoleTable.next_role(RoleTable.Role.MARKSMAN),
+	_check("兵种表：循环切换回到起点", RoleTable.next_role(RoleTable.Role.ENGINEER),
 			RoleTable.Role.RIFLEMAN)
 	_check_true("兵种表：每个兵种都带主武器 + 副武器，且武器 id 在武器表里查得到",
 			RoleTable.weapon_ids(RoleTable.Role.SCOUT).size() >= 2
 			and not WeaponTableScript.get_weapon(String(
 					RoleTable.weapon_ids(RoleTable.Role.SCOUT)[0])).is_empty()
 			and not WeaponTableScript.get_weapon(String(
-					RoleTable.weapon_ids(RoleTable.Role.MARKSMAN)[0])).is_empty())
+					RoleTable.weapon_ids(RoleTable.Role.MARKSMAN)[0])).is_empty()
+			and not WeaponTableScript.get_weapon(String(
+					RoleTable.weapon_ids(RoleTable.Role.ENGINEER)[0])).is_empty())
 	# 2026-10-01 候选 T ②：兵种表原来镜像了 mag_size / reserve，已删——这里钉住「不许再抄一份」
 	_check_true("候选 T ②：兵种表不再镜像弹匣 / 备弹（唯一数据源＝武器表）",
 			not RoleTable.get_role(RoleTable.Role.SCOUT).has("mag_size")

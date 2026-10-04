@@ -318,6 +318,14 @@ func _test_qingling_corridor() -> void:
 		total_cells += int((zone_v as Dictionary).get("cells", 0))
 	_check_true("内容层真的读进来了（%d 片 / %d 格，不是 demo 三片摆位）"
 			% [content_zones.size(), total_cells], total_cells > 50000)
+	# 白旗点必须来自**地图自己的**推进链（2026-10-04 第五十九版把默认图换成正式图之后，这是硬前提：
+	# demo 坐标在正式图上会踩到 45.8° 的坡 + 核心圈里压着一栋房子）。
+	var capture_positions: Array = world_setup.call("_capture_zone_positions", stub)
+	_check("白旗点取地图推进链的前 3 个（第一版三节点全占）", capture_positions.size(), 3)
+	var expected_positions: Array = []
+	for i in 3:
+		expected_positions.append(JieyuMapGen.vec2((nodes[i] as Dictionary).get("pos", [0, 0])))
+	_check("白旗点坐标 = 地图 raas_nodes 前 3 个", capture_positions, expected_positions)
 	stub.free()
 	world_setup.free()
 

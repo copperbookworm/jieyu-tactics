@@ -24,7 +24,12 @@ const DEFAULT_MAP_SEED := 20260101  # grassland_demo 示例地图种子（12.8.4
 # ────────────── 自制地图（工具链 A：灰度高度图导入）─────────────
 ## 空字符串 = 用上面的噪声地形；填了路径则优先导入该高度图（导入失败会退回噪声并报错）
 ## 约定：黑 = 0 m、白（255）= MAX_ELEVATION；尺寸必须与网格一致（1000×1000），不缩放
-const MAP_HEIGHT_IMAGE := "res://assets/maps/map_demo_height.png"
+## 2026-10-04 第五十九版：默认地图从占位图换成**第一张正式地图**「青岭走廊」。
+## 指向 `…/<map_id>/heightmap.png`（目录版）而不是扁平图 —— 只有目录版才带得动
+## occluders.json / material.png / zones.json 那一整套（WorldSetup._map_id_from_path 反推目录名）。
+## 想回到历史占位图（噪声地形 + demo 摆位）就把上面这行换成 res://assets/maps/map_demo_height.png ——
+## 那条退化路径（没有 occluders.json / zones.json / material.png）在 WorldSetup 里仍然完整可用。
+const MAP_HEIGHT_IMAGE := "res://assets/maps/qingling_corridor/heightmap.png"
 const MAP_HEIGHT_DIR := "res://assets/maps/"  # 自制高度图默认存放目录
 
 # ────────────── 画布与缩放 ──────────────

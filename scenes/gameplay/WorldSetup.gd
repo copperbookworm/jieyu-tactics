@@ -228,8 +228,9 @@ static func _enemy_spawn_position(points: Array, index: int) -> Vector2:
 ##    每项有 polygon / h_low / h_top / destructible / hp / damage_profiles，
 ##    这里把它们折进第一版的 Cover（轴对齐矩形 + 顶高 + 耐久的近似），
 ##    并把「摧毁」信号接到残痕（4.17 破坏互动：留贴地残痕 + 小减速，不影响通视）。
-## ② 没有地图数据（例如没设 map_id、或跑的是旧图）⇒ 退回 demo 摆位，
-##    保证既有测试（集成冒烟断言场上 20 个沙袋）与单跑 Main.tscn 的行为一字不变。
+## ② 没有地图数据（例如没设 map_id、或跑的是旧图）⇒ 退回 demo 摆位，保证退化路径仍然可玩。
+##    2026-10-04 第五十九版起**默认地图就是正式图**，所以正常开局走的是 ①，掩体数量以地图数据为准
+##    （集成冒烟不再写死「20 个沙袋」，改成数地图 occluders.json 的条目数）。
 func _build_covers(main) -> void:
 	var entries := _load_occluders(main)
 	if entries.is_empty():
@@ -438,14 +439,58 @@ func _build_enemy_fob(main) -> void:
 	main.add_child(fob)
 
 
-## 白旗点：第一版用 DEMO_NODES 前 3 个节点（全占即胜，验证 L5/L6 循环）
+## 白旗点：第一版 3 个（三节点全占即胜，验证 L5/L6 循环）。
+## 位置**优先取地图自己的推进链**（zones.json 的 raas_nodes），地图没给才退回 DEMO_NODES。
+## 为什么必须优先用地图的（2026-10-04 实测，不是洁癖）：正式图「青岭走廊」的地图 N2 与 demo N2
+## 差 44.7 m，而 demo N2 在正式图上是 **45.8° 的坡**、核心圈里还压着一栋房子 ——
+## 只换高度图不换点，白旗点会直接烂掉一个。
 func _build_capture_zones(main) -> Array:
+	var positions := _capture_zone_positions(main)
 	var zones: Array = []
-	for i in 3:
+	for i in positions.size():
 		var zone := CaptureZone.new()
 		zone.name = "Zone%d" % (i + 1)
-		zone.global_position = MapGenerator.DEMO_NODES[i]
+		zone.global_position = positions[i]
 		zone.setup(main.player)
 		main.add_child(zone)
 		zones.append(zone)
 	return zones
+
+
+## 白旗点坐标：地图的 raas_nodes 前 3 个；不足 3 个就用满它；一个都没有才退回 demo 摆位。
+func _capture_zone_positions(main) -> Array:
+	var nodes: Array = _load_map_zones(main).get("raas_nodes", [])
+	var positions: Array = []
+	for node_v in nodes:
+		if node_v is Dictionary:
+			positions.append(JieyuMapGen.vec2((node_v as Dictionary).get("pos", [0, 0])))
+	if positions.size() >= 3:
+		var first_three: Array = positions.slice(0, 3)
+		print("[地图] 白旗点取自地图推进链前 3 个：%s" % str(first_three))
+		return first_three
+	if positions.size() > 0:
+		print("[地图] 白旗点：地图只给了 %d 个节点，用满它" % positions.size())
+		return positions
+	print("[地图] 没有 zones.json / 没有 raas_nodes → 白旗点退回 demo 摆位")
+	return [MapGenerator.DEMO_NODES[0], MapGenerator.DEMO_NODES[1], MapGenerator.DEMO_NODES[2]]
+
+
+## 地图目录（res://assets/maps/<id>/）里的 zones.json → 字典；读不到就是空字典。
+## 这里只取需要的项（raas_nodes），不做全量 schema 校验 —— schema 归插件侧 JieyuMapChecks 管。
+func _load_map_zones(main) -> Dictionary:
+	var map_id := _map_id_from_path(str(main.map_height_image) if "map_height_image" in main else "")
+	if map_id.is_empty():
+		return {}
+	var path := "res://assets/maps/%s/zones.json" % map_id
+	if not FileAccess.file_exists(path):
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("[地图] zones.json 打不开：%s" % path)
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not (parsed is Dictionary):
+		push_error("[地图] zones.json 顶层不是对象：%s" % path)
+		return {}
+	return parsed

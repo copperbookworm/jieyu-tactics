@@ -164,12 +164,22 @@ func _check_structure() -> void:
 			and _main.get_node_or_null("AimCameraController") != null
 			and _main.get_node_or_null("Vehicle") != null
 			and _main.get_node_or_null("EnemyVehicle") != null)
-	_check("占领节点 3 个", _main.capture_zones.size(), 3)
-	# 掩体 = DEMO_NODES（5 个节点）× 每点 4 个沙袋 = 20（见 MapGenerator.demo_cover_points）
-	_check("掩体 20 个（5 个节点 × 4）", get_nodes_in_group("occluder").size(), 20)
-	# 说明：Main.tscn 的高度图是 assets/maps/map_demo_height.png，那个目录下**没有** occluders.json
-	# ⇒ 这里走的是 demo 摆位（20 个默认沙袋），地图数据那条链路由 jieyu_map_test._test_world_setup_covers()
-	# 用真实存在的示例图（grassland_demo2）覆盖；本文件只钉「demo 摆位没被破坏」。
+	_check("占领节点 3 个（第一版：三节点全占即胜）", _main.capture_zones.size(), 3)
+	# 2026-10-04 第五十九版：默认地图换成**正式图「青岭走廊」** ⇒ 掩体数量以地图数据为准。
+	# 不再写死「20 个沙袋」：直接数地图 occluders.json 的条目数，地图改了测试自动跟上。
+	var map_occluders := _count_map_occluders(GameConfig.MAP_HEIGHT_IMAGE)
+	_check("掩体数 = 地图 occluders.json 的条目数（%d）" % map_occluders,
+			get_nodes_in_group("occluder").size(), map_occluders)
+	_check_true("默认地图确实是正式图（不是 demo 的 20 个沙袋）", map_occluders > 20)
+	# 白旗点也必须来自地图的推进链（zones.json）—— 实测：地图 N2 与 demo N2 差 44.7 m，
+	# 而 demo N2 在正式图上是 45.8° 的坡、核心圈里还压着一栋房子。
+	var map_nodes := _map_node_positions(GameConfig.MAP_HEIGHT_IMAGE)
+	var zones_on_map: bool = _main.capture_zones.size() == mini(3, map_nodes.size())
+	for i in _main.capture_zones.size():
+		if i >= map_nodes.size() \
+				or (_main.capture_zones[i] as Node2D).global_position.distance_to(map_nodes[i]) > 1.0:
+			zones_on_map = false
+	_check_true("白旗点落在地图 zones.json 的节点坐标上（±1 m，取前 3 个）", zones_on_map)
 	# 2026-10-02 订正：这条原来是「敌人 2 个」的等值断言，现在不再成立 ——
 	# 实测 enemy 组是 [Enemy1, Infiltrator1..3]：① 开局 2 名步兵里可能有人被**队友**先击毙；
 	# ② T-S6 的事件驱动穿插兵（Infiltrator*）也会进这个组。所以改成「至少 2 个 + 成员必须是敌兵类」，
@@ -625,13 +635,11 @@ func _check_smoke() -> void:
 
 ## 在几个「地形一定平」的锚点周围扫一圈，找一对真有通视的位置（不去赌地形）
 func _find_clear_sight_pair(distance: float) -> Array:
-	var anchors: Array = [
-		_main.player.global_position,
-		Vector2(500.0, 500.0),   # DEMO_NODES[2] 中央枢纽（节点区被压平过）
-		Vector2(150.0, 500.0),   # DEMO_NODES[0] 西侧起点
-		Vector2(350.0, 300.0),   # DEMO_NODES[1]
-		Vector2(850.0, 500.0),   # DEMO_NODES[4]
-	]
+	# 锚点用**本局真实的白旗点**（来自地图 zones.json，地图改了就自动跟着走），
+	# 不再写死 DEMO_NODES —— 正式图上 demo 坐标未必平（实测 demo N2 是 45.8° 的坡）。
+	var anchors: Array = [_main.player.global_position]
+	for zone in _main.capture_zones:
+		anchors.append((zone as Node2D).global_position)
 	for anchor in anchors:
 		for i in 16:
 			var angle := TAU * float(i) / 16.0
@@ -962,6 +970,12 @@ func _check_downed_not_targeted() -> void:
 		tank.global_position = _main.player.global_position + Vector2(-100.0, 0.0)
 		tank.turret_facing = Vector2.RIGHT
 		tank._fire_cooldown = 0.0
+		# 2026-10-04 第五十九版：默认图换成正式图（235 个遮挡体）之后，随便放个 100 m 外的点
+		# **很可能被一栋楼挡住**，坦克就不开炮了 —— 于是「补刀前提」这条会假红。
+		# 本条要测的是「开炮 / 不开炮」，不是通视（通视另有专项断言）。这里显式关掉：
+		# Vehicle._has_sight_to_player() 在 _sight == null 时返回 true，就是留给测试环境的口子。
+		var sight_backup = tank._sight
+		tank._sight = null
 		var ammo_before: int = tank._ammo
 		_restore_player()
 		tank._ai_update(0.05)
@@ -976,6 +990,7 @@ func _check_downed_not_targeted() -> void:
 			_check("补刀开：玩家倒地后坦克照打（会来补刀）", tank._ammo < ammo_before, true)
 		else:
 			_check("补刀关（🧪 测试态）：玩家倒地后坦克不开炮", tank._ammo, ammo_before)
+		tank._sight = sight_backup   # 收尾：把通视还回去，别影响后面的断言
 	_main.player.respawn()      # 收尾：让人站起来
 
 
@@ -1005,14 +1020,21 @@ func _check_finish_off_pose() -> void:
 				and _main.match_flow.budget == 2)
 		_main.player.respawn()
 	# 敌人：血打光倒地 → 补刀阵亡
-	var enemies := get_nodes_in_group("enemy")
-	if enemies.size() > 0:
-		var e = enemies[0]
-		if e._visual != null:
-			e.take_damage(e.hp + 1.0)
-			_check_true("敌人：血打光是倒地（不是立刻死）", e.downed and e.alive)
-			e.take_damage(1.0)
-			_check_true("敌人：补刀才阵亡", not e.alive)
+	# 2026-10-04 第五十九版：不能再拿 enemies[0] 就测 —— 前面十几段检查（烟雾 / 载具 / 交战）
+	# 可能已经把它打倒了，而 Enemy.take_damage 对**已倒地**的目标是直接 die()（补刀口径），
+	# 于是「血打光是倒地」这条会假红。这里挑一个「活着且未倒地」的敌人来测。
+	var target_enemy = null
+	for node in get_nodes_in_group("enemy"):
+		if bool(node.get("alive")) and not bool(node.get("downed")) and node._visual != null:
+			target_enemy = node
+			break
+	_check_true("敌人：场上有「活着且未倒地」的目标可测", target_enemy != null)
+	if target_enemy != null:
+		target_enemy.take_damage(target_enemy.hp + 1.0)
+		_check_true("敌人：血打光是倒地（不是立刻死）",
+				target_enemy.downed and target_enemy.alive)
+		target_enemy.take_damage(1.0)
+		_check_true("敌人：补刀才阵亡", not target_enemy.alive)
 
 
 # ────────────── 敌方坦克乘员 + 弃车逃生（候选 Q · 使用者 2026-10-02）──────────────
@@ -1184,18 +1206,25 @@ func _check_audio() -> void:
 
 func _check_terrain_zones() -> void:
 	var zones := get_nodes_in_group(GameConfig.TERRAIN_ZONE_GROUP)
-	_check("候选 O 4.17：场上有 3 片环境互动区（泥 / 雪 / 草）", zones.size(), 3)
+	# 2026-10-04 第五十九版：内容层来自正式图的 material.png（连通域 → 等面积圆），
+	# 所以「3 片」这个 demo 摆位数字不再成立 —— 改成「至少 3 片 + 泥 / 雪 / 草三种都有」。
+	_check_true("候选 O 4.17：场上有环境互动区（%d 片，来自正式图 material.png）" % zones.size(),
+			zones.size() >= 3)
 	_check("候选 O 4.17：区域已注入玩家（WorldSetup → player.zones）",
-			_main.player.zones.size(), 3)
+			_main.player.zones.size(), zones.size())
 
 	var grass = null
 	var mud = null
+	var snow = null
 	for zone in zones:
 		if int(zone.kind) == 2:
 			grass = zone
 		elif int(zone.kind) == 0:
 			mud = zone
-	_check_true("候选 O 4.17：找到草丛与泥泞两片", grass != null and mud != null)
+		elif int(zone.kind) == 1:
+			snow = zone
+	_check_true("候选 O 4.17：泥 / 雪 / 草三种内容层都在场上",
+			grass != null and mud != null and snow != null)
 
 	# ① 草丛隐蔽：玩家站进去，敌人的发现距离随之打折
 	if grass != null:
@@ -1347,3 +1376,42 @@ func _check_explosive() -> void:
 	# 收尾：切回步枪兵 —— 别让后面的检查读到工程兵（换武器 / 携带量都不同）
 	_main.player_role = RoleTable.Role.RIFLEMAN
 	_main.player.apply_role(_main.player_role)
+
+
+# ────────────── 地图数据只读助手（2026-10-04 第五十九版）──────────────
+# 为什么让测试自己去数地图文件：默认地图换成正式图之后，「场上 20 个沙袋」这类写死的数字
+# 就变成了一张随时会过期的照片。改成「照地图数据核对」，地图重做一次测试自动跟上。
+
+## 数一张地图目录里的 occluders.json 条目（不校验 schema —— schema 归插件侧 JieyuMapChecks）
+func _count_map_occluders(height_image_path: String) -> int:
+	var map_id := height_image_path.get_base_dir().get_file()
+	var path := "res://assets/maps/%s/occluders.json" % map_id
+	if map_id.is_empty() or not FileAccess.file_exists(path):
+		return 0
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return 0
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	return (parsed as Array).size() if parsed is Array else 0
+
+
+## 地图 zones.json 的 raas_nodes 坐标（按推进链顺序）
+func _map_node_positions(height_image_path: String) -> Array:
+	var map_id := height_image_path.get_base_dir().get_file()
+	var path := "res://assets/maps/%s/zones.json" % map_id
+	if map_id.is_empty() or not FileAccess.file_exists(path):
+		return []
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return []
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not (parsed is Dictionary):
+		return []
+	var result: Array = []
+	for node_v in (parsed as Dictionary).get("raas_nodes", []):
+		if node_v is Dictionary:
+			var pos: Array = (node_v as Dictionary).get("pos", [0, 0])
+			result.append(Vector2(float(pos[0]), float(pos[1])))
+	return result

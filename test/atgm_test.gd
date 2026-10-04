@@ -53,8 +53,8 @@ func _test_data() -> void:
 	_check("数据：导弹伤害 1000", VehicleTableScript.number(ifv, "atgm_damage", 0.0), 1000.0)
 	_check("数据：导弹穿深 900 mm", VehicleTableScript.number(ifv, "atgm_penetration_mm", 0.0), 900.0)
 	_check("数据：导弹发射间隔 8 s", VehicleTableScript.number(ifv, "atgm_interval", 0.0), 8.0)
-	# 射程 2000 m 是 docx 7.4.2 / 第十八章确认稿里的「ATGM 2000 m」；实际能瞄到多远受相机拖拽上限
-	# （SIGHT_MAX_DISTANCE_VEHICLE 1500）限制 —— 19 章「ATGM 载具拖拽上限 2000 m」还没实现，见 docx 20.5。
+	# 射程 2000 m 是 docx 7.4.2 / 第十八章确认稿里的「ATGM 2000 m」；拖拽上限已于 2026-10-04 接上：
+	# 武器位选中反坦克导弹 → SIGHT_MAX_DISTANCE_ATGM 2000 m（见 VehicleController._sync_camera_profile）。
 	_check("数据：导弹射程 2000 m（按 docx 确认值）",
 			VehicleTableScript.number(ifv, "atgm_range", 0.0), 2000.0)
 	var tank := VehicleTableScript.get_vehicle("mbt_t1")

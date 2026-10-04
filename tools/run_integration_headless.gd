@@ -247,6 +247,12 @@ func _check_interactions() -> void:
 	_main.vehicles.toggle()
 	_check_true("靠近后上车：占用 + 按钮变「下车」",
 			v.is_occupied() and _main.hud.vehicle_button.text == "下车")
+	# 载具相机三档（docx 19 ②）：上车就换档位表与拖拽上限
+	_check_true("上车：相机切到载具档 [32,8,4]（docx 19 ②）",
+			_main.camera_controller.in_vehicle
+			and _main.camera_controller.zoom_levels() == GameConfig.VEHICLE_ZOOM_LEVELS)
+	_check("上车：相机拖拽上限 1500 m",
+			_main.camera_controller.max_drag_distance, GameConfig.SIGHT_MAX_DISTANCE_VEHICLE)
 	_main.vehicles.switch_seat()
 	_check_true("换座到武器位：is_gunner + 标签显示武器位",
 			_main.vehicles.is_gunner(_main.player)
@@ -286,6 +292,10 @@ func _check_interactions() -> void:
 	_main.vehicles.toggle()
 	_check_true("下车：按钮回到「上车」", not v.is_occupied()
 			and _main.hud.vehicle_button.text == "上车")
+	_check_true("下车：相机回到步兵档 [32,16,8] + 500 m 上限",
+			not _main.camera_controller.in_vehicle
+			and _main.camera_controller.zoom_levels() == GameConfig.ZOOM_LEVELS
+			and _main.camera_controller.max_drag_distance == GameConfig.SIGHT_MAX_DISTANCE_INFANTRY)
 
 	# ③ 报点标记链
 	_main.camera_controller.blocked_by_terrain = false  # 直接给「通视前提」
@@ -828,6 +838,8 @@ func _check_atgm() -> void:
 			_main.hud.ammo_type_button.pressed.is_connected(_main.vehicles.switch_ammo))
 	_main.hud.ammo_type_button.pressed.emit()
 	_check("ATGM：按一下切到反坦克导弹", ifv.ammo_type(), 1)
+	_check("ATGM：武器位选中导弹时相机拖拽上限 2000 m（docx 19 ②）",
+			_main.camera_controller.max_drag_distance, GameConfig.SIGHT_MAX_DISTANCE_ATGM)
 	_main.hud.update_role()
 	_check_true("ATGM：HUD 显示当前弹种是反坦克导弹",
 			_main.hud.role_label.text.contains("反坦克导弹"))

@@ -62,6 +62,7 @@ func _on_player_vehicle_wrecked(_vehicle) -> void:
 	main.hud.set_vehicle_button_text("上车")
 	main.hud.show_hint("载具已报废：乘员已下车")
 	main.hud.update_role()
+	_sync_camera_profile()
 
 
 ## 上车 / 下车（docx 8.1 舱室与座位）
@@ -72,6 +73,7 @@ func toggle() -> void:
 		vehicle.exit_vehicle()
 		main.hud.set_vehicle_button_text("上车")
 		main.hud.show_hint("已下车")
+		_sync_camera_profile()
 		return
 	# 报废车不许上（2026-10-01 修）：上去之后武器位永远打不出炮，而且原来一句提示都没有，
 	# 玩家只会以为「开火键坏了」——这条是排查「上车换座后开不了火」时挖出来的洞。
@@ -85,6 +87,7 @@ func toggle() -> void:
 	vehicle.enter(main.player)
 	main.hud.set_vehicle_button_text("下车")
 	main.hud.show_hint("已上车：%s" % vehicle.vehicle_name())
+	_sync_camera_profile()
 
 
 ## 换座位（8.1 舱室与座位：驾驶位 ⇄ 武器位）——8.2 载具 UI 三原则：不同座位 UI 不同
@@ -100,6 +103,7 @@ func switch_seat() -> void:
 	else:
 		main.hud.show_hint("已换到驾驶位：推摇杆开车")
 	main.hud.update_role()
+	_sync_camera_profile()
 
 
 ## 玩家是否坐在武器位（只有武器位能开炮，8.1 座位分工）
@@ -120,6 +124,7 @@ func switch_ammo() -> void:
 	else:
 		main.hud.show_hint("已切回 %s（余弹 %d）" % [vehicle.ammo_type_name(), vehicle.ammo()])
 	main.hud.update_role()
+	_sync_camera_profile()
 
 
 func is_gunner(player) -> bool:
@@ -128,10 +133,30 @@ func is_gunner(player) -> bool:
 	return vehicle.seat_of(player) == "gunner"
 
 
+## 相机档位跟着「人在不在车里 / 在哪个座位 / 选了什么弹种」走（docx 19 ②）：
+##   步兵 [32,16,8] + 500 m ｜ 载具 [32,8,4] + 1500 m ｜ **武器位选中反坦克导弹时 2000 m**。
+## 为什么由这里推而不是相机自己查：相机不知道座位与弹种；而座位 / 弹种的状态就在这里。
+## 三个状态变化点（上下车 / 换座 / 切弹种）显式调一次，tick() 里再兜一次底（幂等、无变化即返回）。
+func _sync_camera_profile() -> void:
+	if main == null or main.camera_controller == null:
+		return
+	var controller = main.camera_controller
+	var boarded: bool = vehicle != null and vehicle.is_occupied()
+	controller.set_vehicle_mode(boarded)
+	if not boarded:
+		return
+	if is_gunner(main.player) and vehicle.is_atgm_selected():
+		controller.set_drag_limit(GameConfig.SIGHT_MAX_DISTANCE_ATGM)
+	else:
+		controller.set_drag_limit(GameConfig.SIGHT_MAX_DISTANCE_VEHICLE)
+
+
 ## 每帧：驾驶（摇杆喂给载具）＋ 武器位用准心操炮塔（转速受限，8.2.6）
+## 相机档位在**早退之前**同步：下车后 tick 的其他分支都不跑，但档位必须马上回到步兵那套。
 func tick(delta: float) -> void:
 	if vehicle == null or main.player == null:
 		return
+	_sync_camera_profile()
 	if not vehicle.is_occupied():
 		return
 	vehicle.drive(main.player.move_input(), delta)

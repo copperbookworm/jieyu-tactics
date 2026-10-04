@@ -35,6 +35,10 @@ const VIEWPORT_HEIGHT := 540
 ## 32 / 16 / 8 px每米 ⇒ 960 px 屏幕可视 30 / 60 / 120 m（docx 相机数值落地）
 const ZOOM_LEVELS := [32.0, 16.0, 8.0]
 const DEFAULT_ZOOM_INDEX := 1
+## 载具相机三档（docx 19 ②：视野 30 / 120 / 240 m）—— 同一块 960 宽的屏上 ⇒ PPU 32 / 8 / 4。
+## 与步兵那套 [32, 16, 8]（30 / 60 / 120 m）**刻意错开**：载具要能看远，步兵要能看细节。
+## 由 VehicleController 在上下车 / 换座时推给 AimCameraController（相机自己不猜座位）。
+const VEHICLE_ZOOM_LEVELS := [32.0, 8.0, 4.0]
 
 # ────────────── 相机与准心（照抄 fight-2 实现）──────────────
 # 核心规则：准心 = 屏幕中心 = 相机中心，三者恒等，无死区
@@ -42,6 +46,9 @@ const CAMERA_SMOOTH_SPEED := 12.0        # lerp 系数，无死区
 const CROSSHAIR_CLAMP_OFFSET := 1.0      # m，被挡回退量
 const SIGHT_MAX_DISTANCE_INFANTRY := 500.0   # m，步兵拖拽上限
 const SIGHT_MAX_DISTANCE_VEHICLE := 1500.0   # m，坦克拖拽上限（8.2）
+## docx 19 ②「ATGM 载具拖拽上限 2000 m」：反坦克导弹射程本就 1500+，拖不到 2000 就等于够不着。
+## 只在「武器位 + 当前弹种是反坦克导弹」时生效（主炮仍然 1500）。
+const SIGHT_MAX_DISTANCE_ATGM := 2000.0
 
 # ────────────── 通视检测（4.7 三级递进）─────────────
 const SCREEN_BOX_MARGIN := 240.0  # px，①框检测：屏幕框外一律不显示

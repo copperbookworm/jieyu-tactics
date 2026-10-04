@@ -11,6 +11,10 @@ extends Node2D
 @export var zoom_index: int = GameConfig.DEFAULT_ZOOM_INDEX
 @export var max_drag_distance: float = GameConfig.SIGHT_MAX_DISTANCE_INFANTRY
 
+## 当前生效的档位表与载具态（docx 19 ②：载具单独一套 30 / 120 / 240 m）
+var in_vehicle := false
+var _zoom_levels: Array = GameConfig.ZOOM_LEVELS
+
 var crosshair_world := Vector2.ZERO
 
 ## 本帧准心是否被地形挡住（供 HUD 染色提示，区分于「拖拽上限」）
@@ -38,7 +42,7 @@ func setup(unit: Node2D, camera: Camera2D, sight: SightSystem) -> void:
 	_sight = sight
 	_grid = sight.grid if sight != null else null
 	crosshair_world = unit.global_position
-	camera.zoom = Vector2.ONE * GameConfig.ZOOM_LEVELS[zoom_index]
+	camera.zoom = Vector2.ONE * float(_zoom_levels[zoom_index])
 	# 12.7.4：受击震动由这里订阅（Player 只广播，不反向依赖相机；Main 因此一行都不用加）
 	if EventBus != null and EventBus.has_signal("player_hit") \
 			and not EventBus.is_connected("player_hit", _on_player_hit):
@@ -185,6 +189,55 @@ func _resolve_crosshair() -> void:
 
 ## 三档离散缩放（docx 相机数值落地：防非整数 PPU 破坏像素对齐）
 func set_zoom_index(index: int) -> void:
-	zoom_index = clampi(index, 0, GameConfig.ZOOM_LEVELS.size() - 1)
+	zoom_index = clampi(index, 0, _zoom_levels.size() - 1)
+	_apply_zoom()
+
+
+## 切换「载具 / 步兵」相机档（docx 19 ②）：档位表与默认拖拽上限一起换。
+## 由 VehicleController 在上下车 / 换座 / 切弹种时调 —— 相机不该去猜座位与弹种。
+func set_vehicle_mode(on: bool) -> void:
+	if in_vehicle == on:
+		return
+	in_vehicle = on
+	_zoom_levels = GameConfig.VEHICLE_ZOOM_LEVELS if on else GameConfig.ZOOM_LEVELS
+	zoom_index = clampi(zoom_index, 0, _zoom_levels.size() - 1)
+	max_drag_distance = GameConfig.SIGHT_MAX_DISTANCE_VEHICLE if on \
+			else GameConfig.SIGHT_MAX_DISTANCE_INFANTRY
+	_apply_zoom()
+	_clamp_crosshair_now()
+
+
+## 拖拽上限单独可调：装了反坦克导弹的载具要 2000 m（docx 19 ②），主炮只要 1500 m。
+## 值没变就直接返回 —— 这个方法在 tick() 里每帧都会被调一次。
+func set_drag_limit(value: float) -> void:
+	var wanted := maxf(value, 1.0)
+	if is_equal_approx(wanted, max_drag_distance):
+		return
+	max_drag_distance = wanted
+	_clamp_crosshair_now()
+
+
+## 当前生效的档位表（测试与 HUD 读它，不各自去查 GameConfig）
+func zoom_levels() -> Array:
+	return _zoom_levels
+
+
+## 当前每米像素数（= Camera2D.zoom.x）
+func current_ppu() -> float:
+	return float(_zoom_levels[zoom_index])
+
+
+func _apply_zoom() -> void:
 	if _camera != null:
-		_camera.zoom = Vector2.ONE * GameConfig.ZOOM_LEVELS[zoom_index]
+		_camera.zoom = Vector2.ONE * float(_zoom_levels[zoom_index])
+
+
+## 换了档 / 换了上限之后**立刻**把准心夹回新上限内 ——
+## 否则下车（2000 → 500 m）时准心会留在半公里外，要等下一次拖动才回得来。
+func _clamp_crosshair_now() -> void:
+	if _unit == null:
+		return
+	var offset := crosshair_world - _unit.global_position
+	if offset.length() <= max_drag_distance:
+		return
+	crosshair_world = _unit.global_position + offset.normalized() * max_drag_distance

@@ -343,6 +343,7 @@ static func _check_occluders(doc: JieyuMapDoc, report: Array, node_report: Dicti
 					"遮挡体 %s 标了 destructible=true 却没有 hp（没血量这条规则落不了地）"
 					% str(item.get("id", "?")), {}))
 		_check_damage_profiles(item, report)
+		_check_openings(item, report)
 		if h_top >= JieyuMapSpec.BUILDING_H_LOW_M and str(item.get("type", "")) == "building":
 			buildings += 1
 		for point_v in polygon:
@@ -438,6 +439,89 @@ static func _check_damage_profiles(item: Dictionary, report: Array) -> void:
 		if not states.has(required):
 			report.append(_item(SEV_ERROR, "occluders.damage_state_missing",
 					"遮挡体 %s 的 damage_profiles 缺状态 %s" % [item_id, required], {}))
+
+
+## 开口（窗 / 门洞，拍板①）：查条数、类型、几何是否贴在墙面上、区间是否合法。
+## 条数口径：六章「每个占领点 3 个以上入口/射击窗」+ 4.2「进入通道 ≥ 2 条」
+## → 建筑至少 2 个开口（否则「只有打中开口才伤得到里面」等于这栋楼打不动）。
+static func _check_openings(item: Dictionary, report: Array) -> void:
+	var item_id := str(item.get("id", "?"))
+	var kind := str(item.get("type", ""))
+	var openings: Variant = item.get("openings", null)
+	if openings == null:
+		if kind == "building":
+			report.append(_item(SEV_WARN, "occluders.building_no_openings",
+					"建筑 %s 没有任何开口（窗 / 门洞）：打不进去也看不见里面，"
+					% item_id + "与六章「每个占领点 3 个以上入口/射击窗」冲突", {}))
+		return
+	if not (openings is Array):
+		report.append(_item(SEV_ERROR, "occluders.openings_type",
+				"遮挡体 %s 的 openings 不是数组" % item_id, {}))
+		return
+	var list: Array = openings
+	var polygon: Array = item.get("polygon", [])
+	var bounds := _polygon_bounds(polygon)
+	var half_x := bounds.size.x * 0.5
+	var half_y := bounds.size.y * 0.5
+	var top := float(item.get("h_top", 0.0))
+	# 六章的入口/射击窗条数只对建筑提要求；半高墙留缝是 4.6 的「不能完全封闭」，不设下限
+	if kind == "building" and list.size() < JieyuMapSpec.MIN_OPENINGS_PER_BUILDING:
+		report.append(_item(SEV_WARN, "occluders.few_openings",
+				"建筑 %s 只有 %d 个开口（六章口径要 ≥ %d：每个占领点 3 个以上入口/射击窗）"
+				% [item_id, list.size(), JieyuMapSpec.MIN_OPENINGS_PER_BUILDING], {}))
+	for j in list.size():
+		if not (list[j] is Dictionary):
+			report.append(_item(SEV_ERROR, "occluders.opening_item",
+					"遮挡体 %s 的 openings[%d] 不是对象" % [item_id, j], {}))
+			continue
+		var opening: Dictionary = list[j]
+		var opening_kind := str(opening.get("type", ""))
+		if not JieyuMapSpec.OPENING_KINDS.has(opening_kind):
+			report.append(_item(SEV_ERROR, "occluders.opening_kind",
+					"遮挡体 %s 的 openings[%d].type = %s 非法（只能是 %s）"
+					% [item_id, j, opening_kind, str(JieyuMapSpec.OPENING_KINDS)], {}))
+		var center := JieyuMapGen.vec2(opening.get("center", Vector2.ZERO))
+		var half := JieyuMapGen.vec2(opening.get("half_size", Vector2.ZERO))
+		if half.x <= 0.0 or half.y <= 0.0:
+			report.append(_item(SEV_ERROR, "occluders.opening_size",
+					"遮挡体 %s 的 openings[%d].half_size 必须为正" % [item_id, j], {}))
+		# 开口必须贴在某一面墙上（否则它只是个悬空的洞，弹道判据形同虚设）
+		var on_face := absf(absf(center.x) - half_x) <= half.y + 0.01 \
+				or absf(absf(center.y) - half_y) <= half.x + 0.01
+		var inside := absf(center.x) <= half_x + 0.01 and absf(center.y) <= half_y + 0.01 \
+				and (absf(center.x) + half.x <= half_x + 0.01 \
+				or absf(center.y) + half.y <= half_y + 0.01)
+		if not (on_face and inside):
+			report.append(_item(SEV_WARN, "occluders.opening_off_wall",
+					"遮挡体 %s 的 openings[%d] 没贴在墙面上（center=%s half=%s，墙体半宽 %.1f×%.1f）"
+					% [item_id, j, str(center), str(half), half_x, half_y], {}))
+		var low := float(opening.get("h_low", 0.0))
+		var opening_top := float(opening.get("h_top", 0.0))
+		# h_top = 0 是约定值「到掩体顶」；否则必须落在 [h_low, h_top] 区间里
+		if opening_top > 0.0 and opening_top < low:
+			report.append(_item(SEV_ERROR, "occluders.opening_height_range",
+					"遮挡体 %s 的 openings[%d] h_low %.2f > h_top %.2f" % [item_id, j, low, opening_top],
+					{}))
+		if low < 0.0:
+			report.append(_item(SEV_ERROR, "occluders.opening_sill_negative",
+					"遮挡体 %s 的 openings[%d] 窗台高为负（%.2f）" % [item_id, j, low], {}))
+		if opening_top > 0.0 and top > 0.0 and opening_top > top + 0.01:
+			report.append(_item(SEV_ERROR, "occluders.opening_above_top",
+					"遮挡体 %s 的 openings[%d] 顶高 %.2f 高过掩体顶 %.2f" % [item_id, j, opening_top, top],
+					{}))
+		if opening_kind == JieyuMapSpec.OPENING_WINDOW and low <= 0.0:
+			report.append(_item(SEV_WARN, "occluders.window_ground_level",
+					"遮挡体 %s 的 openings[%d] 是窗但窗台高为 0（等于落地窗 / 门）" % [item_id, j], {}))
+
+
+static func _polygon_bounds(polygon: Array) -> Rect2:
+	var min_point := Vector2(INF, INF)
+	var max_point := Vector2(-INF, -INF)
+	for point_v in polygon:
+		var point := JieyuMapGen.vec2(point_v)
+		min_point = Vector2(minf(min_point.x, point.x), minf(min_point.y, point.y))
+		max_point = Vector2(maxf(max_point.x, point.x), maxf(max_point.y, point.y))
+	return Rect2(min_point, max_point - min_point)
 
 
 static func _polygon_center(polygon: Array) -> Vector2:

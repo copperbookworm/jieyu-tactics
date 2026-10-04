@@ -20,7 +20,11 @@ const CANVAS_SCRIPT := preload("res://addons/jieyu_map/editor/JieyuMapCanvas.gd"
 const UNDO_LIMIT := 12
 const REGEN_GRID_MAX := 512   # 面板里「重新生成」的最大网格边长（更大的走 CLI）
 
-enum Tool { RAISE, LOWER, FLATTEN, SMOOTH, PLATEAU, NODE, BUILDING, ERASE_BUILDING }
+## 工具编号：与 _build_tool_row 的按钮顺序**必须一致**（测试里会按编号断言）
+## 0 抬升 / 1 下挖 / 2 压平 / 3 平滑 / 4 台地 / 5 放节点 / 6 放建筑 / 7 删建筑
+## 8 放窗 / 9 放门 / 10 删开口（拍板①：只有打中开口才伤得到建筑里面）
+enum Tool { RAISE, LOWER, FLATTEN, SMOOTH, PLATEAU, NODE, BUILDING, ERASE_BUILDING,
+		WINDOW, DOOR, ERASE_OPENING }
 
 var editor_plugin: EditorPlugin = null
 var recipe_path := ""
@@ -232,7 +236,8 @@ func _build_tool_row() -> GridContainer:
 	var tools := [
 		["抬升", Tool.RAISE], ["下挖", Tool.LOWER], ["压平", Tool.FLATTEN], ["平滑", Tool.SMOOTH],
 		["台地", Tool.PLATEAU], ["放节点", Tool.NODE], ["放建筑", Tool.BUILDING],
-		["删建筑", Tool.ERASE_BUILDING],
+		["删建筑", Tool.ERASE_BUILDING], ["放窗", Tool.WINDOW], ["放门", Tool.DOOR],
+		["删开口", Tool.ERASE_OPENING],
 	]
 	for entry in tools:
 		var button := Button.new()
@@ -440,6 +445,7 @@ func _apply_brush(from_cell: Vector2i, to_cell: Vector2i) -> void:
 	_refresh_overlay(false)
 
 
+## 落笔：按工具分派到画笔 / 编辑操作。返回改动格数（0 = 无改动）
 func _apply_brush_at(point: Vector2) -> int:
 	match tool:
 		Tool.RAISE:
@@ -462,8 +468,37 @@ func _apply_brush_at(point: Vector2) -> int:
 			return 1
 		Tool.ERASE_BUILDING:
 			return JieyuMapPainter.remove_occluders_near(doc, point, maxf(brush_radius, 20.0))
+		Tool.WINDOW:
+			return _place_opening(point, JieyuMapSpec.OPENING_WINDOW)
+		Tool.DOOR:
+			return _place_opening(point, JieyuMapSpec.OPENING_DOOR)
+		Tool.ERASE_OPENING:
+			var index := JieyuMapPainter.occluder_index_at(doc, point, 2.0)
+			_overlay_dirty = true
+			return 1 if JieyuMapPainter.remove_opening_near(doc, index, point) else 0
 		_:
 			return 0
+
+
+## 放窗 / 放门：吸附到最近的遮挡体、就近选一面墙（Painter.add_opening 里做）
+func _place_opening(point: Vector2, kind: String) -> int:
+	if doc.occluders.is_empty():
+		_set_status("场上还没有建筑 —— 先用「放建筑」画一栋，再往它墙上放窗 / 门")
+		return 0
+	var index := JieyuMapPainter.occluder_index_at(doc, point, 0.0)
+	if index < 0:
+		_set_status("这里附近没有遮挡体，放不了开口")
+		return 0
+	var opening := JieyuMapPainter.add_opening(doc, index, point, kind)
+	if opening.is_empty():
+		_set_status("放开口失败（遮挡体索引 %d 不合法）" % index)
+		return 0
+	_overlay_dirty = true
+	var label := "窗" if kind == JieyuMapSpec.OPENING_WINDOW else "门"
+	_set_status("已放%s到 %s（该遮挡体现在有 %d 个开口）—— 打中开口才伤得到建筑里面"
+			% [label, str((doc.occluders[index] as Dictionary).get("id", "?")),
+			((doc.occluders[index] as Dictionary).get("openings", []) as Array).size()])
+	return 1
 
 
 ## 放节点：地形按「被移过的节点才降平顶」处理（避免整片地形被抹平）

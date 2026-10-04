@@ -492,8 +492,8 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 					break
 			if near_core:
 				continue   # 4.2 / 六章：核心占领区不堆建筑，别把判定器变迷宫
-			var half_x := rng.randf_range(4.0, 7.0)
-			var half_y := rng.randf_range(4.0, 7.0)
+			var half_x := float(roundi(rng.randf_range(4.0, 7.0)))
+			var half_y := float(roundi(rng.randf_range(4.0, 7.0)))
 			var building := {
 				"id": "building_%02d" % (occluders.size() + 1),
 				"type": "building",
@@ -505,6 +505,8 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 				# 锚点与工程的 FOB 结构值同档（1200）。
 				"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
 				"hp": building_hp_for_footprint(half_x * 2.0, half_y * 2.0),
+				# 拍板①开口：默认一窗一门（六章「每个占领点 3 个以上入口/射击窗」）
+				"openings": default_openings_for(half_x, half_y),
 			}
 			occluders.append(building)
 			placed += 1
@@ -521,17 +523,20 @@ static func place_settlements(doc: JieyuMapDoc, zones: Dictionary, recipe: Dicti
 					or center.y > float(doc.height_px) - 8.0:
 				continue
 			wall_index += 1
+			var wall_half_x := float(roundi(rng.randf_range(2.5, 5.0)))
+			var wall_half_y := float(roundi(rng.randf_range(1.0, 1.8)))
 			# 半高墙 = 沙袋类：文档 4.17 / 20.5 给了明文耐久 200（与工程 GameConfig.COVER_HP 同值），
 			# 这是整份文档里**唯一**有据可依的可摧毁物件血量。
 			occluders.append({
 				"id": "wall_%02d" % wall_index,
 				"type": "wall",
-				"polygon": rect_polygon(center, rng.randf_range(2.5, 5.0),
-						rng.randf_range(1.0, 1.8)),
+				"polygon": rect_polygon(center, wall_half_x, wall_half_y),
 				"h_low": 0.0,
 				"h_top": roundf(rng.randf_range(0.8, 2.0) * 10.0) / 10.0,
 				"destructible": JieyuMapSpec.DEFAULT_DESTRUCTIBLE,
 				"hp": JieyuMapSpec.SANDBAG_HP,
+				# 4.6 铁律「不能完全封闭、必须留有暴露面」⇒ 半高墙默认留一条缝
+				"openings": default_openings_for_wall(wall_half_x, wall_half_y),
 			})
 	_apply_damage_profiles(occluders)
 	return occluders
@@ -597,13 +602,60 @@ static func damage_profiles_for(is_building: bool) -> Array:
 	]
 
 
-## 轴对齐矩形多边形（12.8.7 polygon 用 [x, y] 数组）
-static func rect_polygon(center: Vector2, half_x: float, half_y: float) -> Array:
+## 给一栋新建筑生成默认开口（拍板①：只有打中开口才伤得到里面；
+## 六章「每个占领点 3 个以上入口/射击窗」⇒ 默认给 2 个，校验器会把少于 2 个的报出来）。
+## 摆在「较长的那一对边」的中段、两边各一个 —— 保证有两条不同方向的进入/射击路线。
+## h_top = 0 是约定值：表示「到掩体顶」（工程侧读到 0 就取顶高），免得写字面高度后与 h_top 打架。
+static func default_openings_for(half_x: float, half_y: float) -> Array:
+	var half_w := JieyuMapSpec.WINDOW_HALF_WIDTH
+	var half_t := JieyuMapSpec.OPENING_HALF_THICKNESS
+	var door_w := JieyuMapSpec.DOOR_HALF_WIDTH
+	if half_x >= half_y:
+		return [
+			{"type": JieyuMapSpec.OPENING_WINDOW, "center": [0.0, -half_y],
+				"half_size": [half_w, half_t], "h_low": JieyuMapSpec.WINDOW_SILL_M, "h_top": 0.0},
+			{"type": JieyuMapSpec.OPENING_DOOR, "center": [0.0, half_y],
+				"half_size": [door_w, half_t], "h_low": JieyuMapSpec.DOOR_SILL_M, "h_top": 0.0},
+		]
 	return [
-		[roundi(center.x - half_x), roundi(center.y - half_y)],
-		[roundi(center.x + half_x), roundi(center.y - half_y)],
-		[roundi(center.x + half_x), roundi(center.y + half_y)],
-		[roundi(center.x - half_x), roundi(center.y + half_y)],
+		{"type": JieyuMapSpec.OPENING_WINDOW, "center": [-half_x, 0.0],
+			"half_size": [half_t, half_w], "h_low": JieyuMapSpec.WINDOW_SILL_M, "h_top": 0.0},
+		{"type": JieyuMapSpec.OPENING_DOOR, "center": [half_x, 0.0],
+			"half_size": [half_t, door_w], "h_low": JieyuMapSpec.DOOR_SILL_M, "h_top": 0.0},
+	]
+
+
+## 给一段半高墙（沙袋类）生成一个开口 —— 4.6 的铁律是「不能完全封闭、必须留有暴露面」，
+## 所以默认给一条缝；不想要缝就在插件里用「删开口」工具去掉。
+## ⚠ 缝的跨墙厚必须**跟着墙厚走**（取墙厚的一半）：写死 0.6 会在薄墙（半厚 1.0）上
+## 悬到墙外去 —— 校验器会报「没贴在墙面上」，实测第一版就是这个毛病。
+static func default_openings_for_wall(half_x: float, half_y: float) -> Array:
+	var along_x := half_x >= half_y
+	var span := half_x if along_x else half_y
+	var thickness_axis := half_y if along_x else half_x
+	var half_w := minf(JieyuMapSpec.DOOR_HALF_WIDTH, span * 0.6)
+	var half_t := minf(JieyuMapSpec.OPENING_HALF_THICKNESS, thickness_axis * 0.5)
+	return [{
+		"type": JieyuMapSpec.OPENING_DOOR,
+		"center": [0.0, -half_y] if along_x else [-half_x, 0.0],
+		"half_size": [half_w, half_t] if along_x else [half_t, half_w],
+		"h_low": 0.0,
+		"h_top": 0.0,
+	}]
+
+
+## 轴对齐矩形多边形（12.8.7 polygon 用 [x, y] 数组）。
+## ⚠ 中心**先取整再用**：这样「多边形坐标的取整中心」与「origin 的名义中心」严格相等，
+## 开口（openings 的本地坐标就是相对 origin 的名义中心）才不会漂到墙外去。
+## 历史坑：中心取整、半宽不取整 ⇒ 两者错开最多 0.5 m ⇒ 校验器报「开口没贴在墙面上」。
+static func rect_polygon(center: Vector2, half_x: float, half_y: float) -> Array:
+	var cx := roundi(center.x)
+	var cy := roundi(center.y)
+	return [
+		[cx - roundi(half_x), cy - roundi(half_y)],
+		[cx + roundi(half_x), cy - roundi(half_y)],
+		[cx + roundi(half_x), cy + roundi(half_y)],
+		[cx - roundi(half_x), cy + roundi(half_y)],
 	]
 
 

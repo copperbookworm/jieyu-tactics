@@ -116,6 +116,26 @@ const SAMPLE_HMG_STRUCTURE_DAMAGE := 30.0        # 12.7mm 车装机枪
 const SAMPLE_TANK_GUN_STRUCTURE_DAMAGE := 280.0  # 125mm 主炮
 const SAMPLE_ARTILLERY_STRUCTURE_DAMAGE := 420.0 # 155mm 榴弹炮
 
+# ────────────── 开口（窗 / 门洞，拍板① 2026-10-03）──────────────
+## 12.8 原本没有这个字段：开口的几何写在 occluders.json 每条遮挡体的 `openings[]` 里。
+## 语义：只有打中开口才能伤到建筑里面（也才能在屋子里打到人）。
+## 坐标是**本地坐标**（与 polygon 包围盒中心同一个坐标系），随遮挡体旋转一起转。
+const OPENING_WINDOW := "window"
+const OPENING_DOOR := "door"
+const OPENING_KINDS := [OPENING_WINDOW, OPENING_DOOR]
+## 开口厚度（本地坐标，跨墙厚）：取 1.2 m ⇒ 两侧各出 0.6 m，
+## 这样「炮弹从墙的哪一侧穿进来」都落在开口格里（拿射线与开口求交是标称的）。
+const OPENING_HALF_THICKNESS := 0.6
+## 窗：宽 2.4 m、窗台 0.75 m —— 取在卧姿眼高 0.6 m 与站姿眼高 1.6 m 之间，
+## 于是「站姿能透过窗看到屋里、卧姿看不到」是一条干净的边界（与 C2 矮掩体同一套直觉）。
+const WINDOW_HALF_WIDTH := 1.2
+const WINDOW_SILL_M := 0.75
+## 门：宽 2.0 m、落地到顶（卧姿也能走过去 / 打进去）
+const DOOR_HALF_WIDTH := 1.0
+const DOOR_SILL_M := 0.0
+## 4.2 / 六章「每个占领点 3 个以上入口/射击窗」⇒ 建筑也要至少两个开口（校验器据此报警）
+const MIN_OPENINGS_PER_BUILDING := 2
+
 # ────────────── 命名口径（《给地图不同区域命名》：短 / 唯一 / 可想象 / 可战术化）──────────────
 const NAME_MAX_CHARS := 6               # 中文 2–3 字为宜，放宽到 6 字符
 const MODE_IDS := ["pvp_competitive", "pvp_armor", "pvp_casual", "pvevp"]

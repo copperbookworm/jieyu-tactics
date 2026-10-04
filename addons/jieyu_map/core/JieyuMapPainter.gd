@@ -209,8 +209,124 @@ static func add_occluder(doc: JieyuMapDoc, center: Vector2, half_x: float, half_
 		else:
 			item["hp"] = JieyuMapSpec.SANDBAG_HP
 		item["damage_profiles"] = JieyuMapGen.damage_profiles_for(is_building)
+	# 拍板①开口：建筑默认一窗一门；半高墙默认留一条缝（4.6 铁律：不能完全封闭）
+	item["openings"] = JieyuMapGen.default_openings_for(half_x, half_y) if is_building \
+			else JieyuMapGen.default_openings_for_wall(half_x, half_y)
 	doc.occluders.append(item)
 	return item
+
+
+## ────────────── 开口编辑（窗 / 门洞，拍板①）──────────────
+
+## 往指定遮挡体的某一面墙上加一个开口（窗 / 门）。
+## world_point 是落在该遮挡体附近的世界坐标：就近吸附到最近的一面墙，并沿墙夹到两端之内。
+## 返回新开口字典；参数非法时返回空字典。
+static func add_opening(doc: JieyuMapDoc, occluder_index: int, world_point: Vector2,
+		kind: String = JieyuMapSpec.OPENING_WINDOW) -> Dictionary:
+	if occluder_index < 0 or occluder_index >= doc.occluders.size():
+		return {}
+	var item: Dictionary = doc.occluders[occluder_index]
+	var polygon: Array = item.get("polygon", [])
+	if polygon.size() < 3:
+		return {}
+	var box := _polygon_bounds(polygon)
+	var center := box.get_center()
+	var half_x := maxf(box.size.x * 0.5, 0.5)
+	var half_y := maxf(box.size.y * 0.5, 0.5)
+	var local := world_point - center
+	# 就近选面：比较「到四条边中线的距离」，哪条最近就挂哪条
+	var distances := [
+		absf(local.y + half_y),   # 上边（本地 -y）
+		absf(local.y - half_y),   # 下边（本地 +y）
+		absf(local.x + half_x),   # 左边（本地 -x）
+		absf(local.x - half_x),   # 右边（本地 +x）
+	]
+	var side := 0
+	for i in distances.size():
+		if distances[i] < distances[side]:
+			side = i
+	var along_x := side < 2
+	var span := half_x if along_x else half_y
+	var want := JieyuMapSpec.WINDOW_HALF_WIDTH if kind == JieyuMapSpec.OPENING_WINDOW \
+			else JieyuMapSpec.DOOR_HALF_WIDTH
+	var half_w := minf(want, maxf(span - 0.3, 0.3))
+	var slide := clampf((local.x if along_x else local.y), -span + half_w, span - half_w)
+	var half_t := minf(JieyuMapSpec.OPENING_HALF_THICKNESS,
+			maxf((half_y if along_x else half_x) * 0.5, 0.2))
+	var opening := {
+		"type": kind,
+		"center": [0.0, slide] if along_x else [slide, 0.0],
+		"half_size": [half_w, half_t] if along_x else [half_t, half_w],
+		"h_low": JieyuMapSpec.DOOR_SILL_M if kind == JieyuMapSpec.OPENING_DOOR \
+				else JieyuMapSpec.WINDOW_SILL_M,
+		"h_top": 0.0,
+	}
+	# 贴到选中的那一面：-y / +y / -x / +x
+	if along_x:
+		opening["center"] = [0.0, -half_y if side == 0 else half_y]
+	else:
+		opening["center"] = [-half_x if side == 2 else half_x, slide]
+	var openings: Array = item.get("openings", [])
+	openings.append(opening)
+	item["openings"] = openings
+	return opening
+
+
+## 删掉指定遮挡体上离 world_point 最近的开口（局部距离在 tolerance 内才删）
+static func remove_opening_near(doc: JieyuMapDoc, occluder_index: int, world_point: Vector2,
+		tolerance: float = 2.5) -> bool:
+	if occluder_index < 0 or occluder_index >= doc.occluders.size():
+		return false
+	var item: Dictionary = doc.occluders[occluder_index]
+	var polygon: Array = item.get("polygon", [])
+	if polygon.size() < 3:
+		return false
+	var center := _polygon_bounds(polygon).get_center()
+	var local := world_point - center
+	var openings: Array = item.get("openings", [])
+	var best := -1
+	var best_distance := tolerance
+	for i in openings.size():
+		var opening_center := JieyuMapGen.vec2((openings[i] as Dictionary).get("center",
+				Vector2.ZERO))
+		var distance := opening_center.distance_to(local)
+		if distance < best_distance:
+			best_distance = distance
+			best = i
+	if best < 0:
+		return false
+	openings.remove_at(best)
+	item["openings"] = openings
+	return true
+
+
+## 找 world_point 落在哪个遮挡体里（先按包围盒命中；margin 可以放宽一点）
+## 没命中任何包围盒时返回最近的（便于「点建筑旁边一点」也能吸附）；空数组返回 -1
+static func occluder_index_at(doc: JieyuMapDoc, world_point: Vector2, margin: float = 0.0) -> int:
+	var best := -1
+	var best_distance := INF
+	for i in doc.occluders.size():
+		var polygon: Array = (doc.occluders[i] as Dictionary).get("polygon", [])
+		if polygon.size() < 3:
+			continue
+		var box := _polygon_bounds(polygon).grow(margin)
+		if box.has_point(world_point):
+			return i
+		var distance := world_point.distance_to(box.get_center())
+		if distance < best_distance:
+			best_distance = distance
+			best = i
+	return best
+
+
+static func _polygon_bounds(polygon: Array) -> Rect2:
+	var min_point := Vector2(INF, INF)
+	var max_point := Vector2(-INF, -INF)
+	for point_v in polygon:
+		var point := JieyuMapGen.vec2(point_v)
+		min_point = Vector2(minf(min_point.x, point.x), minf(min_point.y, point.y))
+		max_point = Vector2(maxf(max_point.x, point.x), maxf(max_point.y, point.y))
+	return Rect2(min_point, max_point - min_point)
 
 
 ## 删掉所有多边形与 point 距离 ≤ radius 的遮挡体，返回删掉几个

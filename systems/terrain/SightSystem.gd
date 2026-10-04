@@ -145,27 +145,61 @@ func first_smoke_hit(from: Vector2, to: Vector2) -> Vector2:
 ## ③ 掩体层（docx 4.7 第③级）：遍历 "occluder" 组的掩体，
 ## 视线穿过掩体、且交点处的视线高度没高出掩体顶（+COVER_SIGHT_SLACK）→ 判遮挡。
 ## 掩体顶高 = 掩体所在处地面高 + 掩体自身高度。用鸭子类型调用，不依赖 Cover 的类名。
+##
+## 【2026-10-03 拍板①】开口（窗 / 门洞）：交点若落在开口格内、且视线高度落在开口区间里，
+## 这一条视线就从开口穿过去（不判遮挡）。所以在屋子里不再绝对安全 ——
+## 站姿能透过窗看到屋里的人，卧姿（0.6 m）低于窗台（1.0 m）就看不到，与 C2 矮掩体同一套直觉。
 func occluder_blocks(origin: Vector2, origin_height: float,
 		target: Vector2, target_height: float) -> bool:
-	var total := origin.distance_to(target)
-	if total <= 0.001:
-		return false
 	for node in _occluders():
 		var cover = node
 		if cover == null or not cover.has_method("segment_hit"):
 			continue
-		var hit: Vector2 = cover.segment_hit(origin, target)
-		if hit == Vector2.INF:
-			continue
-		var t := clampf(origin.distance_to(hit) / total, 0.0, 1.0)
-		var sight_height := lerpf(origin_height, target_height, t)
-		var ground := 0.0
-		if grid != null:
-			ground = grid.sample_bilinear(cover.global_position)
-		var cover_top: float = cover.top_height_at(ground)
-		if blocks_sight(sight_height, cover_top):
+		if cover_blocks(cover, origin, origin_height, target, target_height,
+				_ground_under(cover)):
 			return true
 	return false
+
+
+## 单块掩体挡不挡这条视线（**纯静态判定**，不查组、不需要场景树 —— 便于单测与复用）。
+## origin_height / target_height / ground 都是**绝对高度**（米）；掩体开口区间是相对地面的，
+## 所以这里把视线高度减去 ground，交给 Cover.segment_hit() 做开口判定（两套口径在这里对齐）。
+## 判定链（拍板①开口）：
+##   ① 入口高度 = 线段与掩体矩形的第一个几何交点处的高度
+##   ② 若整条线都从开口（窗 / 门洞）穿过去 ⇒ 不挡
+##   ③ 否则按「第一个非开口交点」的视线高度与掩体顶高比：没高出顶高（+容差）⇒ 挡
+static func cover_blocks(cover, origin: Vector2, origin_height: float,
+		target: Vector2, target_height: float, ground: float) -> bool:
+	if cover == null or not cover.has_method("segment_hit"):
+		return false
+	var total := origin.distance_to(target)
+	if total <= 0.001:
+		return false
+	var cover_top: float = cover.top_height_at(ground)
+	# 入口处的高度：用「忽略开口」的第一个几何交点算
+	var entry: Vector2 = cover.wall_hit(origin, target, INF, false) \
+			if cover.has_method("wall_hit") else cover.segment_hit(origin, target)
+	if entry == Vector2.INF:
+		return false
+	var entry_t := clampf(origin.distance_to(entry) / total, 0.0, 1.0)
+	var entry_height := lerpf(origin_height, target_height, entry_t) - ground
+	var hit: Vector2 = cover.segment_hit(origin, target, entry_height)
+	if hit == Vector2.INF:
+		return false   # 从窗 / 门洞穿过去了
+	var t := clampf(origin.distance_to(hit) / total, 0.0, 1.0)
+	var sight_height := lerpf(origin_height, target_height, t)
+	return blocks_sight(sight_height, cover_top)
+
+
+## 这个掩体脚下的地面高（掩体顶高与开口高度都是相对地面的）
+func ground_under(cover) -> float:
+	return _ground_under(cover)
+
+
+func _ground_under(cover) -> float:
+	if grid == null or cover == null:
+		return 0.0
+	return grid.sample_bilinear(cover.global_position)
 
 
 ## 高度规则（纯函数，便于测试）：视线高度没高出掩体顶（+容差）就判被挡
@@ -175,8 +209,10 @@ static func blocks_sight(sight_height: float, cover_top: float) -> bool:
 
 
 ## 线段上第一个掩体：返回 {node, point}（没有掩体则 node 为 null、point 为 Vector2.INF）
-## 准心回退用 point，子弹截断要把 node 带回去扣血（可破坏掩体）
-func first_cover(from: Vector2, to: Vector2) -> Dictionary:
+## 准心回退用 point，子弹截断要把 node 带回去扣血（可破坏掩体）。
+## 【2026-10-03 拍板①】判据全部收在 Cover.segment_hit() 里：从窗 / 门洞穿过去的交点不算「挡住」，
+## 所以「看得见」与「打得着」自动是同一套开口口径，不会出现两套判定打架。
+func first_cover(from: Vector2, to: Vector2, sight_height_at: float = INF) -> Dictionary:
 	var nearest_node = null
 	var nearest_point := Vector2.INF
 	var nearest_distance := INF
@@ -184,7 +220,7 @@ func first_cover(from: Vector2, to: Vector2) -> Dictionary:
 		var cover = node
 		if cover == null or not cover.has_method("segment_hit"):
 			continue
-		var hit: Vector2 = cover.segment_hit(from, to)
+		var hit: Vector2 = cover.segment_hit(from, to, sight_height_at)
 		if hit == Vector2.INF:
 			continue
 		var distance := from.distance_to(hit)

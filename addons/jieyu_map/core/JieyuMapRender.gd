@@ -24,6 +24,8 @@ const COLOR_CORE := Color(1.0, 0.85, 0.2)
 const COLOR_RING := Color(1.0, 0.45, 0.15)
 const COLOR_BUILDING := Color(0.65, 0.65, 0.72)
 const COLOR_WALL := Color(0.45, 0.45, 0.52)
+const COLOR_WINDOW := Color(0.30, 0.85, 1.0)
+const COLOR_DOOR := Color(0.45, 1.0, 0.45)
 const COLOR_SPAWN_WEST := Color(0.25, 0.55, 1.0)
 const COLOR_SPAWN_EAST := Color(1.0, 0.32, 0.32)
 const CONTOUR_STEP_M := 10.0
@@ -168,7 +170,7 @@ static func _draw_zones(image: Image, doc: JieyuMapDoc) -> void:
 				str(node.get("id", "N%d" % (i + 1))), COLOR_NODE)
 
 
-## 掩体 / 建筑轮廓
+## 掩体 / 建筑轮廓 + 开口（窗 / 门洞，拍板①：打中开口才伤得到里面，所以要看得见）
 static func _draw_occluders(image: Image, doc: JieyuMapDoc) -> void:
 	for item_v in doc.occluders:
 		if not (item_v is Dictionary):
@@ -180,6 +182,38 @@ static func _draw_occluders(image: Image, doc: JieyuMapDoc) -> void:
 		if is_building:
 			_fill_polygon(image, polygon, color, 0.55)
 		_stroke_polygon(image, polygon, color, 0.9)
+		_draw_openings(image, item, polygon)
+
+
+## 开口画成一段亮色短条：窗=青、门=绿。位置用「包围盒中心 + 本地坐标」换算，
+## 与插件/Painter 的本地坐标系一致（矩形足迹，轴对齐）。
+static func _draw_openings(image: Image, item: Dictionary, polygon: Variant) -> void:
+	var openings: Variant = item.get("openings", null)
+	if not (openings is Array) or not (polygon is Array) or (polygon as Array).size() < 3:
+		return
+	var min_point := Vector2(INF, INF)
+	var max_point := Vector2(-INF, -INF)
+	for point_v in (polygon as Array):
+		var point := JieyuMapGen.vec2(point_v)
+		min_point = Vector2(minf(min_point.x, point.x), minf(min_point.y, point.y))
+		max_point = Vector2(maxf(max_point.x, point.x), maxf(max_point.y, point.y))
+	var center := (min_point + max_point) * 0.5
+	for opening_v in (openings as Array):
+		if not (opening_v is Dictionary):
+			continue
+		var opening: Dictionary = opening_v
+		var is_door := str(opening.get("type", "")) == JieyuMapSpec.OPENING_DOOR
+		var color := COLOR_DOOR if is_door else COLOR_WINDOW
+		var local := JieyuMapGen.vec2(opening.get("center", Vector2.ZERO))
+		var half := JieyuMapGen.vec2(opening.get("half_size", Vector2.ZERO))
+		var world := center + local
+		# 短条沿墙展开：沿 x 铺还是沿 y 铺，看哪个 half 更大
+		var along_x := half.x >= half.y
+		var a := world - Vector2(half.x, 0.0) if along_x else world - Vector2(0.0, half.y)
+		var b := world + Vector2(half.x, 0.0) if along_x else world + Vector2(0.0, half.y)
+		var steps := maxi(int(ceil(a.distance_to(b))), 1)
+		for s in steps + 1:
+			_pixel_soft(image, a.lerp(b, float(s) / float(steps)), color, 1.0, 2.5)
 
 
 ## 公里格网（每 100 m 一道暗线）—— 量距离用

@@ -250,6 +250,9 @@ func _build_covers(main) -> void:
 		cover.half_size = _polygon_half_size(polygon)
 		cover.height = float(entry.get("h_top", GameConfig.COVER_SANDBAG_HEIGHT))
 		cover.max_hp = float(entry.get("hp", GameConfig.COVER_HP))
+		# 开口（窗 / 门洞，2026-10-03 拍板①）：只有打中开口才伤得到建筑里面。
+		# 地图数据里是**本地坐标** + **相对地面**的高度区间，Cover.pierces_at() 用同一套口径。
+		cover.openings = _normalized_openings(entry.get("openings", []), cover.height)
 		var destructible := bool(entry.get("destructible", true))
 		main.add_child(cover)
 		# 不可摧毁的遮挡体（例如按老口径标的建筑）退出可破坏链路：
@@ -260,6 +263,42 @@ func _build_covers(main) -> void:
 			continue
 		rubble_zones.append(cover)
 		_connect_rubble(main, cover)
+
+
+## 开口归一化：把 [{type, center:[x,y], half_size:[x,y], h_low, h_top}] 转成
+## Cover.openings 要的 [{type, center:Vector2, half_size:Vector2, h_low, h_top}]。
+## h_top = 0 是地图数据里的约定值「到掩体顶」，这里替换成实际顶高，
+## 免得后面每个判据都要再判一次「0 是到顶还是真的 0」。
+func _normalized_openings(raw: Variant, cover_height: float) -> Array:
+	var result: Array = []
+	if not (raw is Array):
+		return result
+	for opening_v in (raw as Array):
+		if not (opening_v is Dictionary):
+			continue
+		var opening: Dictionary = opening_v
+		var low := float(opening.get("h_low", 0.0))
+		var top := float(opening.get("h_top", 0.0))
+		result.append({
+			"type": str(opening.get("type", "window")),
+			"center": _to_vec2(opening.get("center", Vector2.ZERO)),
+			"half_size": _to_vec2(opening.get("half_size", Vector2.ZERO)),
+			"h_low": low,
+			"h_top": (cover_height if top <= 0.0 else top),
+		})
+	return result
+
+
+## [x, y] / {"x","y"} / Vector2 → Vector2（JSON 里坐标是数组）
+static func _to_vec2(value: Variant) -> Vector2:
+	if value is Vector2:
+		return value
+	if value is Array and (value as Array).size() >= 2:
+		return Vector2(float((value as Array)[0]), float((value as Array)[1]))
+	if value is Dictionary:
+		var d: Dictionary = value
+		return Vector2(float(d.get("x", 0.0)), float(d.get("y", 0.0)))
+	return Vector2.ZERO
 
 
 ## 地图目录（res://assets/maps/<id>/）里的 occluders.json → 条目数组；读不到就是空数组

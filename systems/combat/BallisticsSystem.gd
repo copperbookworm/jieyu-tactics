@@ -87,7 +87,9 @@ static func resolve_shot(origin: Vector2, direction: Vector2, max_range: float,
 		var origin_height := sight.grid.sample_bilinear(origin) + shooter_eye_height
 		var end_height := sight.grid.sample_bilinear(ray_end) + shooter_eye_height
 		if sight.occluder_blocks(origin, origin_height, ray_end, end_height):
-			var cover_info := sight.first_cover(origin, ray_end)
+			# 交点的视线高度（**相对地面**）—— 开口（窗 / 门洞）判据要用它，与 SightSystem 同一口径；
+			# 射手眼高本身就是相对地面的，所以直接传它。
+			var cover_info := sight.first_cover(origin, ray_end, shooter_eye_height)
 			var hit: Vector2 = cover_info["point"]
 			if hit != Vector2.INF:
 				cover_distance = origin.distance_to(hit)

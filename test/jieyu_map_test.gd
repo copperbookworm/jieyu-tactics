@@ -205,6 +205,11 @@ func _test_generation() -> void:
 			_building_hp_in_tiers(a.occluders))
 	_check_true("「摧毁」段不挡视线且带残痕声明（拍板③）",
 			_destroyed_profiles_valid(a.occluders))
+	# 拍板①开口（第三轮）：只有打中窗 / 门洞才伤得到建筑里面
+	_check_true("每栋建筑都带 ≥2 个开口（六章：每个占领点 3 个以上入口/射击窗）",
+			_buildings_have_openings(a.occluders, 2))
+	_check_true("开口类型合法、几何贴在墙面上、高度区间自洽",
+			_openings_valid(a.occluders))
 	_check("meta 记录了生成配方", a.meta.has("recipe"), true)
 	_check("meta.recipe.seed 与配方一致", int(a.meta["recipe"]["seed"]), 20260101)
 
@@ -271,7 +276,71 @@ func _all_have_damage_profiles(occluders: Array) -> bool:
 	return true
 
 
-## 拍板②：建筑 hp 只能落在三档之一（按占地分档，不是随手给的数）
+## 场上全部开口的总数（面板测试按总数比对：一次落笔会走两次 _apply_brush_at）
+func _count_openings(doc: JieyuMapDoc) -> int:
+	var total := 0
+	if doc == null:
+		return total
+	for item_v in doc.occluders:
+		total += ((item_v as Dictionary).get("openings", []) as Array).size()
+	return total
+
+
+## 拍板①开口：每栋建筑至少 N 个开口
+func _buildings_have_openings(occluders: Array, minimum: int) -> bool:
+	for item_v in occluders:
+		var item: Dictionary = item_v
+		if str(item.get("type", "")) != "building":
+			continue
+		var openings: Variant = item.get("openings", null)
+		if not (openings is Array) or (openings as Array).size() < minimum:
+			return false
+	return true
+
+
+## 拍板①开口：类型合法、half_size 为正、贴在墙面上（本地坐标）、高度区间自洽
+func _openings_valid(occluders: Array) -> bool:
+	for item_v in occluders:
+		var item: Dictionary = item_v
+		var openings: Variant = item.get("openings", null)
+		if openings == null:
+			continue
+		if not (openings is Array):
+			return false
+		var polygon: Array = item.get("polygon", [])
+		if polygon.size() < 3:
+			return false
+		var min_point := Vector2(INF, INF)
+		var max_point := Vector2(-INF, -INF)
+		for point_v in polygon:
+			var point := JieyuMapGen.vec2(point_v)
+			min_point = Vector2(minf(min_point.x, point.x), minf(min_point.y, point.y))
+			max_point = Vector2(maxf(max_point.x, point.x), maxf(max_point.y, point.y))
+		var box := Rect2(min_point, max_point - min_point)
+		var half_x := box.size.x * 0.5
+		var half_y := box.size.y * 0.5
+		var top := float(item.get("h_top", 0.0))
+		for opening_v in (openings as Array):
+			if not (opening_v is Dictionary):
+				return false
+			var opening: Dictionary = opening_v
+			if not JieyuMapSpec.OPENING_KINDS.has(str(opening.get("type", ""))):
+				return false
+			var center := JieyuMapGen.vec2(opening.get("center", Vector2.ZERO))
+			var half := JieyuMapGen.vec2(opening.get("half_size", Vector2.ZERO))
+			if half.x <= 0.0 or half.y <= 0.0:
+				return false
+			var on_face := absf(absf(center.x) - half_x) <= half.y + 0.01 \
+					or absf(absf(center.y) - half_y) <= half.x + 0.01
+			if not on_face:
+				return false
+			var low := float(opening.get("h_low", 0.0))
+			var opening_top := float(opening.get("h_top", 0.0))
+			if low < 0.0:
+				return false
+			if opening_top > 0.0 and (opening_top < low or opening_top > top + 0.01):
+				return false
+	return true
 func _building_hp_in_tiers(occluders: Array) -> bool:
 	var tiers := [JieyuMapSpec.STRUCTURE_HP_SMALL, JieyuMapSpec.STRUCTURE_HP_HOUSE,
 			JieyuMapSpec.STRUCTURE_HP_REINFORCED]
@@ -622,9 +691,12 @@ func _test_panel() -> void:
 	dock.call("_ready")
 	_check_true("子控件已建出来（_ready 没炸）", dock.get_child_count() > 0)
 
-	# 工具编号与面板按钮一致：0 抬升 / 1 下挖 / 2 压平 / 3 平滑 / 4 台地 / 5 放节点 / 6 放建筑 / 7 删建筑
+	# 工具编号与面板按钮一致：0 抬升 / 1 下挖 / 2 压平 / 3 平滑 / 4 台地 / 5 放节点 /
+	# 6 放建筑 / 7 删建筑 / 8 放窗 / 9 放门 / 10 删开口
 	dock.call("_set_tool", 1)
 	_check("换工具生效", int(dock.get("tool")), 1)
+	dock.call("_set_tool", 8)
+	_check("工具能切到「放窗」", int(dock.get("tool")), 8)
 	dock.call("_set_tool", 0)
 	_check("工具切回抬升", int(dock.get("tool")), 0)
 
@@ -669,6 +741,26 @@ func _test_panel() -> void:
 	dock.call("_set_tool", 6)
 	canvas_ref.emit_signal("stroke_started", Vector2i(90, 90))
 	canvas_ref.emit_signal("stroke_ended")
+	_check_true("放建筑工具建出了遮挡体", doc.occluders.size() >= 1)
+	_check_true("新建筑自带默认开口（一窗一门）",
+			((doc.occluders[0] as Dictionary).get("openings", []) as Array).size() >= 2)
+	# 放窗 / 放门 / 删开口（拍板①：开口是打进去的唯一入口）。
+	# ⚠ 一次落笔会走两次 _apply_brush_at（stroke_started + stroke_ended），所以按**总数**比对。
+	var openings_before := _count_openings(doc)
+	dock.call("_set_tool", 8)
+	canvas_ref.emit_signal("stroke_started", Vector2i(90, 90))
+	canvas_ref.emit_signal("stroke_ended")
+	_check_true("放窗工具给建筑加了开口（%d → %d）" % [openings_before, _count_openings(doc)],
+			_count_openings(doc) > openings_before)
+	dock.call("_set_tool", 9)
+	canvas_ref.emit_signal("stroke_started", Vector2i(90, 90))
+	canvas_ref.emit_signal("stroke_ended")
+	var before_erase := _count_openings(doc)
+	dock.call("_set_tool", 10)
+	canvas_ref.emit_signal("stroke_started", Vector2i(90, 90))
+	canvas_ref.emit_signal("stroke_ended")
+	_check_true("删开口工具真的删掉了开口（%d → %d）" % [before_erase, _count_openings(doc)],
+			_count_openings(doc) < before_erase)
 	dock.call("_set_tool", 7)
 	canvas_ref.emit_signal("stroke_started", Vector2i(90, 90))
 	canvas_ref.emit_signal("stroke_ended")

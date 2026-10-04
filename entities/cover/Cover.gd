@@ -31,6 +31,14 @@ extends Node2D
 var hp := GameConfig.COVER_HP
 var destroyed := false
 
+## 开口（窗 / 门洞，12.8 原本没有这个字段，2026-10-03 拍板补进 occluders.json 的 openings[]）：
+##   每条 = {type:"window"|"door", center:Vector2, half_size:Vector2, h_low:float, h_top:float}
+##   center / half_size 都是**本地坐标**（与 half_size / segment_hit 同一个坐标系，随旋转一起转）。
+## 语义：线段穿过矩形时，若交点落在某个开口格内、且视线高度落在该开口的高度区间里，
+## 这一枪就从开口穿过去（看得见 / 打得进），不然就是实心墙。
+## 高度区间是「窗台高～顶高」——所以站姿能透过窗看到屋里、卧姿看不到（与 C2 矮掩体同一套直觉）。
+var openings: Array = []
+
 ## 摧毁时发（WorldSetup 拿它落残痕）。参数是自己，免得接收方还要闭包捕获
 signal destroyed_now(cover)
 
@@ -87,7 +95,30 @@ func top_height_at(ground_height: float) -> float:
 ## 修（2026-09-30 回归测试抓出）：原来按四条边的遍历顺序返回第一个命中的边，
 ## 而边序是先底边、再右边……于是横穿时返回的是远端（从左上到右下打过去，回的是出去的那一面）。
 ## 通视截断与子弹截断要的都是「先挡住视线的那一面」，所以必须按线段参数取最靠前的交点。
-func segment_hit(from: Vector2, to: Vector2) -> Vector2:
+## 线段与掩体矩形的交点（世界坐标；没有交点**或整条线都从开口穿过去**则返回 Vector2.INF）。
+## sight_height 是**相对地面**的视线/弹道高度（传 INF 表示调用方只关心几何，忽略开口高度区间）。
+## 开口（窗 / 门洞）的 h_low / h_top 也是相对地面的，所以这里不需要知道绝对地面高 —— 两套口径天然一致。
+##
+## 2026-10-03 拍板①：只有打中开口才能伤到建筑里面，所以在屋子里不再绝对安全。
+## 结构伤害的落点用 far_wall_hit()（直射穿窗时吃伤害的是对侧墙，不是入口那面）。
+func segment_hit(from: Vector2, to: Vector2, sight_height: float = INF) -> Vector2:
+	return wall_hit(from, to, sight_height, true)
+
+
+## 找到线段与掩体矩形的交点（世界坐标），没有则返回 Vector2.INF。
+##
+## sight_height_at 传 INF 表示「调用方只关心几何，不关心高度」——
+## 例如准心回退（first_cover）只要知道「这条线上有没有掩体」。
+## 传了具体高度时，会再看该点是否落在某个开口的高度区间里：
+## 落在里面就从开口穿过去（这一枪打得到里面），否则算实心墙。
+##
+## include_openings = true：开口视为可穿（通视 / 枪线口径，拍板①）
+## include_openings = false：开口也当墙（「越过墙体的实际落点」用，结构伤害结算要它）
+func wall_hit(from: Vector2, to: Vector2, sight_height_at: float = INF,
+		include_openings: bool = true) -> Vector2:
+	# 摧毁之后整块都不挡：通视与枪线口径下没有交点（「这一枪什么也没碰着」）
+	if destroyed and include_openings:
+		return Vector2.INF
 	var to_local := global_transform.affine_inverse()
 	var a: Vector2 = to_local * from
 	var b: Vector2 = to_local * to
@@ -111,12 +142,77 @@ func segment_hit(from: Vector2, to: Vector2) -> Vector2:
 		var t := 0.0
 		if ab_len_sq > 0.000001:
 			t = (point - a).dot(ab) / ab_len_sq
-		if t < best_t:
-			best_t = t
-			best_local = point
+		if t >= best_t:
+			continue
+		# include_openings = true  ⇒ 从开口穿过去的交点不算（拍板①：这是「打得到里面」的那一枪）。
+		#   整条线都从开口过去 ⇒ 没有交点 ⇒ 返回 INF。
+		# include_openings = false ⇒ **忽略开口**，直接返回几何上第一个交点：
+		#   「一发弹是从哪个面开始穿这个掩体」——SightSystem 拿它算入口高度。
+		if include_openings and _point_in_opening(point, sight_height_at, false):
+			continue
+		best_t = t
+		best_local = point
 	if best_local == Vector2.INF:
 		return Vector2.INF
 	return global_transform * best_local
+
+
+## 找到线段与掩体矩形的**最后一个**交点（世界坐标），没有则返回 Vector2.INF。
+##
+## 用途：结构伤害的落点。一发弹打在墙上就是墙体交点的位置；从窗 / 门洞打进去时，
+## 它会一路飞到**对侧墙**才停 —— 所以这里取 all intersections 里最靠后的那一个。
+## 注意这**不是**「第一个交点」：直射打进窗户的那一发，入口那面墙并不吃伤害。
+func far_wall_hit(from: Vector2, to: Vector2) -> Vector2:
+	var to_local := global_transform.affine_inverse()
+	var a: Vector2 = to_local * from
+	var b: Vector2 = to_local * to
+	var corners := [
+		Vector2(-half_size.x, -half_size.y),
+		Vector2(half_size.x, -half_size.y),
+		Vector2(half_size.x, half_size.y),
+		Vector2(-half_size.x, half_size.y),
+	]
+	var ab := b - a
+	var ab_len_sq := ab.length_squared()
+	var far_t := -INF
+	var far_local := Vector2.INF
+	for i in corners.size():
+		var hit: Variant = Geometry2D.segment_intersects_segment(a, b, corners[i],
+				corners[(i + 1) % corners.size()])
+		if hit == null:
+			continue
+		var point := hit as Vector2
+		var t := 0.0
+		if ab_len_sq > 0.000001:
+			t = (point - a).dot(ab) / ab_len_sq
+		if t > far_t:
+			far_t = t
+			far_local = point
+	if far_local == Vector2.INF:
+		return Vector2.INF
+	return global_transform * far_local
+
+
+## 本地坐标点是否落在某个开口格内。
+##   ignore_height = true  → 只看几何（「开口背后的墙体落点」用）
+##   ignore_height = false → 还要视线/弹道高度落在开口区间里
+func _point_in_opening(local_point: Vector2, sight_height: float,
+		ignore_height: bool) -> bool:
+	for opening_v in openings:
+		if not (opening_v is Dictionary):
+			continue
+		var opening: Dictionary = opening_v
+		var center := _to_vec2(opening.get("center", Vector2.ZERO))
+		var half := _to_vec2(opening.get("half_size", Vector2.ZERO))
+		if absf(local_point.x - center.x) > half.x or absf(local_point.y - center.y) > half.y:
+			continue
+		if ignore_height or is_inf(sight_height):
+			return true
+		var low := float(opening.get("h_low", 0.0))
+		var top := float(opening.get("h_top", height))
+		if sight_height >= low and sight_height <= top:
+			return true
+	return false
 
 
 ## 点到掩体矩形的距离（在矩形内返回 0）——「依托」判定用（支持任意旋转）
@@ -125,6 +221,42 @@ func distance_to_edge(point: Vector2) -> float:
 	var outside := Vector2(maxf(absf(local.x) - half_size.x, 0.0),
 			maxf(absf(local.y) - half_size.y, 0.0))
 	return outside.length()
+
+
+## 这一枪能不能从某个开口穿过去（2026-10-03 拍板①：只有打中开口才能伤到里面）。
+## world_point 是线段与掩体矩形的交点（世界坐标）；ground 是掩体所在处的地面高。
+## 开口的高度区间在数据里是**相对地面**的（窗台 1.0 m / 门 0～顶高），这里换算成绝对高度比。
+## 摧毁之后整块都不挡了，所以直接返回 true（开口此时已无意义）。
+func pierces_at(world_point: Vector2, sight_height: float, ground: float = 0.0) -> bool:
+	if destroyed:
+		return true
+	if openings.is_empty():
+		return false
+	var local: Vector2 = global_transform.affine_inverse() * world_point
+	for opening_v in openings:
+		if not (opening_v is Dictionary):
+			continue
+		var opening: Dictionary = opening_v
+		var center := _to_vec2(opening.get("center", Vector2.ZERO))
+		var half := _to_vec2(opening.get("half_size", Vector2.ZERO))
+		if absf(local.x - center.x) > half.x or absf(local.y - center.y) > half.y:
+			continue
+		var low := ground + float(opening.get("h_low", 0.0))
+		var top := ground + float(opening.get("h_top", height))
+		if sight_height >= low and sight_height <= top:
+			return true
+	return false
+
+
+static func _to_vec2(value: Variant) -> Vector2:
+	if value is Vector2:
+		return value
+	if value is Array and (value as Array).size() >= 2:
+		return Vector2(float((value as Array)[0]), float((value as Array)[1]))
+	if value is Dictionary:
+		var d: Dictionary = value
+		return Vector2(float(d.get("x", 0.0)), float(d.get("y", 0.0)))
+	return Vector2.ZERO
 
 
 func _draw() -> void:

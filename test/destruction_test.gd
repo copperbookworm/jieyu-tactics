@@ -20,6 +20,7 @@ func _run() -> void:
 	_test_rubble()
 	_test_material_parser()
 	_test_sight_and_speed()
+	_test_openings()
 
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
@@ -243,3 +244,101 @@ func _test_sight_and_speed() -> void:
 
 	cover.free()
 	patch.free()
+
+
+## ────────────── ⑤ 开口（窗 / 门洞，拍板① 2026-10-03）──────────────
+
+func _test_openings() -> void:
+	# 世界坐标：房子中心在 (300,300)（**刻意远离其它用例**，避免测试之间互相污染），
+	# 半宽 5 → 西墙 x = 295、东墙 x = 305、墙带 y ∈ [295,305]
+	var cover = CoverScript.new()
+	cover.half_size = Vector2(5.0, 5.0)
+	cover.position = Vector2(300.0, 300.0)
+	cover.height = 3.0
+	cover.max_hp = GameConfig.STRUCTURE_HP_HOUSE
+	cover.hp = cover.max_hp
+	# 西墙 y ∈ [294.5, 298.5] 段一扇窗（窗台 0.75 m —— 取在卧姿眼高 0.6 m 与站姿眼高 1.6 m 之间，
+	# 这样「站姿看得见、卧姿看不见」是一条干净的边界）+ 东墙中段一道门（落地到顶）；
+	# center / half_size 都是本地坐标，所以窗在本地 y = -3.5 ± 2。
+	# 窗与门**刻意错开**（窗在 y≈296.5、门在 y=300）：只穿窗的那条射线不会顺带穿过门，
+	# 于是「几何入口」与「对侧墙落点」都能拿到干净的值。
+	cover.openings = [
+		{"type": "window", "center": Vector2(-5.0, -3.5), "half_size": Vector2(0.6, 2.0),
+			"h_low": 0.75, "h_top": 3.0},
+		{"type": "door", "center": Vector2(5.0, 0.0), "half_size": Vector2(0.6, 1.2),
+			"h_low": 0.0, "h_top": 3.0},
+	]
+
+	# ① 几何入口：从西边 50 m 外打向东 —— 第一个几何交点在墙上（窗那一面）
+	var through_window_from := Vector2(280.0, 296.5)
+	var through_window_to := Vector2(330.0, 296.5)
+	var entry: Vector2 = cover.wall_hit(through_window_from, through_window_to, INF, false)
+	_check_near("几何入口落在墙上 x = 295", entry.x, 295.0, 0.001)
+
+	# ② 站姿视线（1.6 m）打在窗那一面 ⇒ 窗是开口，这一枪**不被入口墙挡住**；
+	#    但同一发弹继续飞会撞到房间另一头 —— segment_hit 返回的是「第一个非开口交点」，
+	#    所以这里期望它在**对侧**（x = 305）而不是入口（x = 295）。
+	var hit_standing: Vector2 = cover.segment_hit(through_window_from, through_window_to, 1.6)
+	_check_near("站姿（1.6 m）：入口窗可穿，弹道停在对侧 x = 305", hit_standing.x, 305.0, 0.001)
+	# ③ 卧姿视线（0.6 m）低于窗台 ⇒ 被墙挡住
+	var hit_prone: Vector2 = cover.segment_hit(through_window_from, through_window_to, 0.6)
+	_check_true("卧姿（0.6 m）低于窗台：被墙挡住", hit_prone != Vector2.INF)
+	_check_near("卧姿：挡住的位置仍是西墙 x = 295", hit_prone.x, 295.0, 0.001)
+
+	# ④ 门是落地的：卧姿也能从门穿过去（这一条刻意走 y = 300 的东墙门）
+	_check("穿过门：门那一面不算挡（卧姿也是）",
+			cover.segment_hit(Vector2(330.0, 300.0), Vector2(280.0, 300.0),
+			0.6) != Vector2.INF, true)
+
+	# ⑤ 打在西墙的非开口段（y 偏移 4 m）⇒ 实心墙，站姿也挡
+	var solid_from := Vector2(280.0, 304.0)
+	var solid_to := Vector2(330.0, 304.0)
+	var solid_hit: Vector2 = cover.segment_hit(solid_from, solid_to, 1.6)
+	_check_true("墙上没有开口的段：站姿也挡（交点 x=%.0f）" % solid_hit.x, solid_hit != Vector2.INF)
+
+	# ⑥ 「打中窗 ≠ 打不到楼」：从窗打进去之后，**对侧墙**才是结构伤害的落点
+	#    （far_wall_hit 取所有交点里最靠后的那一个；入口那面墙不吃直射穿窗的伤害）
+	var far_wall: Vector2 = cover.far_wall_hit(through_window_from, through_window_to)
+	_check_true("从窗打进去还有对侧墙（结构伤害落在那里）", far_wall != Vector2.INF)
+	_check_near("对侧墙在 x = 305", far_wall.x, 305.0, 0.001)
+
+	# ⑦ 摧毁之后整块都不挡（开口已无意义）
+	cover.take_damage(GameConfig.STRUCTURE_HP_HOUSE)
+	_check("摧毁后：实心段也不再挡",
+			cover.segment_hit(solid_from, solid_to, 1.6) == Vector2.INF, true)
+
+	# ⑧ 与通视链路联通：开口要同时影响「看得见」与「打得着」。
+	#    这里直接问 SightSystem.cover_blocks()（纯判定，不查 occluder 组）——
+	#    组查询要等引擎刷新组缓存，无头同步测试里拿不到；而真正要验的就是这套几何判定。
+	#    ⚠ 上面第⑦步刚把这块掩体打掉了 —— 通视链路要的是一栋**完好**的楼，所以重建一份。
+	var fresh = CoverScript.new()
+	fresh.half_size = Vector2(5.0, 5.0)
+	fresh.position = Vector2(300.0, 300.0)
+	fresh.height = 3.0
+	fresh.max_hp = GameConfig.STRUCTURE_HP_HOUSE
+	fresh.hp = fresh.max_hp
+	fresh.openings = cover.openings.duplicate(true)
+	var ground := 10.0
+	var eye := ground + GameConfig.SOLDIER_EYE_HEIGHT
+	# 屋里的目标点：取 (300, 296.5)（矩形内、正对窗）离地 0.5 m 的一个目标。
+	# 站姿与卧姿都要从窗里穿过去看它，差别只落在「入口处视线有多高」：
+	#   站姿：从 (280,296.5) 的 1.6 m 看到 (300,296.5) 的 0.5 m，入口（x=295）≈ 1.11 m > 窗台 1.0 ⇒ 看得见
+	#   卧姿：从 0.6 m 看到 0.5 m，入口 ≈ 0.64 m < 窗台 ⇒ 被墙挡住
+	var inside := Vector2(300.0, 296.5)   # 屋子**里面**（矩形内，x∈[295,305]）、正对窗
+	var inside_target := ground + 0.5
+	_check("通视：站着能透过窗看见屋里（门口视线高于窗台）",
+			SightSystem.cover_blocks(fresh, through_window_from, eye, inside, inside_target,
+			ground), false)
+	_check("通视：同一扇窗，卧姿（0.6 m）低于窗台就看不见",
+			SightSystem.cover_blocks(fresh, through_window_from,
+			ground + GameConfig.PRONE_SIGHT_HEIGHT, inside, inside_target, ground), true)
+	_check("通视：实心墙段站着也挡",
+			SightSystem.cover_blocks(fresh, solid_from, eye, Vector2(330.0, 304.0),
+			eye, ground), true)
+	# 摧毁之后同一条实心墙视线不再被挡（与第⑦步同一条语义，走 cover_blocks 复核一遍）
+	fresh.take_damage(GameConfig.STRUCTURE_HP_HOUSE)
+	_check("通视：摧毁后实心墙也不再挡",
+			SightSystem.cover_blocks(fresh, solid_from, eye, Vector2(330.0, 304.0),
+			eye, ground), false)
+	fresh.free()
+	cover.free()

@@ -224,6 +224,24 @@ static func validate_schema(z: Dictionary, occ: Array) -> Array[String]:
 			if od.has("h_low") and od.has("h_top") \
 					and float(od["h_low"]) > float(od["h_top"]):
 				errors.append("occluders[%d] h_low > h_top" % i)
+			# 开口（窗 / 门洞）：12.8.7 原本没有这个字段，2026-10-03 拍板①补进每条 occluder
+			var openings: Variant = od.get("openings", null)
+			if openings != null and not (openings is Array):
+				errors.append("occluders[%d].openings 必须是数组" % i)
+			elif openings is Array:
+				for j in (openings as Array).size():
+					var opening: Variant = (openings as Array)[j]
+					if not (opening is Dictionary):
+						errors.append("occluders[%d].openings[%d] 不是对象" % [i, j])
+						continue
+					var entry := opening as Dictionary
+					for key in ["type", "center", "half_size", "h_low", "h_top"]:
+						if not entry.has(key):
+							errors.append("occluders[%d].openings[%d] 缺字段 %s" % [i, j, key])
+					if entry.has("type") \
+							and not JieyuMapSpec.OPENING_KINDS.has(str(entry["type"])):
+						errors.append("occluders[%d].openings[%d].type 只能是 %s"
+								% [i, j, str(JieyuMapSpec.OPENING_KINDS)])
 	return errors
 
 

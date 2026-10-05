@@ -25,6 +25,8 @@ const OrganizationScript := preload("res://systems/match/Organization.gd")
 const SquadOrdersScript := preload("res://systems/match/SquadOrders.gd")
 ## 出生点挑选（2026-10-05）：从地图出生区里现挑一个「站得住」的点（纯逻辑，可单测）
 const SpawnPickerScript := preload("res://systems/terrain/SpawnPicker.gd")
+## 敌人驻守部署（2026-10-05 第六十三版 · 拍板 B）：怎么把敌人分到 5 个节点 + 东侧预备队（纯算术）
+const EnemyDeploymentScript := preload("res://systems/match/EnemyDeployment.gd")
 
 var terrain_sprite: Sprite2D = null
 ## 本局友好方编成（组 / 小队 / 队长）—— 由 _spawn_allies 建好后写回，供 HUD / 任务链读
@@ -37,6 +39,12 @@ var spawned_enemy_count := 0
 var spawned_ally_count := 0
 ## 掩体被摧毁后落的残痕（4.17）：它们与泥泞 / 雪地共用一条移速链路，所以要并进 player.zones
 var _rubble_zones: Array = []
+## 本模块持有 Main 引用（只为「拍板 B 的预备队支援」这一个信号回调 —— 其余函数仍按参数传 main）
+var main_ref = null
+## 地图 zones.json 的缓存副本（出生锚点 / 白旗点 / 敌人驻守三处共用一次解析）
+var _map_zones: Dictionary = {}
+## 东侧出生区的预备队（拍板 B）：节点被我方占下后，这些人向前支援下一个节点
+var reserve_enemies: Array = []
 
 
 ## 建场。map_preview_mode 时只建地形 + 预览层（游戏循环一行都不动）
@@ -47,6 +55,8 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	if main.map_preview_mode:
 		_build_map_preview(main)
 		return
+	main_ref = main
+	_map_zones = _load_map_zones(main)
 	# 地图数据只解析一次：出生点挑选 / 掩体 / 载具落点共用同一份（occluders.json 有 60 KB+）
 	main.map_occluders = _load_occluders(main)
 	# 出生锚点（2026-10-05）：读地图出生区现挑一个站得住的点，玩家 / 友军载具 / 补给车共用
@@ -60,6 +70,9 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	_build_terrain_zones(main)   # 4.17：泥泞 / 雪地减速、草丛隐蔽（要在玩家之后、敌人之前）
 	_build_enemy_fob(main)
 	_spawn_enemies(main, enemy_count)
+	# 拍板 B 的后半句：节点被我方占下 → 东侧预备队向前支援（见 _on_flag_state_changed）
+	if not EventBus.flag_state_changed.is_connected(_on_flag_state_changed):
+		EventBus.flag_state_changed.connect(_on_flag_state_changed)
 	# 队友（2026-10-02）：3 名强力队友进 friendly 组。集成冒烟已订正过「敌人 2 个」那条过期断言 ——
 	# 队友会先击毙开局步兵，事件驱动的穿插兵也会进 enemy 组，所以那条不再用等值。
 	_spawn_allies(main, _ally_target())
@@ -206,30 +219,116 @@ func _spawn_allies(main, count: int) -> void:
 ## 通视 DDA 与命中判定都变成近似零距离的退化情况）。
 ## 前 points.size() 个与旧实现逐字一致（位置、命名都不变）⇒ 默认 2 敌的场景回归面为零。
 func _spawn_enemies(main, enemy_count: int) -> void:
-	var points := _enemy_spawn_points(main)
-	if points.is_empty():
+	var slots := _enemy_slots(main, enemy_count)
+	if slots.is_empty():
 		return
 	spawned_enemy_count = enemy_count
+	reserve_enemies.clear()
 	for index in enemy_count:
+		var slot: Dictionary = slots[index % slots.size()]
 		var enemy := Enemy.new()
 		enemy.name = "Enemy%d" % index
-		enemy.global_position = _enemy_spawn_position(points, index)
+		enemy.global_position = slot["position"]
 		enemy.setup(main.sight, main.player, main.camera, main.grid)
+		if bool(slot.get("reserve", false)):
+			reserve_enemies.append(enemy)
 		main.add_child(enemy)
 
 
-## 敌人出生点（2026-10-05）：出生锚点 + 相对偏移（保住第一版「出生 30 秒就能撞见敌人」的体验），
-## 每个点再做一次「原地找平地」微调 —— 正式图上偏移点可能正好落在陡坡或楼里。
-## 「敌人要不要按 RAAS 节点分布」是玩法改动，已登记待拍板，不在这里替使用者决定。
-func _enemy_spawn_points(main) -> Array:
-	var anchor: Vector2 = main.spawn_anchor
-	if anchor == Vector2.ZERO:
-		return MapGenerator.demo_enemy_points()
-	var points: Array = []
-	for offset in MapGenerator.enemy_spawn_offsets():
-		points.append(SpawnPickerScript.nudge(main.grid, anchor + offset,
-				SpawnPickerScript.NUDGE_RADIUS, main.map_occluders))
-	return points
+## 敌人落点（2026-10-05 第六十三版 · 使用者拍板 **B**：按 RAAS 节点 + 东侧出生区分组驻守）。
+## 返回**恰好 enemy_count 个** {position, reserve}；地图没给节点 / 没有东侧出生区时退回老口径
+## （出生锚点 + demo 相对偏移，保住退化路径）。每个点都过一次「原地找平地」微调。
+func _enemy_slots(main, enemy_count: int) -> Array:
+	var nodes := _zone_node_positions(_map_zones)
+	var reserve_center := _spawn_area_center(main, _map_zones, "east")
+	if nodes.is_empty() or reserve_center == Vector2.INF:
+		return _legacy_enemy_slots(main, enemy_count)
+	var plan := EnemyDeploymentScript.plan(nodes.size(), enemy_count)
+	var slots: Array = []
+	for node_index in nodes.size():
+		for slot in int(plan["per_node"][node_index]):
+			var ideal: Vector2 = nodes[node_index] \
+					+ EnemyDeploymentScript.node_slot_offset(slot)
+			slots.append({"position": _nudged(main, ideal), "reserve": false})
+	for slot in int(plan["reserve"]):
+		var ideal: Vector2 = reserve_center + EnemyDeploymentScript.reserve_slot_offset(slot)
+		slots.append({"position": _nudged(main, ideal), "reserve": true})
+	return slots
+
+
+## 老口径（退化路径）：出生锚点 + demo 相对偏移；点位数不够时循环复用 + 圆周散开
+func _legacy_enemy_slots(main, enemy_count: int) -> Array:
+	var points := MapGenerator.demo_enemy_points()
+	if points.is_empty():
+		return []
+	var slots: Array = []
+	for index in enemy_count:
+		slots.append({"position": _enemy_spawn_position(points, index), "reserve": false})
+	return slots
+
+
+## 落点微调：正式图上节点圆环 / 出生区里都可能正好是陡坡或楼
+func _nudged(main, ideal: Vector2) -> Vector2:
+	return SpawnPickerScript.nudge(main.grid, ideal,
+			SpawnPickerScript.NUDGE_RADIUS, main.map_occluders)
+
+
+## 出生区多边形的中心（东侧预备队集结用）；没有该 side 时返回 Vector2.INF
+func _spawn_area_center(main, zones: Dictionary, side: String) -> Vector2:
+	for area_v in zones.get("spawn_areas", []):
+		if not (area_v is Dictionary):
+			continue
+		var area: Dictionary = area_v
+		if String(area.get("side", "")) != side:
+			continue
+		var polygon: Array = area.get("polygon", [])
+		if polygon.size() < 3:
+			return Vector2.INF
+		var sum := Vector2.ZERO
+		for point_v in polygon:
+			sum += JieyuMapGen.vec2(point_v)
+		return _nudged(main, sum / float(polygon.size()))
+	return Vector2.INF
+
+
+## 拍板 B 的后半句：我方占下一个节点 → 东侧预备队「向前支援」下一个节点。
+## 口令走 Enemy.set_move_target()（换 _patrol_target，到点后它自己回到原地巡逻）——
+## 不新增 AI 状态机，也不给敌人加寻路：第一版的战场很小，直线过去就够。
+func _on_flag_state_changed(node_name: Variant, state: int) -> void:
+	if state != 1:   # CaptureZone.State.BLUE（不引用 CaptureZone，免得与它的 EventBus 依赖成环）
+		return
+	if main_ref == null or reserve_enemies.is_empty():
+		return
+	var nodes := _zone_node_positions(_map_zones)
+	if nodes.is_empty():
+		return
+	var index := _capture_zone_index(node_name)
+	if index < 0:
+		return
+	var target: Vector2 = nodes[mini(index + 1, nodes.size() - 1)]
+	var moved := 0
+	for enemy_v in reserve_enemies:
+		if is_instance_valid(enemy_v) and not (enemy_v as Node).is_queued_for_deletion():
+			enemy_v.set_move_target(target)
+			moved += 1
+	if moved > 0:
+		print("[敌人] 预备队 %d 人向前支援 → 节点 %d %s" % [moved, mini(index + 1, nodes.size() - 1) + 1,
+				str(target)])
+
+
+func _capture_zone_index(node_name: Variant) -> int:
+	if main_ref == null:
+		return -1
+	for i in (main_ref.capture_zones as Array).size():
+		var zone = main_ref.capture_zones[i]
+		if is_instance_valid(zone) and String((zone as Node).name) == String(node_name):
+			return i
+	return -1
+
+
+func _exit_tree() -> void:
+	if EventBus.flag_state_changed.is_connected(_on_flag_state_changed):
+		EventBus.flag_state_changed.disconnect(_on_flag_state_changed)
 
 
 ## 出生锚点（2026-10-05）：从地图 spawn_areas（west）里现挑一个「站得住」的点。

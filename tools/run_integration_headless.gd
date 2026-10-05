@@ -173,6 +173,38 @@ func _check_structure() -> void:
 	_check("掩体数 = 地图 occluders.json 的条目数（%d）" % map_occluders,
 			get_nodes_in_group("occluder").size(), map_occluders)
 	_check_true("默认地图确实是正式图（不是 demo 的 20 个沙袋）", map_occluders > 20)
+	# 拍板 B（2026-10-05 · 第六十三版）：敌人驻守在地图节点上，不再是「出生点前方 45~75 m」。
+	# 只算敌方**步兵**：enemy 组里还有敌方坦克乘员与事件驱动的穿插兵，它们的落点规则不同。
+	var deployment_nodes := _map_node_positions(GameConfig.MAP_HEIGHT_IMAGE)
+	var infantry: Array = []
+	for node in get_nodes_in_group("enemy"):
+		var enemy_name := String(node.name)
+		if enemy_name.begins_with("Enemy") and not enemy_name.contains("TankCrew") \
+				and not enemy_name.contains("Vehicle"):
+			infantry.append(node)
+	var on_node := 0
+	for node in infantry:
+		for node_pos in deployment_nodes:
+			if (node as Node2D).global_position.distance_to(node_pos) <= 30.0:
+				on_node += 1
+				break
+	_check("拍板 B：开局敌方步兵全部驻守在地图节点上（%d 人）" % infantry.size(),
+			on_node, infantry.size())
+	# 预备队支援：口令真的走到 Enemy.set_move_target()（2 敌的测试局本来没有预备队，这里手工挂上）
+	var world = _main.world
+	_check("拍板 B：人少（2 敌）时不留预备队", (world.reserve_enemies as Array).size(), 0)
+	if deployment_nodes.size() >= 2 and not infantry.is_empty():
+		for node in infantry:
+			(world.reserve_enemies as Array).append(node)
+		world._on_flag_state_changed((_main.capture_zones[0] as Node).name, 1)
+		var aimed := 0
+		for node in infantry:
+			if (node as Node2D)._patrol_target.distance_to(deployment_nodes[1]) < 1.0:
+				aimed += 1
+		_check("拍板 B：预备队向前支援 —— 目标指向下一个节点", aimed, infantry.size())
+		for node in infantry:
+			node.set_move_target((node as Node2D).global_position)   # 还原：回自己脚下巡逻
+		(world.reserve_enemies as Array).clear()
 	# 白旗点也必须来自地图的推进链（zones.json）—— 实测：地图 N2 与 demo N2 差 44.7 m，
 	# 而 demo N2 在正式图上是 45.8° 的坡、核心圈里还压着一栋房子。
 	var map_nodes := _map_node_positions(GameConfig.MAP_HEIGHT_IMAGE)
@@ -415,6 +447,8 @@ func _check_interactions() -> void:
 
 	# ④.7 为 T-S5 铺垫：把 0 号节点推进「容差吸附」区间，让 CaptureZone._process 自己翻蓝
 	# （T-S5 的闸门是「我方已控制 ≥1 个节点」，翻蓝之后它才发得出来）
+	# ⚠ 拍板 B 之后敌人驻守在节点上：不清点，「双方同在 = 对冲」会让进度原地不动（那是设计）
+	_clear_zone_of_enemies()
 	_main.capture_zones[0].progress = 0.9995
 
 	# ⑤ 兵种 / 姿态 / 换枪 / 聚焦
@@ -572,6 +606,7 @@ func _check_main_defend() -> void:
 ## 全占胜利：不去直接改 state，而是把进度推到「容差吸附」区间，让 CaptureZone._process
 ## 自己翻蓝并广播 flag_state_changed —— 走的就是真机那条链路。
 func _arm_victory() -> void:
+	_clear_zone_of_enemies()   # 同上：敌人站在点上时进度不该涨
 	for zone in _main.capture_zones:
 		zone.progress = 0.9995
 
@@ -824,6 +859,21 @@ func _neutralize_enemy_fire() -> void:
 ## SightSystem.Throttle 每 SIGHT_THROTTLE_FRAMES（4）个物理帧才真查一次地形 + 掩体层，
 ## 而测试是「同一物理帧里传送 + 立刻问 AI 看不看得见」—— 不清就会拿到**传送前**的结论。
 ## 产品里这是设计内的有界陈旧（≤4 帧 ≈ 66 ms，单位是连续移动的），只有瞬移的测试要自己负责清。
+## 把站在占领区里的敌人挪出去（2026-10-05 · 拍板 B 之后必须有这一步）：
+## 敌人现在**驻守在地图节点上**，而 CaptureZone 的规则是「双方同在 = 对冲、进度不动」（docx 4.2）——
+## 这是设计要的「要拿点先清点」，但测试里「把进度推到容差区等它自己翻蓝」的写法必须先把人挪开。
+func _clear_zone_of_enemies() -> void:
+	for node in get_nodes_in_group("enemy"):
+		var enemy := node as Node2D
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		for zone_v in _main.capture_zones:
+			var zone := zone_v as Node2D
+			if zone != null and zone.is_inside(enemy.global_position):
+				enemy.global_position = Vector2(30.0, 30.0)   # 地图西北角：离五个节点都 ≥ 400 m
+				break
+
+
 func _reset_sight_caches() -> void:
 	for node in get_nodes_in_group("enemy"):
 		var throttle: Variant = node.get("_sight_throttle")

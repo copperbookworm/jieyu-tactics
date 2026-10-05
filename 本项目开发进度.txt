@@ -3417,3 +3417,21 @@ base_url 也可能变。若把模型名写死在包里，玩家会遇到「选�
     `docs/性能预算.md` 第十四节写了全表、口径与复现命令。**待拍板：是否改走 gradle 自定义 Android 构建。**
   · 本轮测试：单元 EXIT=0；集成冒烟 通过 274 / 失败 0（EXIT=0）。
 
+· 【新，2026-10-05 · 第七十三版 · 轨 1】Android 自定义构建请求 120 Hz：**代码全对，但华为按包名策略按回 60**。
+  · 落地：装 Android 构建模板 + `gradle_build/use_gradle_build=true` + 覆盖 `GodotApp.java`（窗口层
+    `preferredDisplayModeId`，Surface 层 `setFrameRate(120, FIXED_SOURCE, ALWAYS)`，onResume + 两次重试）；
+    版本化副本与重装脚本在 `tools/android_overrides/`。gradle debug 包 41.9 MB → 92.7 MB，导出约 1~2 min。
+  · **请求确实送到了系统**：AGPService `[DecideAndSendRefreshRate] displayEngineLimitFps -1, sf: 120 ...`；
+    但同一行 `final refresh rate 60`、接着 `[SetActiveConfigByFps] fps to sf 60`、`iaware strange app type: -1`
+    ⇒ `mActiveModeId` 仍 =1、`period_ns` 仍 16666666。
+  · 旁路全试过：`adb shell cmd game mode performance` → 「not supported by com.example.jieyu1」；
+    manifest 已是 `isGame=true` + `appCategory=game`；无省电模式、无 root、`cmd display` 无档位命令。
+  · 三个坑：① 版本标记在 `android/.build_version`（不是 android/build/ 里）；② 本机 gradle-8.11.1 发行包 zip
+    被截断，要从另一个 hash 目录补完好包 + `.ok`；③ `View.setRequestedFrameRate` 是 API 34 才有
+    （Android 12 上 NoSuchMethodError，而且会把 Surface 那条腿一起带崩 —— 已改两条腿各自 try/catch）。
+  · 未测（登记欠账）：release（非 debuggable）包是否被区别对待 —— 预设缺 release keystore，`--export-release` 直接失败。
+  · 结论：**>60 Hz 在这台华为上由厂商白名单决定，应用侧改不动** ⇒ 100 fps 的呈现前提在这台设备上不可达；
+    代码保留（换一台尊重应用请求的 120 Hz 设备即可生效，验收 = `mActiveModeId=2` + `period_ns=8333333`）。
+    **轨 2（CPU 帧时间 / 先把 60 Hz 锁住）继续。**
+  · 测试：本轮只改 Java / 导出配置 / 场景接线，GDScript 未动；提交前单元 EXIT=0、集成 274/0（EXIT=0）。
+

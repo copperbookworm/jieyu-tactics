@@ -58,6 +58,13 @@
 - 本机坑：PATH 里裸 `node` 是坏的 v22，脚本一律用 `C:\Program Files\nodejs\node.exe`；
   `DSH_HOME` 必须保持 `D:\dsh-data`，绝不可覆盖
 - 重要项目别只存 E:（exFAT、无日志，断电易损）
+- **Android 导出自第七十三版起走 gradle 自定义构建**：`export_presets.cfg` 的
+  `gradle_build/use_gradle_build=true`，依赖 `android/build/`（约 206 MB，`.gitignore` 里 `/android/` 已忽略）
+  与 JDK 17。换机器 / 换引擎版本后先跑 `pwsh -File tools/android_overrides/install_build_template.ps1`；
+  导出时带 `$env:JAVA_HOME="C:\Program Files\Java\jdk-17"`。**原因与验收见 `docs/性能预算.md` 第十五节**
+  （华为把包名钉在 60 Hz，只能由应用自己请求高刷）。
+- Android 真机的「呈现刷新率」口径：`adb shell dumpsys display | Select-String mActiveModeId`（2=120Hz）
+  与 `adb shell dumpsys SurfaceFlinger --latency <layer>` 首行 `period_ns`（8333333=120Hz / 16666666=60Hz）
 
 ## 知识 / 记忆落点
 - `docs/kb/` —— 从手机端 agent 迁来的知识库（含 `refs/godot-api`、`refs/godot-guide` 官方文档）

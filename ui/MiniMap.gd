@@ -39,10 +39,24 @@ func _ready() -> void:
 	# 右上角，避开开火按钮（右下）与准心（屏心）
 	position = Vector2(GameConfig.VIEWPORT_WIDTH - MINI_SIZE - 8.0, 8.0)
 	var bg := Sprite2D.new()
-	bg.texture = _terrain_texture
-	bg.scale = Vector2.ONE * (MINI_SIZE / MAP_SIZE)
+	bg.texture = _mini_texture()
 	bg.centered = false
 	add_child(bg)
+
+
+## 小地图专用的**预缩小**贴图（2026-10-05 性能修复）。
+## 原来直接把 1000×1000 的全图按 150/1000 缩放每帧绘制 —— 没有 mipmap，6.7× 缩小的采样
+## 在移动 GPU 上是典型的 cache 抖动源（notes f057 记的就是这一条）。
+## 一次性缩到 150×150 存成独立贴图，之后每帧只是 1:1 绘制。
+func _mini_texture() -> ImageTexture:
+	if _terrain_texture == null:
+		return null
+	var source := _terrain_texture.get_image()
+	if source == null:
+		return null
+	var small := source.duplicate() as Image
+	small.resize(int(MINI_SIZE), int(MINI_SIZE), Image.INTERPOLATE_BILINEAR)
+	return ImageTexture.create_from_image(small)
 
 
 func _process(_delta: float) -> void:

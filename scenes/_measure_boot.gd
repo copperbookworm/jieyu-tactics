@@ -10,12 +10,13 @@ extends Node
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
 const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
 
-const BOOT_LOBBY := true      # true = 对照组（大厅）；false = 实验组（20 v 20 对局）
-const WINDOW_S := 5.0
+const BOOT_LOBBY := false     # true = 对照组（大厅）；false = 实验组（20 v 20 对局）
+const WINDOW_S := 3.0
 
 var _samples: Array = []
 var _elapsed := 0.0
 var _window := 0.0
+var _last_phys := 0
 
 
 func _ready() -> void:
@@ -23,11 +24,11 @@ func _ready() -> void:
 		add_child((load("res://scenes/app/App.tscn") as PackedScene).instantiate())
 		print("[测量包] 对照组：已起大厅 App.tscn")
 		return
-	MatchRulesScript.set_mode(ModeTableScript.Mode.PVP_RANKED)
+	MatchRulesScript.set_mode(ModeTableScript.Mode.PVP_CASUAL)
 	var main = (load("res://scenes/gameplay/Main.tscn") as PackedScene).instantiate()
-	main.enemy_count = ModeTableScript.enemy_count(ModeTableScript.Mode.PVP_RANKED)
+	main.enemy_count = ModeTableScript.enemy_count(ModeTableScript.Mode.PVP_CASUAL)
 	add_child(main)
-	print("[测量包] 实验组：已按 PVP_RANKED 起对局（敌人 %d、队友 %d）"
+	print("[测量包] 实验组：已按 PVP_CASUAL 起对局（敌人 %d、队友 %d）"
 			% [main.enemy_count, MatchRulesScript.ally_count()])
 
 
@@ -41,10 +42,28 @@ func _process(delta: float) -> void:
 	var sorted := _samples.duplicate()
 	sorted.sort()
 	var count := sorted.size()
+	_samples.clear()
+	if count == 0:
+		return
 	var p50: float = sorted[int(float(count) * 0.5)]
+	var p90: float = sorted[mini(int(float(count) * 0.9), count - 1)]
 	var p95: float = sorted[mini(int(float(count) * 0.95), count - 1)]
 	var p99: float = sorted[mini(int(float(count) * 0.99), count - 1)]
-	print("[测帧] 对照=%s t=%.0fs 帧数=%d 引擎FPS=%.1f | 帧时间 p50=%.1f ms p95=%.1f ms p99=%.1f ms max=%.1f ms"
-			% ["大厅" if BOOT_LOBBY else "对局", _elapsed, count,
-			Engine.get_frames_per_second(), p50, p95, p99, sorted[count - 1]])
-	_samples.clear()
+	# 2026-10-05：帧时间要与「引擎侧拆解」同一行打出来 —— 否则分不清是仿真还是渲染。
+	# steps = 这一窗里物理步进了几次：帧慢时 Godot 会一帧补跑多个物理步（默认上限 8），
+	# 而单位的 _physics_process（AI / 通视）在**每个**物理步里都跑一遍 ⇒ 帧越慢、AI 跑得越多（死亡螺旋）。
+	var phys_total := Engine.get_physics_frames()
+	var steps := phys_total - _last_phys
+	_last_phys = phys_total
+	print("[测帧] t=%.0fs 帧数=%d fps=%.1f steps=%d(%.1f/帧) | p50=%.1f p90=%.1f p95=%.1f p99=%.1f max=%.1f ms | PROC=%.1f PHYS=%.1f | draw=%d robj=%d nodes=%d objs=%d mem=%.1fMB" % [
+			_elapsed, count, Engine.get_frames_per_second(), steps,
+			float(steps) / maxf(float(count), 1.0),
+			p50, p90, p95, p99,
+			sorted[count - 1],
+			float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0,
+			float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0,
+			int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+			int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)),
+			int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+			int(Performance.get_monitor(Performance.OBJECT_COUNT)),
+			float(Performance.get_monitor(Performance.MEMORY_STATIC)) / 1048576.0])

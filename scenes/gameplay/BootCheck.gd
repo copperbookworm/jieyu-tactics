@@ -17,6 +17,7 @@ extends RefCounted
 
 const WeaponTableScript := preload("res://systems/weapons/WeaponTable.gd")
 const VehicleTableScript := preload("res://systems/vehicles/VehicleTable.gd")
+const VehiclePartsScript := preload("res://systems/vehicles/VehicleParts.gd")
 const QuestTableScript := preload("res://systems/quest/QuestTable.gd")
 
 
@@ -24,7 +25,7 @@ const QuestTableScript := preload("res://systems/quest/QuestTable.gd")
 static func missing_tables() -> Array[String]:
 	var missing: Array[String] = []
 	for path in [WeaponTableScript.CSV_PATH, VehicleTableScript.CSV_PATH,
-			QuestTableScript.CSV_PATH]:
+			VehiclePartsScript.CSV_PATH, QuestTableScript.CSV_PATH]:
 		if not FileAccess.file_exists(path):
 			missing.append(String(path))
 	return missing

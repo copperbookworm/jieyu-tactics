@@ -276,6 +276,34 @@ const VEHICLE_AI_RANGE := 900.0          # m，敌方载具发现玩家的距离
 const VEHICLE_AI_INTERVAL_SCALE := 3.0   # 倍，AI 开火间隔 = 炮间隔 × 此值（AI 打得更慢）
 const VEHICLE_AI_AIM_TOLERANCE_DEG := 5.0  # 度，炮口对准到这个容差内才开火
 
+# ────────────── 载具部件系统（docx 8.4 / 第二十八章 · 2026-10-05 拍板）─────────────
+## 部件清单、瞄高三档与判定链见 docx 8.4；本块是它引用的全部数值（唯一出口）。
+## 部件血量与效果都是「待实测」的初值：血量按整车结构值派生，表内留覆盖列（data/vehicle_parts.txt）。
+const VEHICLE_PART_HP_ENGINE := 0.25        # 发动机血量 = 整车结构值 × 此值
+const VEHICLE_PART_HP_AMMO_RACK := 0.20     # 弹药架
+const VEHICLE_PART_HP_FUEL_TANK := 0.15     # 油箱
+const VEHICLE_PART_HP_TURRET_RING := 0.25   # 炮塔环 / 火炮
+const VEHICLE_PART_HP_MOBILITY := 0.15      # 机动件：单侧履带 / 单组轮胎 / 旋翼
+const VEHICLE_PART_HP_ROTOR := 0.20         # 旋翼
+const VEHICLE_PART_HP_TAIL_ROTOR := 0.10    # 尾桨
+## 三态阈值：部件血量 ≤ 最大值的此比例即「受损」，≤0 为「损坏」（8.4.3）
+const VEHICLE_PART_DAMAGED_RATIO := 0.5
+## 部件效果（8.4.1）
+const VEHICLE_ENGINE_DAMAGED_SPEED_SCALE := 0.6       # 发动机受损：速度上限 ×0.6
+const VEHICLE_TRACK_ONE_SPEED_SCALE := 0.7            # 单侧履带损坏
+const VEHICLE_TRACK_ONE_TURN_SCALE := 0.5             # 单侧履带损坏：转向速率
+const VEHICLE_WHEEL_ONE_SPEED_SCALE := 0.85           # 单个轮组损坏（多组按次方叠乘）
+const VEHICLE_TURRET_RING_DAMAGED_ROTATE_SCALE := 0.3 # 炮塔环受损：转速 ×0.3
+const VEHICLE_FIRE_DPS := 20.0                        # 结构值/秒，油箱被击穿后的持续掉血
+const VEHICLE_CREW_REPAIR_SECONDS := 8.0              # 乘员修一件部件的耗时（8.4.1）
+## 方位权重兜底（8.4.6，AI / 间瞄 / 爆炸用；玩家按瞄高档走的是「限定档位后归一化」的同一张表）。
+## "mobility" 是占位键，按车型展开成履带 / 轮胎 / 旋翼；"hull" 表示打到车体本身（＝整车结构值）。
+const VEHICLE_PART_WEIGHTS := {
+	"front": {"turret_ring": 0.35, "hull": 0.45, "ammo_rack": 0.10, "fuel_tank": 0.05, "mobility": 0.05},
+	"side": {"mobility": 0.40, "hull": 0.30, "engine": 0.15, "ammo_rack": 0.10, "fuel_tank": 0.05},
+	"rear": {"engine": 0.40, "hull": 0.25, "fuel_tank": 0.20, "ammo_rack": 0.10, "mobility": 0.05},
+}
+
 # ────────────── 间瞄火力（docx 7.4 闭式解 + 4.11.3 地图选落点 + 4.11.4 侦察兵标记当靶点）─────────────
 ## 第一版解算就用带阻力模型（docx 7.4.2 定标：常数减速度 −30 m/s² 持续 2 s + g_eff 2.8 倍），
 ## 7.4 的无阻力闭式解降级为校验基准（工具与测试用它互校）

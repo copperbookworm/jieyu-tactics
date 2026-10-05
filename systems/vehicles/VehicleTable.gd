@@ -114,3 +114,16 @@ static func side_label(side: String) -> String:
 static func is_penetrated(vehicle: Dictionary, side: String, hit_angle_deg: float,
 		penetration_mm: float) -> bool:
 	return penetration_mm >= effective_armor_mm(vehicle, side, hit_angle_deg)
+
+
+## 取字符串列（mobility 这类枚举列不能用 number()）；空串按缺省处理。
+static func text(vehicle: Dictionary, key: String, fallback: String) -> String:
+	if not vehicle.has(key):
+		return fallback
+	var value := String(vehicle[key]).strip_edges()
+	return fallback if value.is_empty() else value
+
+
+## 机动型式（docx 8.4.1 · 2026-10-05 新增列）：tracked / wheeled / rotary。
+static func mobility(vehicle: Dictionary) -> String:
+	return text(vehicle, "mobility", "tracked")

@@ -14,25 +14,40 @@ const VehicleTable := preload("res://systems/vehicles/VehicleTable.gd")
 ## 表现层特效（候选 M：12.7.3 / 12.7.4）
 const EffectSpawner := preload("res://systems/effects/EffectSpawner.gd")
 const Sfx := preload("res://systems/audio/Sfx.gd")
+## 出生点微调（2026-10-05）：落点要「站得住」—— 见 _spawn_near()
+const SpawnPickerScript := preload("res://systems/terrain/SpawnPicker.gd")
 
 var main = null             # Main（不标类型：Main 无 class_name，用鸭子类型）
 var vehicle = null          # 我方载具
 var enemy_vehicle = null    # 敌方载具（候选 K：AI 驾驶）
 
 
+## 载具落点微调（2026-10-05）：优先用地图出生锚点算出来的点，锚点没建起来（无地图 / 预览模式）时
+## 退回 demo 点；两者都过一遍 SpawnPicker.nudge —— 正式图上偏移点可能正好在陡坡或楼里。
+func _spawn_near(ideal: Vector2, fallback: Vector2) -> Vector2:
+	var anchor: Vector2 = main.spawn_anchor
+	var base := ideal if anchor != Vector2.ZERO else fallback
+	if main.grid == null:
+		return base
+	return SpawnPickerScript.nudge(main.grid, base, SpawnPickerScript.NUDGE_RADIUS,
+			main.map_occluders)
+
+
 func setup(main_node, player, sight, vehicle_id: String) -> void:
 	main = main_node
 	var points := MapGenerator.demo_vehicle_points()
 	# 载具（docx 第八章）：先放一辆在出生点旁边，用来验证「上车 / 开炮 / 装甲挡弹」
+	# 2026-10-05：我方车改挂**出生锚点**（+35 m，与 demo 口径一致）并做一次找平地微调；
+	# 敌方坦克仍走 demo 点（敌方侧位置不在本轮变更范围）但同样微调，免得停在陡坡上。
 	vehicle = VehicleScript.new()
 	vehicle.name = "Vehicle"
-	vehicle.global_position = points[0]
+	vehicle.global_position = _spawn_near(main.spawn_anchor + Vector2(35.0, 0.0), points[0])
 	main.add_child(vehicle)
 	vehicle.setup(vehicle_id, sight)
 	# 敌方载具（候选 K）：坦克 + AI——「敌人也开车」这条验收靠它
 	enemy_vehicle = VehicleScript.new()
 	enemy_vehicle.name = "EnemyVehicle"
-	enemy_vehicle.global_position = points[1]
+	enemy_vehicle.global_position = _spawn_near(points[1], points[1])
 	enemy_vehicle.friendly = false
 	enemy_vehicle.ai_enabled = true
 	main.add_child(enemy_vehicle)

@@ -153,12 +153,24 @@ static func demo_terrain_zones() -> Array:
 	]
 
 
+## 敌人相对出生锚点的偏移（单一来源）：demo 摆位与「地图出生区」两条路都用它，
+## 免得两边各写一份偏移慢慢漂移。45~75 m 是「出生 30 秒就能撞见敌人」的口径。
+const ENEMY_SPAWN_OFFSETS := [Vector2(45.0, -10.0), Vector2(70.0, 30.0)]
+
+
+static func enemy_spawn_offsets() -> Array[Vector2]:
+	var offsets: Array[Vector2] = []
+	for offset in ENEMY_SPAWN_OFFSETS:
+		offsets.append(offset)
+	return offsets
+
+
 static func demo_enemy_points() -> Array[Vector2]:
 	var spawn := demo_spawn_point()
-	return [
-		spawn + Vector2(45.0, -10.0),
-		spawn + Vector2(70.0, 30.0),
-	]
+	var points: Array[Vector2] = []
+	for offset in ENEMY_SPAWN_OFFSETS:
+		points.append(spawn + offset)
+	return points
 
 
 ## 载具出生点：[我方车, 敌方坦克]——Main 建载具与地图预览共用这一处，

@@ -58,6 +58,10 @@ var camera_controller: AimCameraController = null
 var terrain_texture: Texture2D = null
 ## 占领节点（HudBuilder 刷 HUD、TacticalMap / QuestSystem 都要读）
 var capture_zones: Array = []
+## 出生锚点（2026-10-05）：WorldSetup 从地图出生区挑出来的点 —— 玩家 / 友军载具 / 补给车共用
+var spawn_anchor := Vector2.ZERO
+## 地图遮挡体原始条目（同上，只解析一次）：出生点挑选与载具落点微调都要用
+var map_occluders: Array = []
 
 ## 五个子模块（各自持有本节点引用）
 var world = null            # WorldSetup

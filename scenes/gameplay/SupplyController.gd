@@ -37,7 +37,9 @@ func _on_quests_changed(quest_list: Array) -> void:
 func _dispatch(target_position: Vector2) -> void:
 	convoy = SupplyScript.new()
 	convoy.name = "SupplyConvoy"
-	convoy.global_position = MapGenerator.demo_spawn_point()  # 从后方续航区出发
+	# 从后方续航区出发：优先地图出生锚点（2026-10-05），没有地图时退回 demo 出生点
+	var anchor: Vector2 = main.spawn_anchor
+	convoy.global_position = anchor if anchor != Vector2.ZERO else MapGenerator.demo_spawn_point()
 	main.add_child(convoy)
 	convoy.setup(target_position, GameConfig.SUPPLY_SPEED)
 	convoy.arrived.connect(_on_arrived)

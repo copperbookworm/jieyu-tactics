@@ -28,6 +28,8 @@ const VICTORY_FRAMES := 10       # 让 CaptureZone._process 自己翻蓝并广�
 const MapLayerSourceScript := preload("res://ui/MapLayerSource.gd")
 ## 载具表（只读、无 autoload 依赖）：用真实装甲口径验「两发导弹打爆主战坦克」
 const VehicleTableScript := preload("res://systems/vehicles/VehicleTable.gd")
+## 出生点挑选（2026-10-05）：只用来读 NUDGE_RADIUS 这一条常量（判据断言自己实现，不自证）
+const SpawnPickerScript := preload("res://systems/terrain/SpawnPicker.gd")
 
 var _main = null
 var _phase := 0
@@ -180,6 +182,29 @@ func _check_structure() -> void:
 				or (_main.capture_zones[i] as Node2D).global_position.distance_to(map_nodes[i]) > 1.0:
 			zones_on_map = false
 	_check_true("白旗点落在地图 zones.json 的节点坐标上（±1 m，取前 3 个）", zones_on_map)
+	# 出生点也必须来自地图（2026-10-05 · 第六十一版）：地图只给**出生区多边形**，出生点是现挑的。
+	# 判据见 systems/terrain/SpawnPicker.gd：双尺度坡度 ≤30° · 离掩体 ≥5 m · 离最近节点 ≥100 m（逐级放宽）。
+	# 实测本图 west 出生区有 699 个采样点满足 100 m 档，所以这里按顶档断言；换地图若降档，该红——
+	# 那正是「看一眼为什么」的信号，不是把断言放宽。
+	var spawn_polygon := _map_spawn_polygon(GameConfig.MAP_HEIGHT_IMAGE, "west")
+	_check_true("地图给了 west 出生区（多边形 ≥ 3 点）", spawn_polygon.size() >= 3)
+	var spawn: Vector2 = _main.spawn_anchor
+	print("[出生] 锚点 = %s（离最近节点 %.1f m，离最近掩体 %.1f m）"
+			% [str(spawn), _nearest_distance(spawn, map_nodes), _cover_distance(spawn)])
+	_check_true("出生锚点落在 west 出生区多边形内", _point_in_polygon(spawn_polygon, spawn))
+	_check_true("出生锚点不是 demo 出生点（地图接手了）",
+			spawn.distance_to(MapGenerator.demo_spawn_point()) > 5.0)
+	_check_true("出生锚点双尺度坡度合格（≤ %.0f°）" % GameConfig.MAX_SLOPE_DEG, _spawn_slope_ok(spawn))
+	_check_true("出生锚点离最近遮挡体 ≥ 5 m（实测 %.1f m）" % _cover_distance(spawn),
+			_cover_distance(spawn) >= 5.0)
+	_check_true("出生锚点离最近节点 ≥ 100 m（实测 %.1f m）" % _nearest_distance(spawn, map_nodes),
+			_nearest_distance(spawn, map_nodes) >= 100.0)
+	_check_true("玩家出生在出生锚点上", _main.player.global_position.distance_to(spawn) < 1.0)
+	# 我方载具按「锚点 + 35 m」摆，并且同样要站得住（正式图上偏移点可能正好在陡坡 / 楼里）
+	var vehicle_spawn: Vector2 = (_main.get_node("Vehicle") as Node2D).global_position
+	_check_true("我方载具落在出生锚点附近且坡度合格",
+			vehicle_spawn.distance_to(spawn + Vector2(35.0, 0.0)) <= SpawnPickerScript.NUDGE_RADIUS + 1.0
+			and _spawn_slope_ok(vehicle_spawn))
 	# 2026-10-02 订正：这条原来是「敌人 2 个」的等值断言，现在不再成立 ——
 	# 实测 enemy 组是 [Enemy1, Infiltrator1..3]：① 开局 2 名步兵里可能有人被**队友**先击毙；
 	# ② T-S6 的事件驱动穿插兵（Infiltrator*）也会进这个组。所以改成「至少 2 个 + 成员必须是敌兵类」，
@@ -570,6 +595,7 @@ func _check_smoke() -> void:
 	if _main == null or _main.player == null or not is_instance_valid(_main.player):
 		_check_true("候选 P：烟雾端到端（前置：玩家还在场）", false)
 		return
+	_restore_player()   # 前面可能被打倒：倒地的玩家眼高只有 0.6 m，烟线判据会跟着变
 	var enemies := get_nodes_in_group("enemy")
 	_check_true("候选 P：场上有敌人可用来验烟", enemies.size() > 0)
 	if enemies.is_empty():
@@ -587,6 +613,7 @@ func _check_smoke() -> void:
 	_main.player.global_position = to
 	enemy.global_position = from
 	enemy.detection_range = 60.0
+	_reset_sight_caches()   # 传送后就地问 AI：不先清缓存会拿到传送前的结论
 	enemy._update_ai(0.0)
 	var seen_at: Vector2 = _main.player.global_position
 	_check_true("候选 P：投烟前 AI 是正常交火（不是盲射）", not enemy.is_blind_firing())
@@ -633,27 +660,49 @@ func _check_smoke() -> void:
 	_check_true("候选 P ④：烟散后 AI 回到正常交火（不再盲射）", not enemy.is_blind_firing())
 
 
-## 在几个「地形一定平」的锚点周围扫一圈，找一对真有通视的位置（不去赌地形）
+## 在几个「地形一定平」的锚点周围扫一圈，找一对**又通视、又够平**的位置（不去赌地形）
+##
+## 为什么要「够平」这一条（2026-10-05 补）：烟高 3 m、眼高约 2.3 m。如果这一对的
+## 两端高差或中点隆起超过约 1 m，视线会从烟顶掠过 —— 那是几何事实，不是烟失效。
+## 第六十一版把出生点从 demo 摆位换成「地图出生区里挑出的平地」之后，前面几项检查把玩家
+## 带到了河岸上（那儿 12 m 就掉 17 m），于是这条前置条件第一次露馅：三条烟断言连带两条 AI 断言全红。
+## 白旗点核心是生成器**刻意压平**过的，所以「优先玩家位置、再退到节点」的扫法配上平地要求就能找到对的位置。
 func _find_clear_sight_pair(distance: float) -> Array:
-	# 锚点用**本局真实的白旗点**（来自地图 zones.json，地图改了就自动跟着走），
-	# 不再写死 DEMO_NODES —— 正式图上 demo 坐标未必平（实测 demo N2 是 45.8° 的坡）。
 	var anchors: Array = [_main.player.global_position]
 	for zone in _main.capture_zones:
 		anchors.append((zone as Node2D).global_position)
 	for anchor in anchors:
-		for i in 16:
-			var angle := TAU * float(i) / 16.0
+		for i in 32:
+			var angle := TAU * float(i) / 32.0
 			var offset := Vector2(cos(angle), sin(angle)) * distance * 0.5
 			var from: Vector2 = anchor + offset
 			var to: Vector2 = anchor - offset
-			if _sight_clear(from, to):
-				return [from, to]
+			if not _sight_clear(from, to):
+				continue
+			# 只查两端 + 中点是不够的：地形可以在两点之间鼓起来，把卧姿玩家的视线顶掉
+			# （2026-10-05 实测：两端差 0.6 m、中点也只差 0.6 m，但 20% 处就隆起 2 m 多）。
+			var high_from: float = _main.grid.height_at_world(from)
+			var high_to: float = _main.grid.height_at_world(to)
+			var flat := true
+			for k in range(1, 5):
+				var ratio := float(k) / 5.0
+				var line_height := lerpf(high_from, high_to, ratio)
+				if absf(_main.grid.height_at_world(from.lerp(to, ratio)) - line_height) > 1.0:
+					flat = false
+					break
+			if not flat:
+				continue
+			return [from, to]
 	return []
 
 
+## 这条视线在**游戏里**到底通不通 —— 口径与 Enemy._can_see_player() 一致：
+## 起点用敌方的眼高（eye_height_at），目标用**玩家姿态相关**的高度（unit_sight_height ⇒ 卧姿 0.6 m）。
+## 为什么必须一致（2026-10-05 踩到）：玩家卧姿时目标高度降到 0.6 m，用固定 2.34 m 眼高算出来的
+## 「通视」会让测试以为 AI 该看得见，而 AI 其实被地形凸起挡住了 —— 三条烟 / AI 断言因此假红。
 func _sight_clear(from: Vector2, to: Vector2) -> bool:
 	return _main.sight.has_sight(from, _main.sight.eye_height_at(from),
-			to, _main.sight.eye_height_at(to))
+			to, _main.sight.unit_sight_height(to, _main.player))
 
 
 # ────────────── 候选 O 第一轮：战斗播报（4.14）+ 操作提示（4.15）──────────────
@@ -769,6 +818,21 @@ func _neutralize_enemy_fire() -> void:
 	for enemy in get_nodes_in_group("enemy"):
 		enemy.fire_damage = 0.0
 	_restore_player()
+
+
+## 传送任何单位之后必须清掉感知节流缓存（2026-10-05）：
+## SightSystem.Throttle 每 SIGHT_THROTTLE_FRAMES（4）个物理帧才真查一次地形 + 掩体层，
+## 而测试是「同一物理帧里传送 + 立刻问 AI 看不看得见」—— 不清就会拿到**传送前**的结论。
+## 产品里这是设计内的有界陈旧（≤4 帧 ≈ 66 ms，单位是连续移动的），只有瞬移的测试要自己负责清。
+func _reset_sight_caches() -> void:
+	for node in get_nodes_in_group("enemy"):
+		var throttle: Variant = node.get("_sight_throttle")
+		if throttle != null:
+			throttle.reset()
+	if _main != null and _main.vehicles != null and _main.vehicles.enemy_vehicle != null:
+		var tank_throttle: Variant = _main.vehicles.enemy_vehicle.get("_sight_throttle")
+		if tank_throttle != null:
+			tank_throttle.reset()
 
 
 func _restore_player() -> void:
@@ -948,7 +1012,18 @@ func _check_downed_not_targeted() -> void:
 		return
 	var enemy = enemies[0]
 	_restore_player()
-	_main.player.global_position = enemy.global_position + Vector2(12.0, 0.0)   # 站到敌人眼前
+	# 站到敌人眼前（2026-10-05）：不再写死「东边 12 m」—— 那条线可能正好被地形 / 河岸切掉。
+	# 8 个方向里挑第一个**真有通视**的（口径同 AI），挑不到才退回东边。
+	var enemy_pos: Vector2 = enemy.global_position
+	var chosen := Vector2(12.0, 0.0)
+	for i in 8:
+		var angle := TAU * float(i) / 8.0
+		var candidate: Vector2 = enemy_pos + Vector2(cos(angle), sin(angle)) * 12.0
+		if _sight_clear(enemy_pos, candidate):
+			chosen = candidate - enemy_pos
+			break
+	_main.player.global_position = enemy_pos + chosen
+	_reset_sight_caches()   # 同上：玩家刚被瞬移，敌方的感知缓存必须清
 	enemy._update_ai(0.05)
 	var engaged: bool = int(enemy._state) == 1        # AIState.COMBAT
 	# 再倒地：**仍然**是交战态 —— 这是「倒地可被补刀」（使用者 2026-10-02 拍板）的前提
@@ -1394,6 +1469,93 @@ func _count_map_occluders(height_image_path: String) -> int:
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	file.close()
 	return (parsed as Array).size() if parsed is Array else 0
+
+
+## 地图 zones.json 的出生区多边形（side = "west" / "east"），返回 Vector2 数组
+func _map_spawn_polygon(height_image_path: String, side: String) -> Array:
+	var zones := _map_zones(height_image_path)
+	for area_v in zones.get("spawn_areas", []):
+		if area_v is Dictionary and String((area_v as Dictionary).get("side", "")) == side:
+			var result: Array = []
+			for raw in (area_v as Dictionary).get("polygon", []):
+				result.append(Vector2(float(raw[0]), float(raw[1])))
+			return result
+	return []
+
+
+## 地图 zones.json 解析结果（读不到返回空字典）
+func _map_zones(height_image_path: String) -> Dictionary:
+	var map_id := height_image_path.get_base_dir().get_file()
+	var path := "res://assets/maps/%s/zones.json" % map_id
+	if map_id.is_empty() or not FileAccess.file_exists(path):
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	return parsed if parsed is Dictionary else {}
+
+
+## 下面的出生点断言刻意自己实现（不用 SpawnPicker 的方法自证自己）：
+## 射线法内外判定 · 双尺度坡度 · 点与遮挡体矩形的距离。
+func _point_in_polygon(polygon: Array, point: Vector2) -> bool:
+	var inside := false
+	var count := polygon.size()
+	var j := count - 1
+	for i in count:
+		var a: Vector2 = polygon[i]
+		var b: Vector2 = polygon[j]
+		if ((a.y > point.y) != (b.y > point.y)) \
+				and point.x < (b.x - a.x) * (point.y - a.y) / maxf(b.y - a.y, 0.00001) + a.x:
+			inside = not inside
+		j = i
+	return inside
+
+
+func _spawn_slope_ok(point: Vector2) -> bool:
+	for step in [8, 4]:
+		var here: Vector2i = _main.grid.world_to_cell(point)
+		var lateral: Vector2i = _main.grid.world_to_cell(point + Vector2(float(step), 0.0))
+		var down: Vector2i = _main.grid.world_to_cell(point + Vector2(0.0, float(step)))
+		if maxf(_main.grid.slope_deg(here, lateral), _main.grid.slope_deg(here, down)) \
+				> GameConfig.MAX_SLOPE_DEG:
+			return false
+	return true
+
+
+func _cover_distance(point: Vector2) -> float:
+	var best := 99.0
+	for entry in _main.map_occluders:
+		var polygon: Array = (entry as Dictionary).get("polygon", [])
+		if polygon.size() < 3:
+			continue
+		best = minf(best, _rect_distance(polygon, point))
+	return best
+
+
+func _rect_distance(polygon: Array, point: Vector2) -> float:
+	var min_x := INF
+	var max_x := -INF
+	var min_y := INF
+	var max_y := -INF
+	for raw in polygon:
+		min_x = minf(min_x, float(raw[0]))
+		max_x = maxf(max_x, float(raw[0]))
+		min_y = minf(min_y, float(raw[1]))
+		max_y = maxf(max_y, float(raw[1]))
+	if point.x >= min_x and point.x <= max_x and point.y >= min_y and point.y <= max_y:
+		return 0.0
+	var dx := maxf(maxf(min_x - point.x, 0.0), point.x - max_x)
+	var dy := maxf(maxf(min_y - point.y, 0.0), point.y - max_y)
+	return sqrt(dx * dx + dy * dy)
+
+
+func _nearest_distance(point: Vector2, points: Array) -> float:
+	var best := 9999.0
+	for other in points:
+		best = minf(best, point.distance_to(other))
+	return best
 
 
 ## 地图 zones.json 的 raas_nodes 坐标（按推进链顺序）

@@ -23,6 +23,8 @@ const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
 const OrganizationScript := preload("res://systems/match/Organization.gd")
 ## 编成命令层（docx 4.10.8）：主线下发给小队长、小队长按模板派发小队内子任务
 const SquadOrdersScript := preload("res://systems/match/SquadOrders.gd")
+## 出生点挑选（2026-10-05）：从地图出生区里现挑一个「站得住」的点（纯逻辑，可单测）
+const SpawnPickerScript := preload("res://systems/terrain/SpawnPicker.gd")
 
 var terrain_sprite: Sprite2D = null
 ## 本局友好方编成（组 / 小队 / 队长）—— 由 _spawn_allies 建好后写回，供 HUD / 任务链读
@@ -45,6 +47,10 @@ func setup(main, height_image_path: String, map_seed: int, enemy_count: int) -> 
 	if main.map_preview_mode:
 		_build_map_preview(main)
 		return
+	# 地图数据只解析一次：出生点挑选 / 掩体 / 载具落点共用同一份（occluders.json 有 60 KB+）
+	main.map_occluders = _load_occluders(main)
+	# 出生锚点（2026-10-05）：读地图出生区现挑一个站得住的点，玩家 / 友军载具 / 补给车共用
+	main.spawn_anchor = _spawn_anchor(main)
 	_build_player(main)
 	main.player.apply_role(main.player_role)  # 兵种（3.1）：弹匣 / 备弹 / 伤害倍率
 	main.player.sight = main.sight            # 子弹挡掩体（与通视同一套高度口径）
@@ -128,7 +134,8 @@ func _build_map_preview(main) -> void:
 func _build_player(main) -> void:
 	main.player = PlayerUnit.new()
 	main.player.name = "Player"
-	main.player.global_position = MapGenerator.demo_spawn_point()
+	# 出生点来自地图出生区（挑不出时才由 _spawn_anchor 退回 demo_spawn_point）—— 见该函数注释
+	main.player.global_position = main.spawn_anchor
 	main.player.respawn_point = main.player.global_position   # 候选 Q：重生回这个点
 	main.add_child(main.player)
 
@@ -199,7 +206,7 @@ func _spawn_allies(main, count: int) -> void:
 ## 通视 DDA 与命中判定都变成近似零距离的退化情况）。
 ## 前 points.size() 个与旧实现逐字一致（位置、命名都不变）⇒ 默认 2 敌的场景回归面为零。
 func _spawn_enemies(main, enemy_count: int) -> void:
-	var points := MapGenerator.demo_enemy_points()
+	var points := _enemy_spawn_points(main)
 	if points.is_empty():
 		return
 	spawned_enemy_count = enemy_count
@@ -209,6 +216,56 @@ func _spawn_enemies(main, enemy_count: int) -> void:
 		enemy.global_position = _enemy_spawn_position(points, index)
 		enemy.setup(main.sight, main.player, main.camera, main.grid)
 		main.add_child(enemy)
+
+
+## 敌人出生点（2026-10-05）：出生锚点 + 相对偏移（保住第一版「出生 30 秒就能撞见敌人」的体验），
+## 每个点再做一次「原地找平地」微调 —— 正式图上偏移点可能正好落在陡坡或楼里。
+## 「敌人要不要按 RAAS 节点分布」是玩法改动，已登记待拍板，不在这里替使用者决定。
+func _enemy_spawn_points(main) -> Array:
+	var anchor: Vector2 = main.spawn_anchor
+	if anchor == Vector2.ZERO:
+		return MapGenerator.demo_enemy_points()
+	var points: Array = []
+	for offset in MapGenerator.enemy_spawn_offsets():
+		points.append(SpawnPickerScript.nudge(main.grid, anchor + offset,
+				SpawnPickerScript.NUDGE_RADIUS, main.map_occluders))
+	return points
+
+
+## 出生锚点（2026-10-05）：从地图 spawn_areas（west）里现挑一个「站得住」的点。
+## 为什么不取质心：实测正式图 west 出生区的质心是 60.5° 的坡（demo 出生点也有 45.8°）——
+## 地图生成器只压平节点核心、**不压平出生区**，所以出生点必须现挑（判据见 SpawnPicker.gd）。
+## 挑不出（没地图 / 没 spawn_areas / 全区都陡）就退回 demo_spawn_point()。
+func _spawn_anchor(main) -> Vector2:
+	var zones := _load_map_zones(main)
+	var polygon: Array = []
+	for area_v in zones.get("spawn_areas", []):
+		if not (area_v is Dictionary):
+			continue
+		var area: Dictionary = area_v
+		if String(area.get("side", "")) == "west":
+			polygon = area.get("polygon", [])
+			break
+	if polygon.size() < 3:
+		print("[地图] 没有 west spawn_areas → 出生点退回 demo 摆位")
+		return MapGenerator.demo_spawn_point()
+	var picked := SpawnPickerScript.pick(main.grid, polygon, _zone_node_positions(zones),
+			main.map_occluders)
+	if picked == Vector2.INF:
+		push_warning("[地图] west 出生区里挑不出可用点（全区陡 / 全被掩体压住）→ 退回 demo 出生点")
+		return MapGenerator.demo_spawn_point()
+	print("[地图] 出生点取自 west 出生区：%s（双尺度坡度 ≤ %.0f°，离最近节点 ≥ %.0f m）"
+			% [str(picked), GameConfig.MAX_SLOPE_DEG, SpawnPickerScript.NODE_DIST_TIERS[0]])
+	return picked
+
+
+## zones.json 里的 raas_nodes 坐标（出生点挑选要避开占领点 —— 12.8.4：续航区在点外 100~200 m）
+func _zone_node_positions(zones: Dictionary) -> Array:
+	var positions: Array = []
+	for node_v in zones.get("raas_nodes", []):
+		if node_v is Dictionary:
+			positions.append(JieyuMapGen.vec2((node_v as Dictionary).get("pos", [0, 0])))
+	return positions
 
 
 ## 第 index 个敌人的出生点：前 N 个用 demo 点（与旧实现一致），之后循环复用 + 圆周散开
@@ -232,7 +289,7 @@ static func _enemy_spawn_position(points: Array, index: int) -> Vector2:
 ##    2026-10-04 第五十九版起**默认地图就是正式图**，所以正常开局走的是 ①，掩体数量以地图数据为准
 ##    （集成冒烟不再写死「20 个沙袋」，改成数地图 occluders.json 的条目数）。
 func _build_covers(main) -> void:
-	var entries := _load_occluders(main)
+	var entries: Array = main.map_occluders
 	if entries.is_empty():
 		var points := MapGenerator.demo_cover_points()
 		for i in points.size():

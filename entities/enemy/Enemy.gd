@@ -67,6 +67,10 @@ var _hit_flash_left := 0.0
 var _flash_drawn := false
 var _sight: SightSystem = null
 var _player: Node2D = null
+## 当前交战目标（2026-10-05 第六十五版 · 使用者拍板 **B**）：玩家与队友**同权**，取最近的可见目标。
+## 为什么必须有滞回（_repick_left）：逐帧重挑会在玩家与队友之间抖动，一枪都打不出去。
+var _target: Node2D = null
+var _repick_left := 0.0
 var _camera: Camera2D = null
 var _grid: HeightGrid = null
 var _visibility_timer := 0.0
@@ -202,9 +206,10 @@ func _update_ai(delta: float) -> void:
 	if not ai_enabled:
 		velocity = Vector2.ZERO
 		return
-	# 🧪 补刀开关：关掉时不再把倒地目标当靶子（步兵退回巡逻）—— 使用者 2026-10-02 的测试态
-	if not GameConfig.ENEMY_FINISH_OFF_ENABLED and _player != null \
-			and _player.has_method("is_incapacitated") and _player.is_incapacitated():
+	# 🧪 补刀开关：关掉时不再把**已倒地**的目标当靶子（步兵退回巡逻）—— 使用者 2026-10-02 的测试态。
+	# ⚠ 必须带「目标不为 null」这个前提：否则「没有目标」也会走进这条分支，敌人永远巡逻（改 B 时踩过）
+	if not GameConfig.ENEMY_FINISH_OFF_ENABLED and _target != null \
+			and _is_incapacitated_target(_target):
 		_state = AIState.PATROL
 		_move_patrol()
 		return
@@ -218,19 +223,43 @@ func _update_ai(delta: float) -> void:
 	if _player == null or _grid == null:
 		return
 	_last_known_age += delta
-	var to_player := _player.global_position - global_position
-	var distance := to_player.length()
-	var sees_player := _can_see_player()
-	if sees_player:
-		_last_known = _player.global_position
+	# 换目标（拍板 B）：目标没了 / 看不见了 / 到点重挑时才重新选，避免逐帧抖动
+	_repick_left -= delta
+	# ⚠ 重挑必须**先过间隔闸门**（2026-10-05 第六十五版实测）：最初的写法是「看不见就立刻重挑」，
+	# 于是一帧里对最多 3 个候选各查一次 DDA，而节流器是单槽的 —— 20 敌同场时整帧墙钟
+	# 从 6.19 ms 涨到 44.95 ms（7×）。现在只做**便宜**的判定（引用 / 生死 / 距离），
+	# 贵的通视检查交给 0.3 s 一次的 _pick_target。
+	# 只有「**原本有目标**、而它失效 / 跑出探测距离」才允许绕过节流间隔；
+	# 「本来就没目标」必须老实等间隔 —— 否则十几个没仗打的敌人会每帧各扫 3 个候选，
+	# 又是 8 ms/帧 量级（第六十五版第二次实测：40.66 ms 仍然偏高，就是这条没堵住）
+	var need_pick := _repick_left <= 0.0
+	if not need_pick and _target != null:
+		if not _targetable(_target) \
+				or global_position.distance_to(_target.global_position) > effective_detection_range():
+			need_pick = true
+	if _target == null:
+		need_pick = _repick_left <= 0.0
+	if need_pick:
+		var picked := _pick_target()
+		if picked != _target:
+			_sight_throttle.reset()   # 节流器是单槽的：换了目标必须清，否则拿的是上一个目标的结论
+			_target = picked
+		_repick_left = TARGET_REPICK_INTERVAL
+	var distance := INF
+	var sees_target := false
+	if _target != null and is_instance_valid(_target):
+		distance = global_position.distance_to(_target.global_position)
+		sees_target = _can_see(_target)
+	if sees_target:
+		_last_known = _target.global_position
 		_has_last_known = true
 		_last_known_age = 0.0
-	if sees_player and distance <= effective_detection_range():
+	if sees_target and distance <= effective_detection_range():
 		_state = AIState.COMBAT
 		velocity = Vector2.ZERO
-		_try_fire(delta, _player.global_position, false)
-	elif distance <= effective_detection_range() and _blind_fire_ready() \
-			and _smoke_blocks_player():
+		_try_fire(delta, _target.global_position, false)
+	elif _target != null and distance <= effective_detection_range() and _blind_fire_ready() \
+			and _smoke_blocks_target():
 		# 4.12.5：无通视即无目标，但可以朝最后已知位置盲射（命中率 −70%）
 		_state = AIState.BLIND_FIRE
 		velocity = Vector2.ZERO
@@ -241,8 +270,8 @@ func _update_ai(delta: float) -> void:
 	# 12.7.1：上半身（Upper）朝目标 —— 交火 / 盲射时朝目标方向，巡逻时朝移动方向
 	if _visual != null:
 		var look := Vector2.ZERO
-		if sees_player:
-			look = _player.global_position - global_position
+		if sees_target:
+			look = _target.global_position - global_position
 		elif _state == AIState.BLIND_FIRE:
 			look = _last_known - global_position
 		elif velocity.length() > 0.05:
@@ -253,10 +282,91 @@ func _update_ai(delta: float) -> void:
 
 ## 4.17 草丛隐蔽：玩家在草丛里（卧姿更隐蔽）时，被发现的距离按隐蔽度打折。
 ## 注意这是「发现距离」，不是通视——通视仍走 _can_see_player（地形 / 掩体 / 烟三层）。
+## 重挑目标的间隔（s）：逐帧重挑会在玩家与队友之间抖动；0.3 s 也顺便把「对多候选逐个查通视」
+## 的成本压到可接受（每个候选一次 DDA ~190 µs，而节流器是单槽的、没法一次缓存多个候选）
+const TARGET_REPICK_INTERVAL := 0.3
+## 每次重挑最多对几个候选做**贵**的通视检查（按距离从近到远），防止队友扎堆时一帧查二十次
+const TARGET_SCAN_MAX := 3
+
+
+## 拍板 B：挑交战目标 —— 当前目标仍可见就继续打，否则在「玩家 + friendly 组」里挑**最近**的可见目标。
+## 玩家**没有**额外权重：使用者选的是 B（同权），不是 C（折中）—— 要加权得先改这条注释与测试。
+func _pick_target() -> Node2D:
+	# 滞回：**只因为烟**看不见不算换目标的理由 —— 4.12.5 要求「无通视即无目标，但朝最后已知位置盲射」。
+	# 若这里也换人，敌人会转头打旁边看得见的队友，盲射契约直接失效（改 B 时踩过，集成冒烟当场两条红）。
+	if _targetable(_target) and global_position.distance_to(_target.global_position) \
+			<= effective_detection_range() \
+			and (_can_see(_target) or _smoke_blocks_target()):
+		return _target
+	var candidates: Array = []
+	for node in _target_candidates():
+		var distance := global_position.distance_to(node.global_position)
+		if distance <= effective_detection_range():
+			candidates.append({"node": node, "distance": distance})
+	candidates.sort_custom(func(a, b): return float(a["distance"]) < float(b["distance"]))
+	var scanned := 0
+	for entry in candidates:
+		if scanned >= TARGET_SCAN_MAX:
+			break
+		if not _targetable(entry["node"]):
+			continue
+		scanned += 1
+		if _can_see(entry["node"]):
+			return entry["node"]
+	return null
+
+
+## 候选目标：玩家 + friendly 组（玩家可能也在 friendly 组里，去重）
+func _target_candidates() -> Array:
+	var out: Array = []
+	if _player != null and is_instance_valid(_player):
+		out.append(_player)
+	var tree := get_tree()
+	if tree == null:
+		return out
+	for node in tree.get_nodes_in_group("friendly"):
+		if node == _player or not (node is Node2D):
+			continue
+		if out.has(node):
+			continue
+		out.append(node)
+	return out
+
+
+## 目标已经「没了」：无效引用或已阵亡（真死，不是倒地）—— 任何情况下都不该再打
+func _is_target_gone(node) -> bool:
+	if node == null or not is_instance_valid(node):
+		return true
+	if node.get("alive") != null and not bool(node.alive):
+		return true
+	return false
+
+
+## 目标倒地（4.16，未必阵亡）：补刀开关关掉时不算可打目标（🧪 使用者 2026-10-02 的测试态）
+func _is_incapacitated_target(node) -> bool:
+	if _is_target_gone(node):
+		return false
+	if node.get("downed") != null and bool(node.downed):
+		return true
+	if node.has_method("is_incapacitated"):
+		return bool(node.is_incapacitated())
+	return false
+
+
+## 能不能打它（拍板 B：玩家与队友同一套判据）
+func _targetable(node) -> bool:
+	if _is_target_gone(node):
+		return false
+	if not GameConfig.ENEMY_FINISH_OFF_ENABLED and _is_incapacitated_target(node):
+		return false
+	return true
+
+
 func effective_detection_range() -> float:
 	var concealment := 0.0
-	if _player != null and _player.has_method("terrain_concealment"):
-		concealment = clampf(float(_player.terrain_concealment()), 0.0,
+	var subject = _target if _target != null else _player
+	if subject != null and subject.has_method("terrain_concealment"):
+		concealment = clampf(float(subject.terrain_concealment()), 0.0,
 				GameConfig.TERRAIN_CONCEAL_MAX)
 	return detection_range * (1.0 - concealment)
 
@@ -267,11 +377,11 @@ func _blind_fire_ready() -> bool:
 
 
 ## 玩家是否被烟挡住（只问烟这一层：地形 / 掩体挡住时 AI 照旧巡逻，不进盲射）
-func _smoke_blocks_player() -> bool:
-	if _sight == null or _player == null or _sight.grid == null:
+func _smoke_blocks_target() -> bool:
+	if _sight == null or _target == null or _sight.grid == null:
 		return false
 	return _sight.smoke_blocks(global_position, _sight.eye_height_at(global_position),
-			_player.global_position, _target_sight_height())
+			_target.global_position, _sight.unit_sight_height(_target.global_position, _target))
 
 
 ## 当前是否在盲射（表现 / 集成冒烟读它）
@@ -295,26 +405,26 @@ var _sight_throttle := SightSystem.Throttle.new()
 ## 「无通视 → 转入盲射」（docx 4.12.5）的状态转换被推迟最多 SIGHT_THROTTLE_FRAMES 帧，
 ## 集成冒烟的三条断言当场变红。行为契约优先于这点开销 ⇒ 敌人保持逐帧查；
 ## 省下来的靠队友「目标重挑节流」（Ally._pick_timer）与载具节流（Vehicle._sight_throttle）。
-func _can_see_player() -> bool:
-	if _sight == null or _player == null or _sight.grid == null:
+## 目标是否可见（拍板 B 之后 target 可能是玩家，也可能是队友 —— 口径同一套）
+func _can_see(node) -> bool:
+	if _sight == null or node == null or not is_instance_valid(node) or _sight.grid == null:
 		return false
 	# 通视统一用眼高（1.6），与玩家准心钳制一致——否则敌人(身体0.9)和玩家准心(眼1.6)
 	# 口径不同，会在起伏地形产生「敌能打我、我瞄不到敌」的单向通视。
 	var origin_height := _sight.eye_height_at(global_position)
-	# 玩家卧姿时目标高度降到 0.6 m（C2 矮掩体）：卧下更容易被地形与沙袋挡住
+	# 目标卧姿时高度降到 0.6 m（C2 矮掩体）：卧下更容易被地形与沙袋挡住
 	# 顺序：先查便宜的烟雾层（4.12.5 的状态转换靠它，必须新鲜），再查被节流的地形 + 掩体层。
 	# has_sight = 地形 ∧ 掩体 ∧ ¬烟雾，两项合起来与原来的一次 has_sight 结果一致。
-	var target_height := _target_sight_height()
-	if _sight.smoke_blocks(global_position, origin_height,
-			_player.global_position, target_height):
+	var target_height := _sight.unit_sight_height(node.global_position, node)
+	if _sight.smoke_blocks(global_position, origin_height, node.global_position, target_height):
 		return false
 	return _sight_throttle.core(_sight, Engine.get_physics_frames(),
-			global_position, origin_height, _player.global_position, target_height)
+			global_position, origin_height, node.global_position, target_height)
 
 
-## 视线目标高度：直接走 SightSystem 的统一口径（卧姿 0.6 m 矮掩体）
-func _target_sight_height() -> float:
-	return _sight.unit_sight_height(_player.global_position, _player)
+## 兼容旧调用（测试 / 表现层读它）：等价于「玩家是否可见」
+func _can_see_player() -> bool:
+	return _can_see(_player)
 
 
 ## 交火：朝 aim_at（玩家实际位置，或盲射时的最后已知位置）方向弹道结算，
@@ -342,13 +452,14 @@ func _try_fire(delta: float, aim_at: Vector2, blind: bool = false) -> void:
 	if spread_deg > 0.001:
 		direction = direction.rotated(deg_to_rad(randf_range(-spread_deg, spread_deg)))
 	# 玩家姿态决定命中面积（C2：站/蹲/卧 = 1.0 / 0.7 / 0.5）——卧姿更难被打中
+	if _target == null or not is_instance_valid(_target):
+		return
 	var hit_radius := GameConfig.ENEMY_HIT_RADIUS
-	var target_unit := _player as PlayerUnit
-	if target_unit != null:
-		# 4.17：贴掩体不聚焦＝缩在掩体后，命中面积再打折；探头（聚焦）＝暴露回满
-		hit_radius *= target_unit.hit_radius_scale() * target_unit.exposure_scale()
+	# 拍板 B 之后目标可能是队友：只有玩家有姿态 / 贴掩体的命中面积系数，队友用基础半径
+	if _target.has_method("hit_radius_scale"):
+		hit_radius *= float(_target.hit_radius_scale()) * float(_target.exposure_scale())
 	var result := BallisticsSystem.resolve_shot(
-			global_position, direction, GameConfig.WEAPON_MAX_RANGE, [_player], hit_radius,
+			global_position, direction, GameConfig.WEAPON_MAX_RANGE, [_target], hit_radius,
 			_sight, GameConfig.SOLDIER_EYE_HEIGHT, structure_damage)
 	var tracer := Tracer.new()
 	tracer.setup(global_position, direction, result["distance"])
@@ -376,10 +487,12 @@ func _try_fire(delta: float, aim_at: Vector2, blind: bool = false) -> void:
 		if blind and not SmokeScreenScript.keeps_blind_hit(randf()):
 			result["hit"] = false
 		else:
-			var target := result["target"] as PlayerUnit
-			if target != null:
+			# 拍板 B：伤害按 duck-typing 落到**任何**目标身上（玩家与队友各有一套 take_damage）
+			var target = result["target"]
+			if target != null and target.has_method("take_damage"):
 				target.take_damage(fire_damage * GameConfig.ENEMY_DAMAGE_SCALE)
-				target.add_suppression(GameConfig.SUPPRESSION_HIT_BONUS)
+				if target.has_method("add_suppression"):
+					target.add_suppression(GameConfig.SUPPRESSION_HIT_BONUS)
 				return
 	# 未命中：看弹道离玩家多近——够近才算压制（docx 7.3「弹药从身边飞过」）
 	_suppress_near_miss(direction)
@@ -387,8 +500,9 @@ func _try_fire(delta: float, aim_at: Vector2, blind: bool = false) -> void:
 
 ## 近失压制：弹道到玩家的最近距离决定积累量，越贴近压得越狠
 func _suppress_near_miss(direction: Vector2) -> void:
-	var target := _player as PlayerUnit
-	if target == null:
+	# 只有玩家有压制系统（队友没有）：目标是队友时直接跳过近失压制
+	var target = _target
+	if target == null or not target.has_method("add_suppression"):
 		return
 	var factor := SuppressionSystem.near_miss_factor(global_position, direction,
 			target.global_position)

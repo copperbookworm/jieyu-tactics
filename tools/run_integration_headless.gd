@@ -205,6 +205,55 @@ func _check_structure() -> void:
 		for node in infantry:
 			node.set_move_target((node as Node2D).global_position)   # 还原：回自己脚下巡逻
 		(world.reserve_enemies as Array).clear()
+	# 拍板 B（2026-10-05 · 第六十五版）：敌人不再「只锁玩家」—— 玩家挪远、敌人贴到队友面前时应改打队友，
+	# 而且伤害要真的落到队友身上（队友 200 血、有自己的 take_damage）。
+	var allies_alive: Array = []
+	for node in get_nodes_in_group("friendly"):
+		# 必须排除倒地 / 已阵亡：Ally.take_damage 对倒地目标走 die()、**不动血量**，
+		# 拿一个倒地队友来验「会掉血」必然假红（实测踩过）
+		if String(node.name).begins_with("Ally") and float(node.hp) > 0.0 \
+				and bool(node.alive) and not bool(node.downed):
+			allies_alive.append(node)
+	if not allies_alive.is_empty() and not infantry.is_empty():
+		var ally = allies_alive[0]
+		var attacker = infantry[0]
+		var player_home: Vector2 = _main.player.global_position
+		ally.order_active = false
+		# 摆到**出生垫**上再验伤害：那块是第六十一/六十二版保证「平地 + 5 m 内无掩体」的地方，
+		# 队友站在楼里时八条射线全被掩体截断（第一版就是这么假红的）
+		var pad: Vector2 = _main.spawn_anchor
+		(ally as Node2D).global_position = pad + Vector2(0.0, 8.0)
+		attacker.global_position = pad + Vector2(5.0, 8.0)
+		attacker.set_move_target(attacker.global_position)
+		_main.player.global_position = Vector2(950.0, 950.0)   # 玩家挪到地图另一角
+		_reset_sight_caches()
+		_tick_ai(attacker, 0.7)   # 推过 0.3 s 的重挑闸门
+		_check("拍板 B：敌人挑最近的队友当目标（不再只锁玩家）", attacker._target, ally)
+		var ally_hp_before: float = float(ally.hp)
+		# 试 8 个方向：正上方 / 正下方可能被掩体截断，也可能残留压制让敌人「不敢露头」
+		# ⚠ 前面为「避免敌人真把玩家打死」把所有敌人的 fire_damage 设成了 0（见本文件那条说明），
+		# 所以要验「队友会掉血」必须临时恢复 —— 否则测出来的是「0 伤害当然不掉血」
+		var damage_home: float = float(attacker.fire_damage)
+		attacker.fire_damage = 20.0
+		for attempt in 8:
+			var around := TAU * float(attempt) / 8.0
+			attacker.global_position = (ally as Node2D).global_position \
+					+ Vector2(cos(around), sin(around)) * 5.0
+			attacker._fire_cooldown = 0.0
+			attacker._hold_fire_time = 0.0
+			attacker.suppression = 0.0
+			attacker._try_fire(0.0, (ally as Node2D).global_position, false)
+			if float(ally.hp) < ally_hp_before:
+				break
+		_check_true("拍板 B：队友真的会掉血（%.0f → %.0f，alive=%s downed=%s hp=%.0f）"
+				% [ally_hp_before, float(ally.hp), str(ally.alive), str(ally.downed), float(ally.hp)],
+				float(ally.hp) < ally_hp_before)
+		# 粘滞：目标仍可见时不许逐帧换人（否则一枪都打不出去）
+		_tick_ai(attacker, 0.4)
+		_check("拍板 B：目标粘滞 —— 再推 0.4 s 仍锁同一个队友", attacker._target, ally)
+		attacker.fire_damage = damage_home
+		_main.player.global_position = player_home
+		_reset_sight_caches()
 	# 白旗点也必须来自地图的推进链（zones.json）—— 实测：地图 N2 与 demo N2 差 44.7 m，
 	# 而 demo N2 在正式图上是 45.8° 的坡、核心圈里还压着一栋房子。
 	var map_nodes := _map_node_positions(GameConfig.MAP_HEIGHT_IMAGE)
@@ -649,7 +698,7 @@ func _check_smoke() -> void:
 	enemy.global_position = from
 	enemy.detection_range = 60.0
 	_reset_sight_caches()   # 传送后就地问 AI：不先清缓存会拿到传送前的结论
-	enemy._update_ai(0.0)
+	_tick_ai(enemy, 0.5)
 	var seen_at: Vector2 = _main.player.global_position
 	_check_true("候选 P：投烟前 AI 是正常交火（不是盲射）", not enemy.is_blind_firing())
 
@@ -672,10 +721,11 @@ func _check_smoke() -> void:
 			_main.marks.marks.size(), marks_before_crosshair)
 
 	# 无通视 → 盲射，且瞄的是「最后已知位置」而不是实时位置（4.11.2 红线）
-	enemy._update_ai(0.0)
+	# 拍板 B 之后重挑是 0.3 s 节流的 ⇒ 必须推进时间，单次 _update_ai(0.0) 推不动
+	_tick_ai(enemy, 0.5)
 	_check_true("候选 P ②：无通视时 AI 转入盲射（4.12.5）", enemy.is_blind_firing())
 	_main.player.global_position = to + Vector2(0.0, 15.0)   # 玩家挪窝：AI 不该跟着转
-	enemy._update_ai(0.0)
+	_tick_ai(enemy, 0.1)
 	_check("候选 P ②：盲射瞄的是最后已知位置，不是玩家实时位置",
 			enemy.blind_aim_target(), seen_at)
 	var shots_before: int = enemy.blind_shots
@@ -691,7 +741,7 @@ func _check_smoke() -> void:
 	smoke._process(0.02)
 	_main.player.global_position = to
 	_check_true("候选 P ④：烟散后同一条视线恢复（4.12.3）", _sight_clear(from, to))
-	enemy._update_ai(0.0)
+	_tick_ai(enemy, 0.5)
 	_check_true("候选 P ④：烟散后 AI 回到正常交火（不再盲射）", not enemy.is_blind_firing())
 
 
@@ -872,6 +922,17 @@ func _clear_zone_of_enemies() -> void:
 			if zone != null and zone.is_inside(enemy.global_position):
 				enemy.global_position = Vector2(30.0, 30.0)   # 地图西北角：离五个节点都 ≥ 400 m
 				break
+
+
+## 推进敌人的 AI 一段时间（2026-10-05 第六十五版起必须有这一步）：
+## 拍板 B 之后敌人重挑目标是 **0.3 s 节流**的（不节流就是 7× 性能回归），
+## 而 AI 是时间制的 —— 测试里那句单次 _update_ai(0.0) 推不动间隔，目标永远挑不出来。
+func _tick_ai(enemy, seconds: float = 0.7) -> void:
+	var step := 1.0 / 60.0
+	var left := seconds
+	while left > 0.0:
+		enemy._update_ai(minf(step, left))
+		left -= step
 
 
 func _reset_sight_caches() -> void:
@@ -1074,12 +1135,12 @@ func _check_downed_not_targeted() -> void:
 			break
 	_main.player.global_position = enemy_pos + chosen
 	_reset_sight_caches()   # 同上：玩家刚被瞬移，敌方的感知缓存必须清
-	enemy._update_ai(0.05)
+	_tick_ai(enemy, 0.5)    # 拍板 B：重挑目标 0.3 s 节流，推进时间才挑得出来
 	var engaged: bool = int(enemy._state) == 1        # AIState.COMBAT
 	# 再倒地：**仍然**是交战态 —— 这是「倒地可被补刀」（使用者 2026-10-02 拍板）的前提
 	_main.player.hp = 0.0
 	_main.player.down()
-	enemy._update_ai(0.05)
+	_tick_ai(enemy, 0.2)
 	_check_true("补刀前提：站着时敌人交战", engaged)
 	if GameConfig.ENEMY_FINISH_OFF_ENABLED:
 		_check("补刀开：玩家倒地后敌人仍然交战（会来补刀）", int(enemy._state), 1)

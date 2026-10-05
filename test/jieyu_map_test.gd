@@ -302,6 +302,13 @@ func _test_qingling_corridor() -> void:
 	var report := JieyuMapChecks.run(doc)
 	_check("青岭走廊校验：ERROR 数", JieyuMapChecks.count_level(report, JieyuMapChecks.SEV_ERROR), 0)
 	_check("青岭走廊校验：WARN 数", JieyuMapChecks.count_level(report, JieyuMapChecks.SEV_WARN), 0)
+	# 出生区落脚地（2026-10-05）：两个出生区都必须有一块压平过的落脚地，
+	# 且它离最近节点要满足 12.8.4 的 100~200 m（不然会多一条 spawn.pad_too_close WARN，上面那条就会红）
+	var pad_count := 0
+	for item_v in report:
+		if str((item_v as Dictionary).get("code", "")) == "spawn.pad":
+			pad_count += 1
+	_check("青岭走廊：两个出生区各有一块落脚地", pad_count, 2)
 	# 工程侧要读的三样：掩体（occluders.json）/ 内容层（material.png）/ 扁平高度图
 	var world_setup := WorldSetupScript.new()
 	var stub := Node.new()
@@ -747,6 +754,35 @@ func _test_checks() -> void:
 	], 200, 200, 1)
 	_check_true("节点核心在陡坡上被抓出",
 			_has_code(JieyuMapChecks.run(steep), "node.core_not_passable"))
+
+	# ⑧ 出生区落脚地（2026-10-05 新增判据）：只看**顶点**会漏掉「内部是陡崖」的出生区
+	var pad := doc.create("check_pad", 400, 400)
+	pad.height.fill(100)
+	pad.zones = JieyuMapGen.build_zones([
+		{"id": "N1", "name": "a", "pos": [250.0, 250.0]},
+	], 400, 400, 1)
+	pad.zones["spawn_areas"] = [{"side": "west",
+			"polygon": [[10, 10], [160, 10], [160, 160], [10, 160]]}]
+	_check_true("平地上的出生区有落脚地（spawn.pad）",
+			_has_code(JieyuMapChecks.run(pad), "spawn.pad"))
+	# 把出生区内部做成陡坡：**四个顶点仍是平的**（以前只看顶点，这条会漏过去）。
+	# 两个单位坑（都实测踩过，别再踩）：
+	#   ① set_height 写的是**灰度 0~255**，坡度按 max_elevation(150 m) 满量程换算
+	#      ⇒ 0.8 灰度/m 实际只有约 25°，够不上 30° 的判据（负例会假绿）；
+	#   ② 单调斜坡走远了会**顶到 255 饱和**，整片反而变成「常量 = 平地」（3 灰度/m 时踩到）。
+	# 所以用锯齿：每 20 m 拉 5 灰度/m（≈ 65°+），周期回绕，宽度够宽且永不饱和。
+	for x in range(40, 150):
+		for y in range(40, 150):
+			pad.set_height(x, y, 100.0 + float((x - 40) % 20) * 5.0)
+	var broken := JieyuMapChecks.run(pad)
+	_check_true("出生区内部是陡坡 → 顶点全平也必须报 spawn.no_pad",
+			_has_code(broken, "spawn.no_pad"))
+	_check("内部陡坡不算 ERROR（图不可用才是 ERROR）",
+			JieyuMapChecks.count_level(broken, JieyuMapChecks.SEV_ERROR), 0)
+	# 压平一块落脚地之后必须恢复
+	JieyuMapPainter.flatten_disc(pad, Vector2(100, 100), JieyuMapSpec.SPAWN_PAD_RADIUS_M, 20.0, 100.0)
+	_check_true("压平落脚地后 spawn.no_pad 消失",
+			not _has_code(JieyuMapChecks.run(pad), "spawn.no_pad"))
 
 
 func _has_code(report: Array, code: String) -> bool:

@@ -586,24 +586,111 @@ static func _check_passability(doc: JieyuMapDoc, report: Array) -> void:
 					"节点 %s 核心格坡度 %.1f° > %.0f°（L1 验收：出生 / 占领格必须站得住）"
 					% [str(node.get("id", "?")), slope, limit], {}))
 
+	# 出生区（2026-10-05 修盲点）：以前只看多边形的**顶点** —— 四个角在平地就放行，
+	# 内部是 60° 陡崖也照样 validate 全绿（默认图青岭走廊就是这么漏出去的）。
+	# 现在按 ≤5 m 步长采**内部**点，回答三件事：
+	#   ① 有没有任何站得住的点（一个都没有 = ERROR，这张图不能用来出生）；
+	#   ② 有没有一块半径 SPAWN_PAD_RADIUS_M 的平整落脚地（12.8.4 续航区）—— 没有 = WARN；
+	#   ③ 落脚地离最近节点够不够远（12.8.4 的 100 m）—— 不够 = WARN。
 	for spawn_v in doc.zones.get("spawn_areas", []):
 		if not (spawn_v is Dictionary):
 			continue
 		var spawn: Dictionary = spawn_v
 		var polygon: Variant = spawn.get("polygon", null)
-		if not (polygon is Array):
+		if not (polygon is Array) or (polygon as Array).size() < 3:
 			continue
-		var blocked := 0
-		var samples := 0
-		for point_v in polygon:
-			var point := JieyuMapGen.vec2(point_v)
-			samples += 1
-			if JieyuMapGen.slope_deg_at(doc.height, doc.width, doc.height_px,
-					doc.max_elevation(), floori(point.x), floori(point.y), 4) > limit:
-				blocked += 1
-		if samples > 0 and blocked == samples:
+		var side := str(spawn.get("side", "?"))
+		var stats := _spawn_pad_stats(doc, polygon, doc.zones.get("raas_nodes", []), limit)
+		if int(stats["samples"]) > 0 and int(stats["passable"]) == 0:
 			report.append(_item(SEV_ERROR, "spawn.not_passable",
-					"出生区 %s 的所有顶点都在不可通行坡面上" % str(spawn.get("side", "?")), {}))
+					"出生区 %s 内部没有任何站得住的采样点（%d 个采样点全在 > %.0f° 的坡面上）"
+					% [side, int(stats["samples"]), limit], {}))
+		elif not bool(stats["has_pad"]):
+			report.append(_item(SEV_WARN, "spawn.no_pad",
+					("出生区 %s 里找不到半径 %.0f m 的平整落脚地（12.8.4 续航区）："
+					+ "生成器漏了压平，或区内被掩体占满")
+					% [side, JieyuMapSpec.SPAWN_PAD_RADIUS_M], {}))
+		else:
+			var pad_center: Vector2 = stats["pad_center"]
+			if not bool(stats["pad_compliant"]):
+				report.append(_item(SEV_WARN, "spawn.pad_too_close",
+						"出生区 %s 没有任何落脚地满足「离节点 ≥ %.0f m」（12.8.4 续航区在点外 100~200 m）："
+						+ "区内最好的那块只有 %.1f m"
+						% [side, JieyuMapSpec.SPAWN_OFFSET_M[0], float(stats["pad_node_dist"])], {}))
+			var cover_text := "区内无遮挡体" if is_inf(float(stats["pad_cover_dist"])) \
+					else "离最近掩体 %.1f m" % float(stats["pad_cover_dist"])
+			report.append(_item(SEV_INFO, "spawn.pad",
+					"出生区 %s 落脚地 (%.0f, %.0f)：%s、离最近节点 %.1f m"
+					% [side, pad_center.x, pad_center.y, cover_text,
+					float(stats["pad_node_dist"])], {}))
+
+
+
+## 出生区内部采样 + 落脚地判据（校验器独立复核生成器的压平，不共用结论）。
+## 返回 {samples, passable, has_pad, pad_center, pad_cover_dist, pad_node_dist}
+static func _spawn_pad_stats(doc: JieyuMapDoc, polygon: Array, nodes: Array,
+		limit: float) -> Dictionary:
+	var stats := {"samples": 0, "passable": 0, "has_pad": false, "pad_compliant": false,
+			"pad_center": Vector2.ZERO, "pad_cover_dist": -1.0, "pad_node_dist": -1.0}
+	var radius := JieyuMapSpec.SPAWN_PAD_RADIUS_M
+	var bounds := _polygon_bounds(polygon)
+	var y := bounds.position.y
+	while y <= bounds.end.y:
+		var x := bounds.position.x
+		while x <= bounds.end.x:
+			var point := Vector2(x, y)
+			x += 5.0
+			if not JieyuMapGen.point_in_polygon(polygon, point):
+				continue
+			stats["samples"] = int(stats["samples"]) + 1
+			if not _disc_passable(doc, point, radius, limit):
+				continue
+			stats["passable"] = int(stats["passable"]) + 1
+			if JieyuMapGen.polygon_edge_distance(polygon, point) < radius:
+				continue
+			var cover := JieyuMapGen.nearest_occluder_distance(doc.occluders, point)
+			if cover < radius + JieyuMapSpec.SPAWN_PAD_CLEAR_M:
+				continue
+			# 判据是「**存在**一块合规落脚地」，不是「最不贴掩体的那块恰好合规」：
+			# 校验器独立扫出来的最佳候选可能与生成器选址差几米，拿单个候选代表全图会误报
+			# （实测：east 生成器选址离节点 102.6 m，而校验器按「离掩体最远」挑到 99.2 m 那块，
+			#  只差 0.8 m 就报了一条 WARN —— 而合规的落脚地就在旁边）。
+			var node_dist := JieyuMapGen.nearest_node_distance(nodes, point)
+			var compliant := node_dist >= JieyuMapSpec.SPAWN_OFFSET_M[0]
+			if not bool(stats["has_pad"]) \
+					or (compliant and not bool(stats["pad_compliant"])) \
+					or (compliant == bool(stats["pad_compliant"]) \
+					and cover > float(stats["pad_cover_dist"]) + 0.001):
+				stats["has_pad"] = true
+				stats["pad_compliant"] = compliant
+				stats["pad_center"] = point
+				stats["pad_cover_dist"] = cover
+				stats["pad_node_dist"] = node_dist
+		y += 5.0
+	return stats
+
+
+## 以 center 为心、radius 为半径的圆盘是否整块站得住（心 + 两圈共 17 点）
+static func _disc_passable(doc: JieyuMapDoc, center: Vector2, radius: float, limit: float) -> bool:
+	for probe in _disc_probes(center, radius):
+		if JieyuMapGen.slope_deg_at(doc.height, doc.width, doc.height_px,
+				doc.max_elevation(), floori(probe.x), floori(probe.y), 4) > limit:
+			return false
+	return true
+
+
+## 圆盘采样点：心 + 两圈（0.5R 与 0.8R）。
+## 外圈为什么取 0.8R 而不是 R：坡度采样自带 4 m 前视 —— 在正好 R 处采样会读到落脚地**外面**的
+## 过渡带，把一块合格平地误判成不合格（实测：压平后中心 0.0°，R 处却量到 78°）。
+## 0.8 × 25 = 20 m，加 4 m 前视仍在 25 m 的平整核心里。
+static func _disc_probes(center: Vector2, radius: float) -> Array:
+	var probes: Array = [center]
+	for i in 8:
+		var angle := TAU * float(i) / 8.0
+		var direction := Vector2(cos(angle), sin(angle))
+		probes.append(center + direction * radius * 0.8)
+		probes.append(center + direction * radius * 0.5)
+	return probes
 
 
 ## ────────────── 开阔地 + 视线打断（共用一套采样栅格）──────────────

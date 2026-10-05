@@ -847,6 +847,153 @@ static func content_layer_meta(rows_file: String = "", material_file: String = "
 
 ## 从配方生成一张完整地图（高度 + 五节点 + 五结构 + 出生区 + 建筑 + 内容层）。
 ## 返回的 doc.warnings 里是「生成完了但有话说」。
+## ────────────── 出生区落脚地（12.8.4 续航区 · 2026-10-05 补）──────────────
+##
+## 背景：生成器原来只压平**节点核心**，不压平出生区；而校验器的出生区检查只看多边形**顶点**的坡度
+## （四个角都在平地就放行）。两条合起来，「内部是 60° 陡崖的出生区」能一路 validate 全绿 ——
+## 默认图青岭走廊就是这么漏出去的（实测质心 60.5°、当时的 demo 出生点 45.8°）。
+##
+## 现在：生成器在每个出生区里压平一块圆盘（半径 + 过渡带），选址**只看几何**
+## （出生区边界 / 已放好的掩体 / 节点距离）—— 因为「平地」正是要造出来的东西，不能拿它当选址依据。
+## 校验器那边独立复核「真的存在这样一块平地」（spawn.no_pad），两边不共用结论。
+
+## 点在多边形内（射线法，凸 / 凹都对）
+static func point_in_polygon(polygon: Array, point: Vector2) -> bool:
+	var count := polygon.size()
+	if count < 3:
+		return false
+	var inside := false
+	var j := count - 1
+	for i in count:
+		var a := vec2(polygon[i])
+		var b := vec2(polygon[j])
+		if ((a.y > point.y) != (b.y > point.y)) \
+				and point.x < (b.x - a.x) * (point.y - a.y) / maxf(b.y - a.y, 0.00001) + a.x:
+			inside = not inside
+		j = i
+	return inside
+
+
+## 点到多边形边界的距离（点在里面时给的是「离边界多远」）
+static func polygon_edge_distance(polygon: Array, point: Vector2) -> float:
+	var count := polygon.size()
+	if count == 0:
+		return INF
+	if count == 1:
+		return point.distance_to(vec2(polygon[0]))
+	var best := INF
+	for i in count:
+		best = minf(best, _segment_distance(vec2(polygon[i]), vec2(polygon[(i + 1) % count]), point))
+	return best
+
+
+## 点与多边形的关系距离：在里面 = 0，在外面 = 到边界的距离
+static func polygon_distance(polygon: Array, point: Vector2) -> float:
+	return 0.0 if point_in_polygon(polygon, point) else polygon_edge_distance(polygon, point)
+
+
+static func _segment_distance(a: Vector2, b: Vector2, point: Vector2) -> float:
+	var span := b - a
+	var length_squared := span.length_squared()
+	if length_squared <= 0.000001:
+		return point.distance_to(a)
+	return point.distance_to(a + span * clampf((point - a).dot(span) / length_squared, 0.0, 1.0))
+
+
+static func _polygon_bounds(polygon: Array) -> Rect2:
+	if polygon.is_empty():
+		return Rect2()
+	var low := vec2(polygon[0])
+	var high := vec2(polygon[0])
+	for point_v in polygon:
+		var point := vec2(point_v)
+		low = Vector2(minf(low.x, point.x), minf(low.y, point.y))
+		high = Vector2(maxf(high.x, point.x), maxf(high.y, point.y))
+	return Rect2(low, high - low)
+
+
+## 离最近遮挡体多边形多远
+static func nearest_occluder_distance(occluders: Array, point: Vector2) -> float:
+	var best := INF
+	for item_v in occluders:
+		var polygon: Array = (item_v as Dictionary).get("polygon", [])
+		if polygon.size() >= 3:
+			best = minf(best, polygon_distance(polygon, point))
+	return best
+
+
+## 离最近 RAAS 节点多远
+static func nearest_node_distance(nodes: Array, point: Vector2) -> float:
+	var best := INF
+	for node_v in nodes:
+		best = minf(best, point.distance_to(vec2((node_v as Dictionary).get("pos", [0, 0]))))
+	return best
+
+
+## 出生区落脚地选址。返回 {ok, center, cover_dist, node_dist, tier, side}
+## 判据：① 落在出生区内、离边界 ≥ 半径（落脚地要真的在声明区内）
+##       ② 离最近遮挡体 ≥ 半径 + SPAWN_PAD_CLEAR_M（落脚地里不许有楼 / 沙袋）
+##       ③ 离最近节点 ≥ 100 m（12.8.4「续航区在点外 100~200 m」），挑不出逐级放宽 60 → 30 → 0
+## 并列时：先选离掩体更远的，再选离节点距离更接近 150 m 的（100~200 带的中值）。
+static func best_spawn_pad_center(doc: JieyuMapDoc, polygon: Array, nodes: Array,
+		side: String) -> Dictionary:
+	var radius := JieyuMapSpec.SPAWN_PAD_RADIUS_M
+	var margin := radius + JieyuMapSpec.SPAWN_PAD_CLEAR_M
+	var bounds := _polygon_bounds(polygon)
+	var result := {"ok": false, "center": Vector2.ZERO, "cover_dist": -1.0,
+			"node_dist": -1.0, "tier": -1.0, "side": side}
+	for tier_v in JieyuMapSpec.SPAWN_OFFSET_M + [60.0, 30.0, 0.0]:
+		var tier := float(tier_v)
+		var best := {}
+		var x := bounds.position.x + radius
+		while x <= bounds.end.x - radius:
+			var y := bounds.position.y + radius
+			while y <= bounds.end.y - radius:
+				var point := Vector2(x, y)
+				if point_in_polygon(polygon, point) \
+						and polygon_edge_distance(polygon, point) >= radius:
+					var cover := nearest_occluder_distance(doc.occluders, point)
+					var node_dist := nearest_node_distance(nodes, point)
+					if cover >= margin and node_dist >= tier:
+						var better := best.is_empty() \
+								or cover > float(best["cover_dist"]) + 0.001 \
+								or (absf(cover - float(best["cover_dist"])) <= 0.001 \
+								and absf(node_dist - 150.0) < absf(float(best["node_dist"]) - 150.0))
+						if better:
+							best = {"cover_dist": cover, "node_dist": node_dist, "center": point}
+				y += 5.0
+			x += 5.0
+		if not best.is_empty():
+			result["ok"] = true
+			result["center"] = best["center"]
+			result["cover_dist"] = best["cover_dist"]
+			result["node_dist"] = best["node_dist"]
+			result["tier"] = tier
+			return result
+	return result
+
+
+## 给每个出生区压平一块落脚地；返回选址清单（供日志 / 自检 / 测试读）
+static func flatten_spawn_pads(doc: JieyuMapDoc, zones: Dictionary, nodes: Array) -> Array:
+	var pads: Array = []
+	for spawn_v in zones.get("spawn_areas", []):
+		if not (spawn_v is Dictionary):
+			continue
+		var spawn: Dictionary = spawn_v
+		var polygon: Array = spawn.get("polygon", [])
+		if polygon.size() < 3:
+			continue
+		var side := str(spawn.get("side", "?"))
+		var pad := best_spawn_pad_center(doc, polygon, nodes, side)
+		if bool(pad["ok"]):
+			JieyuMapPainter.flatten_disc(doc, pad["center"], JieyuMapSpec.SPAWN_PAD_RADIUS_M,
+					JieyuMapSpec.SPAWN_PAD_FALLOFF_M, -1.0)
+		else:
+			push_warning("[地图] 出生区 %s 找不到落脚地选址（区内被掩体占满 / 贴边太近）" % side)
+		pads.append(pad)
+	return pads
+
+
 static func from_recipe(map_id: String, recipe: Dictionary) -> JieyuMapDoc:
 	var grid_w := int(recipe.get("grid_w", GameConfig.GRID_WIDTH))
 	var grid_h := int(recipe.get("grid_h", GameConfig.GRID_HEIGHT))
@@ -924,6 +1071,9 @@ static func from_recipe(map_id: String, recipe: Dictionary) -> JieyuMapDoc:
 	if recipe.has("flags"):
 		doc.zones["flags"] = (recipe["flags"] as Array).duplicate(true)
 	doc.occluders = place_settlements(doc, doc.zones, recipe, seed_value)
+	# 出生区落脚地压平（2026-10-05）：必须在**掩体之后**（选址要看哪块空地还没被占）、
+	# **内容层之前**（泥 / 雪 / 草按高程分，压平要反映到内容图上）。
+	flatten_spawn_pads(doc, doc.zones, nodes)
 
 	var content := build_content_images(doc, recipe)
 	var total_content := int(content["counts"][0]) + int(content["counts"][1]) \

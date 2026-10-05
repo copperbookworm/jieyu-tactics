@@ -50,6 +50,13 @@ const NOISE_LAYERS := [
 const CORE_RADIUS_M := 15.0
 const PRESSURE_RING_M := [30.0, 150.0]
 const SPAWN_OFFSET_M := [100.0, 200.0]
+## 出生区落脚地（12.8.4 续航区）—— 生成器负责造，校验器负责查。
+## 2026-10-05 加：以前生成器只压平**节点核心**、不压平出生区，校验器又只看多边形的**顶点**坡度，
+## 两条合起来，「内部是 60° 陡崖的出生区」能一路 validate 全绿 —— 默认图青岭走廊就是这么漏出去的
+## （实测：west 出生区质心 60.5°、当时的 demo 出生点 45.8°）。
+const SPAWN_PAD_RADIUS_M := 25.0     # 落脚地半径：站得下一队人
+const SPAWN_PAD_FALLOFF_M := 20.0    # 落脚地到原地形的过渡带宽度
+const SPAWN_PAD_CLEAR_M := 5.0       # 落脚地内不许有遮挡体（离遮挡体多边形的最小距离）
 const MIN_APPROACH_ROUTES := 2          # 4.2 要求 ≥ 2 条（六章建议 ≥ 3）
 const RECOMMENDED_APPROACH_ROUTES := 3  # 六章「每个占领点 3 个以上入口/射击窗」
 const MIN_DIST_TO_CORE_M := 100.0       # 12.8.7 rally_zones.min_dist_to_core_m

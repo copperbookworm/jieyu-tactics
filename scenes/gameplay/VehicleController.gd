@@ -11,6 +11,8 @@ extends Node
 const VehicleScript := preload("res://entities/vehicle/Vehicle.gd")
 ## 载具数据表（同样无 class_name）：HUD 提示要读装甲面名与等效厚度
 const VehicleTable := preload("res://systems/vehicles/VehicleTable.gd")
+## 部件系统（docx 8.4）：瞄高档位与部位名
+const VehiclePartsScript := preload("res://systems/vehicles/VehicleParts.gd")
 ## 表现层特效（候选 M：12.7.3 / 12.7.4）
 const EffectSpawner := preload("res://systems/effects/EffectSpawner.gd")
 const Sfx := preload("res://systems/audio/Sfx.gd")
@@ -148,6 +150,20 @@ func is_gunner(player) -> bool:
 	return vehicle.seat_of(player) == "gunner"
 
 
+## 武器位换瞄高档（8.4.2）：只有武器位能换（与弹种键同一条权限）。
+## 换档不改弹道方向，只改这一发结算到哪个部位。
+func cycle_aim_gear() -> bool:
+	if vehicle == null or main == null or main.player == null:
+		return false
+	if not is_gunner(main.player):
+		main.hud.show_hint("不在武器位上：先点「上车」，再点「换座」")
+		return false
+	vehicle.aim_gear = VehiclePartsScript.next_gear(vehicle.aim_gear)
+	main.hud.show_hint("瞄高：%s" % VehiclePartsScript.gear_name(vehicle.aim_gear))
+	main.hud.update_role()
+	return true
+
+
 ## 相机档位跟着「人在不在车里 / 在哪个座位 / 选了什么弹种」走（docx 19 ②）：
 ##   步兵 [32,16,8] + 500 m ｜ 载具 [32,8,4] + 1500 m ｜ **武器位选中反坦克导弹时 2000 m**。
 ## 为什么由这里推而不是相机自己查：相机不知道座位与弹种；而座位 / 弹种的状态就在这里。
@@ -239,12 +255,21 @@ func fire() -> void:
 			# 残骸：take_hit 对已报废目标是早退（等效厚度给 0），拿它算击穿提示会说假话 ⇒ 直接照实回话
 			main.hud.show_hint("命中敌方载具残骸（已摧毁）")
 			return
+		# 部位（8.4.2）：玩家按自己的瞄高档位；部位内由散布 / 方位权重决定
+		# enemy_vehicle 是鸭子类型（Variant）：这里不能靠 := 推断，必须显式标类型
+		var side: String = VehicleTable.hit_side(enemy_vehicle.hull_facing,
+				vehicle.turret_facing)
+		var part: String = enemy_vehicle.resolve_hit_part(side, vehicle.aim_gear, randf())
 		var armor: Dictionary = enemy_vehicle.take_hit(float(result["damage"]),
-				float(result["penetration_mm"]), vehicle.turret_facing)
+				float(result["penetration_mm"]), vehicle.turret_facing, part)
+		var part_text := VehiclePartsScript.part_name(String(armor.get("part", "hull")))
 		var side_text := VehicleTable.side_label(String(armor["side"]))
-		var armor_text := "%s等效 %d mm" % [side_text, int(float(armor["armor_mm"]))]
+		var armor_text := "%s%s等效 %d mm" % [part_text, side_text,
+				int(float(armor["armor_mm"]))]
 		var pen_text := "%d mm 穿深" % int(float(armor["penetration_mm"]))
-		if bool(armor["penetrated"]):
+		if bool(armor["part_destroyed"])                 and String(armor["part"]) == "ammo_rack":
+			main.hud.show_hint("击穿！弹药架殉爆 —— %s" % armor_text)
+		elif bool(armor["penetrated"]):
 			main.hud.show_hint("击穿！%s ＜ 我 %s" % [armor_text, pen_text])
 		else:
 			main.hud.show_hint("未击穿：%s ＞ 我 %s" % [armor_text, pen_text])

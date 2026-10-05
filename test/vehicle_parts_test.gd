@@ -71,16 +71,19 @@ func _test_catalog() -> void:
 	_check_true("目录：直升机没有炮塔环", not heli.has("turret_ring"))
 	_check("档位：炮塔环 → 炮塔档", VehiclePartsScript.gear_of("turret_ring"),
 			VehiclePartsScript.Gear.TURRET)
-	_check("档位：弹药架 → 车体档", VehiclePartsScript.gear_of("ammo_rack"),
+	_check("档位：发动机 → 车体档", VehiclePartsScript.gear_of("engine"),
 			VehiclePartsScript.Gear.HULL)
+	_check("档位：弹药架 → 弹药架档（2026-10-05 拍板独立成档）",
+			VehiclePartsScript.gear_of("ammo_rack"), VehiclePartsScript.Gear.AMMO_RACK)
 	_check("档位：履带 → 机动件档", VehiclePartsScript.gear_of("track_l"),
 			VehiclePartsScript.Gear.MOBILE)
-	_check("档位：循环 炮塔 → 车体 → 机动件 → 炮塔",
+	_check("档位：循环 炮塔 → 车体 → 弹药架 → 机动件 → 炮塔",
 			[VehiclePartsScript.next_gear(VehiclePartsScript.Gear.TURRET),
 			VehiclePartsScript.next_gear(VehiclePartsScript.Gear.HULL),
+			VehiclePartsScript.next_gear(VehiclePartsScript.Gear.AMMO_RACK),
 			VehiclePartsScript.next_gear(VehiclePartsScript.Gear.MOBILE)],
-			[VehiclePartsScript.Gear.HULL, VehiclePartsScript.Gear.MOBILE,
-			VehiclePartsScript.Gear.TURRET])
+			[VehiclePartsScript.Gear.HULL, VehiclePartsScript.Gear.AMMO_RACK,
+			VehiclePartsScript.Gear.MOBILE, VehiclePartsScript.Gear.TURRET])
 
 
 func _test_hp() -> void:
@@ -121,6 +124,11 @@ func _test_turret_armor() -> void:
 			tank, "front"), 850.0)
 	_check("炮塔装甲：侧面沿用车身侧面（260）",
 			VehiclePartsScript.turret_armor_mm("mbt_t1", "side"), 260.0)
+	_check_true("炮塔装甲：等效厚度与车体同面一致（正面 ≈ 808 mm）",
+			absf(VehiclePartsScript.effective_turret_armor_mm("mbt_t1", "front") - 808.29) < 1.0)
+	_check("炮塔装甲：表内覆盖列优先（850 面）",
+			VehiclePartsScript.turret_armor_with_row({"turret_armor_front_mm": "850"},
+			tank, "front"), 850.0)
 
 
 func _test_state_machine() -> void:
@@ -220,6 +228,20 @@ func _test_weights() -> void:
 	_check("兜底：后部 + 车体档 + roll 0 ⇒ 发动机（权重最高）",
 			VehiclePartsScript.roll_part("mbt_t1", "rear",
 			VehiclePartsScript.Gear.HULL, 0.0), "engine")
+	_check("兜底：正面 + 弹药架档 ⇒ 弹药架（2026-10-05 新档）",
+			VehiclePartsScript.roll_part("mbt_t1", "front",
+			VehiclePartsScript.Gear.AMMO_RACK, 0.0), "ammo_rack")
+	_check("兜底：正面 + 车体档 + roll 0.99 ⇒ 油箱（正面权重里只有车体 / 油箱）",
+			VehiclePartsScript.roll_part("mbt_t1", "front",
+			VehiclePartsScript.Gear.HULL, 0.99), "fuel_tank")
+	var hull_pool := {}
+	for i in 20:
+		hull_pool[VehiclePartsScript.roll_part("mbt_t1", "front",
+				VehiclePartsScript.Gear.HULL, float(i) / 20.0)] = true
+	_check_true("兜底：正面车体档只出车体 / 油箱（%s），弹药架 / 炮塔 / 履带都不在池里"
+			% str(hull_pool.keys()),
+			not hull_pool.has("ammo_rack") and not hull_pool.has("turret_ring")
+			and not hull_pool.has("track_l"))
 	_check("兜底：侧面 + 不限档 + roll 0.99 ⇒ 油箱（累计最后一段）",
 			VehiclePartsScript.roll_part("mbt_t1", "side", -1, 0.99), "fuel_tank")
 	_check("兜底：轮式车正面 + 机动档 ⇒ 前轮组",

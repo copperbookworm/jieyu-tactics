@@ -28,6 +28,7 @@ const VICTORY_FRAMES := 10       # 让 CaptureZone._process 自己翻蓝并广�
 const MapLayerSourceScript := preload("res://ui/MapLayerSource.gd")
 ## 载具表（只读、无 autoload 依赖）：用真实装甲口径验「两发导弹打爆主战坦克」
 const VehicleTableScript := preload("res://systems/vehicles/VehicleTable.gd")
+const VehiclePartsScript := preload("res://systems/vehicles/VehicleParts.gd")
 ## 出生点挑选（2026-10-05）：只用来读 NUDGE_RADIUS 这一条常量（判据断言自己实现，不自证）
 const SpawnPickerScript := preload("res://systems/terrain/SpawnPicker.gd")
 
@@ -405,6 +406,20 @@ func _check_interactions() -> void:
 	_check_true("载具恢复后可正常上车（避免污染后续交互链）", v.is_occupied())
 	_main.vehicles.switch_seat()
 	_check_true("载具恢复后换到武器位", _main.vehicles.is_gunner(_main.player))
+	# 瞄高（docx 8.4.2 · 2026-10-05 加第四档「弹药架」）：武器位能换、驾驶位换不动
+	var gear_before: int = v.aim_gear
+	_main.hud.mark_hint.text = ""
+	_check_true("瞄高：武器位能换档", _main.vehicles.cycle_aim_gear())
+	_check("瞄高：换到下一档", v.aim_gear,
+			(gear_before + 1) % VehiclePartsScript.GEAR_COUNT)
+	_check_true("瞄高：换档给了提示", _main.hud.mark_hint.text.contains("瞄高"))
+	_main.vehicles.switch_seat()
+	var gear_after: int = v.aim_gear
+	_main.hud.mark_hint.text = ""
+	_check("瞄高：驾驶位换不动", _main.vehicles.cycle_aim_gear(), false)
+	_check("瞄高：驾驶位换档后档位没变", v.aim_gear, gear_after)
+	_main.vehicles.switch_seat()          # 换回武器位，别污染后面的交互链
+	v.aim_gear = VehiclePartsScript.Gear.HULL
 	_main.vehicles.toggle()
 	_check_true("下车：按钮回到「上车」", not v.is_occupied()
 			and _main.hud.vehicle_button.text == "上车")

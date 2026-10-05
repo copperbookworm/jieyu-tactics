@@ -14,8 +14,11 @@ const MOBILITY_WHEELED := "wheeled"
 const MOBILITY_ROTARY := "rotary"
 const MOBILITIES := [MOBILITY_TRACKED, MOBILITY_WHEELED, MOBILITY_ROTARY]
 
-# ── 瞄高三档（8.4.2）──
-enum Gear { TURRET, HULL, MOBILE }
+# ── 瞄高四档（8.4.2 · 2026-10-05 拍板：拆出独立「弹药架」档）──
+## 为什么是四档：三档时弹药架会落进「车体」档、按方位权重约 17% 概率随手殉爆；
+## 拆成独立一档后「车体」档只出 车体 / 发动机 / 油箱，殉爆变成有意瞄准的结果。
+const GEAR_COUNT := 4
+enum Gear { TURRET, HULL, AMMO_RACK, MOBILE }
 
 # ── 部件 id ──
 const PART_HULL := "hull"
@@ -49,7 +52,7 @@ const PART_LABELS := {
 	PART_TAIL_ROTOR: "尾桨",
 }
 
-const GEAR_LABELS := {Gear.TURRET: "炮塔", Gear.HULL: "车体", Gear.MOBILE: "机动件"}
+const GEAR_LABELS := {Gear.TURRET: "炮塔", Gear.HULL: "车体", Gear.AMMO_RACK: "弹药架", Gear.MOBILE: "机动件"}
 
 ## 表覆盖列 → 部件 id（空值 / 0 ⇒ 退回派生值）。列名见 data/vehicle_parts.txt 表头。
 const HP_COLUMNS := {
@@ -150,14 +153,15 @@ static func part_catalog_for(vehicle_id: String) -> Array[String]:
 static func gear_of(part: String) -> int:
 	if part == PART_TURRET_RING:
 		return Gear.TURRET
-	if part == PART_ENGINE or part == PART_AMMO_RACK \
-			or part == PART_FUEL_TANK or part == PART_HULL:
+	if part == PART_AMMO_RACK:
+		return Gear.AMMO_RACK
+	if part == PART_ENGINE or part == PART_FUEL_TANK or part == PART_HULL:
 		return Gear.HULL
 	return Gear.MOBILE
 
 
 static func next_gear(gear: int) -> int:
-	return (gear + 1) % 3
+	return (gear + 1) % GEAR_COUNT
 
 
 static func gear_name(gear: int) -> String:
@@ -214,6 +218,26 @@ static func turret_armor_with_row(row: Dictionary, vehicle: Dictionary, side: St
 static func turret_armor_mm(vehicle_id: String, side: String) -> float:
 	return turret_armor_with_row(get_row(vehicle_id),
 			VehicleTableScript.get_vehicle(vehicle_id), side)
+
+
+## 炮塔装甲的基础倾角：表内覆盖列优先，否则沿用该车对应面（8.4.7）。
+static func turret_armor_deg_with_row(row: Dictionary, vehicle: Dictionary,
+		side: String) -> float:
+	var override := VehicleTableScript.number(row, "turret_armor_%s_deg" % side, 0.0)
+	if override > 0.0:
+		return override
+	return VehicleTableScript.number(vehicle, "armor_%s_deg" % side, 0.0)
+
+
+## 炮塔装甲等效厚度：与 VehicleTable.effective_armor_mm 同一套公式（厚度 ÷ cos(倾角)）。
+static func effective_turret_armor_mm(vehicle_id: String, side: String,
+		hit_angle_deg: float = 0.0) -> float:
+	var row := get_row(vehicle_id)
+	var vehicle := VehicleTableScript.get_vehicle(vehicle_id)
+	var thickness := turret_armor_with_row(row, vehicle, side)
+	var base := turret_armor_deg_with_row(row, vehicle, side)
+	var total := clampf(absf(hit_angle_deg) + base, 0.0, 80.0)
+	return thickness / maxf(cos(deg_to_rad(total)), 0.1)
 
 
 # ── 三态状态机（8.4.3）──

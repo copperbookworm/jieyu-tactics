@@ -10,6 +10,8 @@ signal weapon_fired(origin: Vector2, direction: Vector2, distance: float)
 const VehicleTable := preload("res://systems/vehicles/VehicleTable.gd")
 ## 表现层（候选 M：12.7.2 履带 / 残骸冒烟）
 const EffectSpawner := preload("res://systems/effects/EffectSpawner.gd")
+## 部件系统（docx 8.4 · 2026-10-05）：部件状态 / 瞄高档位 / 部位结算
+const VehiclePartsScript := preload("res://systems/vehicles/VehicleParts.gd")
 
 var data: Dictionary = {}
 var driver = null                    # 驾驶位占用的玩家单位（PlayerUnit）
@@ -27,6 +29,12 @@ var _ammo := 0
 var _sight: SightSystem = null
 var _player_ref = null               # AI 的目标
 var _turret_recoil := 0.0            # 0..1，开火时的后坐视觉量
+
+# —— 部件系统（docx 8.4 · 2026-10-05）——
+## parts：部件 id → {hp, max_hp, state}；整车结构值 hp 同时就是「车体」这个部件的血量（8.4.3）
+var parts: Dictionary = {}
+## 武器位瞄高档位（8.4.2 四档：炮塔 / 车体 / 弹药架 / 机动件）
+var aim_gear: int = VehiclePartsScript.Gear.HULL
 
 # —— 敌方坦克乘员（候选 Q · 使用者 2026-10-02：坦克要有敌人士兵操控，快损坏时下车逃生）——
 ## 乘员是 Enemy（不是 PlayerUnit）：在车里时藏起来、脱离 enemy 组（不作为独立目标）、关掉自身 AI
@@ -61,6 +69,7 @@ func setup(vehicle_id: String, sight: SightSystem) -> void:
 	_ammo = int(VehicleTable.number(data, "ammo", 0.0))
 	_atgm_ammo = int(VehicleTable.number(data, "atgm_ammo", 0.0))   # 没有这一列的载具就是 0（＝没装导弹）
 	_sight = sight
+	parts = VehiclePartsScript.init_parts(vehicle_id)
 	add_to_group("vehicle")
 	_build_layers()
 	queue_redraw()
@@ -71,12 +80,66 @@ func vehicle_name() -> String:
 
 
 func max_speed() -> float:
-	return VehicleTable.number(data, "speed_kmh", 0.0) / 3.6  # km/h → m/s
+	# 部件效果（8.4.1）：发动机受损 / 断带 / 轮胎损坏都会压低速度上限
+	return VehicleTable.number(data, "speed_kmh", 0.0) / 3.6 * speed_scale()
 
 
 ## 命中判定半径（m）：按车长折算——载具是大目标，别套用步兵的 0.25 m
 func hit_radius() -> float:
 	return VehicleTable.number(data, "length_m", 4.0) * GameConfig.VEHICLE_HIT_RADIUS_SCALE
+
+
+## 数据表 id（部件表 / 装甲查询用）
+func vehicle_id() -> String:
+	return String(data.get("id", ""))
+
+
+## 机动型式（tracked / wheeled / rotary）
+func mobility() -> String:
+	return VehiclePartsScript.mobility_of(vehicle_id())
+
+
+# —— 部件效果（8.4.1，全部走 VehicleParts 的纯函数）——
+
+func speed_scale() -> float:
+	return VehiclePartsScript.speed_scale(parts, mobility())
+
+
+func turn_scale() -> float:
+	return VehiclePartsScript.turn_scale(parts, mobility())
+
+
+func turret_rotate_scale() -> float:
+	return VehiclePartsScript.turret_rotate_scale(parts)
+
+
+func main_gun_blocked() -> bool:
+	return VehiclePartsScript.main_gun_blocked(parts)
+
+
+## 一发炮弹该落到哪个部位（8.4.2 / 8.4.6）：gear 由武器位给（玩家瞄高），
+## roll 由调用方给（生产传 randf()、测试传定值 ⇒ 可复现）。
+func resolve_hit_part(side: String, gear: int, roll: float) -> String:
+	return VehiclePartsScript.roll_part(vehicle_id(), side, gear, roll)
+
+
+## 整车结构值挨打（打中车体 / 未击穿的零头 / 起火持续掉血都走这条）
+func _hull_damage(amount: float) -> bool:
+	hp = maxf(hp - maxf(amount, 0.0), 0.0)
+	_maybe_bail_out()
+	var wrecked_now := hp <= 0.0
+	if wrecked_now and not destroyed:
+		_wreck()
+	return wrecked_now
+
+
+## 报废（K-kill 的统一出口：结构值归零与弹药架殉爆都走这里）
+func _wreck() -> void:
+	destroyed = true
+	exit_vehicle()
+	wrecked.emit(self)
+	EffectSpawner.wreck_smoke_on(self)   # 12.7.2：残骸持续冒烟（K-kill 的等效表现）
+	queue_redraw()
 
 
 func is_occupied() -> bool:
@@ -199,7 +262,7 @@ func aim_at(target_point: Vector2, delta: float) -> void:
 	if desired.length() < 0.001:
 		return
 	turret_facing = _rotate_towards(turret_facing, desired.normalized(),
-			GameConfig.TURRET_ROTATE_SPEED, delta)
+			GameConfig.TURRET_ROTATE_SPEED * turret_rotate_scale(), delta)
 
 
 ## 炮塔回正（8.2.6 弹簧模型）：没人操炮时缓慢回到车体朝向，越接近末速越慢
@@ -209,7 +272,8 @@ func recenter_turret(delta: float) -> void:
 	var stiffness := GameConfig.TURRET_RECENTER_STIFFNESS
 	var damping := clampf(GameConfig.TURRET_RECENTER_DAMPING * 0.1, 0.0, 0.5)
 	turret_facing = _rotate_towards(turret_facing, hull_facing,
-			GameConfig.TURRET_ROTATE_SPEED * stiffness, delta * (1.0 - damping))
+			GameConfig.TURRET_ROTATE_SPEED * stiffness * turret_rotate_scale(),
+			delta * (1.0 - damping))
 
 
 ## 12.7.2：建图层节点（Hull / Turret / Track）。绘制仍集中在 _draw，节点只承载 rotation 与相位。
@@ -289,7 +353,7 @@ func drive(input_vector: Vector2, delta: float) -> void:
 		var target := input_vector.normalized() * max_speed()
 		velocity = velocity.lerp(target, clampf(3.0 * delta, 0.0, 1.0))
 		hull_facing = hull_facing.lerp(input_vector.normalized(),
-				clampf(2.5 * delta, 0.0, 1.0)).normalized()
+				clampf(2.5 * turn_scale() * delta, 0.0, 1.0)).normalized()
 	else:
 		velocity = velocity.lerp(Vector2.ZERO, clampf(2.0 * delta, 0.0, 1.0))
 	rotation = hull_facing.angle()
@@ -297,37 +361,52 @@ func drive(input_vector: Vector2, delta: float) -> void:
 	queue_redraw()
 
 
-## 挨打：命中面 → 有效厚度 → 击穿判定 → 伤害（未击穿只吃零头，这就是「装甲挡弹」）
-## 第一版不算法线偏角，只用该面的基础倾角（首上 30° 这类）
+## 挨打：命中面 → 定部位 → 部位/车体装甲 → 击穿判定 → 按部位结算（docx 8.4.3）
+## part 缺省 "hull" = 老口径（只打整车结构值），既有调用方与测试不受影响；
+## 武器位 / AI / 间爆各自把部位算好再传进来（Vehicle.resolve_hit_part）。
 func take_hit(raw_damage: float, penetration_mm: float,
-		hit_direction: Vector2) -> Dictionary:
+		hit_direction: Vector2, part: String = "hull") -> Dictionary:
 	if destroyed:
 		return {"penetrated": false, "damage": 0.0, "side": "side",
-				"armor_mm": 0.0, "penetration_mm": penetration_mm, "destroyed": true}
+				"armor_mm": 0.0, "penetration_mm": penetration_mm, "destroyed": true,
+				"part": part, "part_state": VehiclePartsScript.STATE_OK,
+				"part_destroyed": false}
 	var side := VehicleTable.hit_side(hull_facing, hit_direction)
-	# 把该面等效厚度也带出去：HUD 才能说清「为什么没穿」，而不是只丢一句「未击穿」
-	var armor_mm := VehicleTable.effective_armor_mm(data, side, 0.0)
-	var penetrated := VehicleTable.is_penetrated(data, side, 0.0, penetration_mm)
+	# 炮塔环走炮塔装甲面（8.4.3）；其余部位仍套车体同一面
+	var armor_mm := (VehiclePartsScript.effective_turret_armor_mm(vehicle_id(), side)
+			if part == VehiclePartsScript.PART_TURRET_RING
+			else VehicleTable.effective_armor_mm(data, side, 0.0))
+	var penetrated := penetration_mm >= armor_mm
 	var damage := raw_damage
-	if not penetrated:
+	var part_state := VehiclePartsScript.state_of(parts, part)
+	var part_destroyed := false
+	if penetrated:
+		if part == VehiclePartsScript.PART_HULL or part.is_empty():
+			_hull_damage(damage)
+		else:
+			var outcome: Dictionary = VehiclePartsScript.damage_part(parts, part, damage)
+			part_state = int(outcome["state"])
+			part_destroyed = bool(outcome["destroyed"])
+			# 弹药架被击穿 = 殉爆（K-kill，确定触发、不做概率，8.4.1）
+			if part == VehiclePartsScript.PART_AMMO_RACK:
+				_hull_damage(hp)
+	else:
+		# 未击穿只吃 5% 零头，且不伤部件（8.4.3）
 		damage *= GameConfig.VEHICLE_NON_PEN_DAMAGE_SCALE
-	hp = maxf(hp - damage, 0.0)
-	_maybe_bail_out()   # 候选 Q：快报废 → 乘员弃车逃生
-	var wrecked_now := hp <= 0.0
-	if wrecked_now:
-		destroyed = true
-		exit_vehicle()
-		wrecked.emit(self)
-		EffectSpawner.wreck_smoke_on(self)   # 12.7.2：残骸持续冒烟（K-kill 的等效表现）
+		_hull_damage(damage)
 	queue_redraw()
 	return {"penetrated": penetrated, "damage": damage, "side": side,
-			"armor_mm": armor_mm, "penetration_mm": penetration_mm, "destroyed": wrecked_now}
+			"armor_mm": armor_mm, "penetration_mm": penetration_mm,
+			"destroyed": destroyed, "part": part, "part_state": part_state,
+			"part_destroyed": part_destroyed}
 
 
 ## 能开炮的前提：有人操炮（武器位）或这辆是 AI 车——驾驶位不能开炮（8.1 座位分工）
 func can_fire() -> bool:
 	if destroyed or _fire_cooldown > 0.0:
 		return false
+	if main_gun_blocked():
+		return false          # F-kill（8.4.1：炮塔环损坏 ⇒ 主炮不能开）
 	if operator == null and not ai_enabled:
 		return false
 	return selected_ammo() > 0
@@ -340,6 +419,8 @@ func can_fire() -> bool:
 func fire_block_reason() -> String:
 	if destroyed:
 		return "载具已报废"
+	if main_gun_blocked():
+		return "火炮已损毁"
 	if selected_ammo() <= 0:
 		return "反坦克导弹打光" if _ammo_type == AmmoType.ATGM else "车载弹药耗尽"
 	if _fire_cooldown > 0.0:
@@ -520,6 +601,10 @@ func _process(delta: float) -> void:
 		_fire_cooldown = maxf(_fire_cooldown - delta, 0.0)
 	_turret_recoil = maxf(_turret_recoil - GameConfig.TURRET_RECOIL_DECAY * delta, 0.0)
 	recenter_turret(delta)
+	# 起火（8.4.1：油箱被击穿）：持续掉血；docx 8.4.8 明确不蔓延、不烧到弹药架
+	var burn := VehiclePartsScript.fire_dps(parts)
+	if burn > 0.0 and not destroyed:
+		_hull_damage(burn * delta)
 	if ai_enabled and not destroyed:
 		_ai_update(delta)
 	_sync_layers()          # 12.7.2：图层跟着车体 / 炮塔

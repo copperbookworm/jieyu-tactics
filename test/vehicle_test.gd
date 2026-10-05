@@ -7,6 +7,7 @@ extends EditorScript
 
 const VehicleTableScript := preload("res://systems/vehicles/VehicleTable.gd")
 const VehicleScript := preload("res://entities/vehicle/Vehicle.gd")
+const VehiclePartsScript := preload("res://systems/vehicles/VehicleParts.gd")
 
 var _passed := 0
 var _failed := 0
@@ -25,6 +26,7 @@ func _run() -> void:
 	_test_crew_bailout()
 	_test_fire_block_reason()
 	_test_wreck_refuses_boarding()
+	_test_parts_wiring()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
 		print("！！ 有 %d 项失败，往上翻看期望与实际" % _failed)
@@ -283,3 +285,72 @@ func _test_wreck_refuses_boarding() -> void:
 	_check("报废车：整辆车没人占用", vehicle.is_occupied(), false)
 	vehicle.free()
 	player.free()
+
+
+## 部件系统接进 Vehicle（docx 8.4 · 2026-10-05 第二轮）：状态 / 效果 / 按部位结算
+func _test_parts_wiring() -> void:
+	var tank = VehicleScript.new()
+	tank.setup("mbt_t1", null)
+	_check("部件：初始化出目录里的全部部件", tank.parts.size(),
+			VehiclePartsScript.part_catalog_for("mbt_t1").size())
+	_check("部件：机动型式从表里读出来", tank.mobility(), "tracked")
+	_check("部件：默认瞄高档是车体", tank.aim_gear, VehiclePartsScript.Gear.HULL)
+	_check("部件：完好时速度系数 1.0", tank.speed_scale(), 1.0)
+
+	# 炮塔环：打穿 → F-kill（主炮锁死），但整车不报废
+	var turret_hit: Dictionary = tank.take_hit(99999.0, 99999.0, Vector2.RIGHT, "turret_ring")
+	_check_true("部位：炮塔环被击穿", bool(turret_hit["penetrated"]))
+	_check("部位：炮塔环一炮就损坏", tank.parts["turret_ring"]["state"],
+			VehiclePartsScript.STATE_DESTROYED)
+	_check_true("部位：炮塔环损坏 ⇒ 主炮被锁", tank.main_gun_blocked())
+	_check("部位：炮塔环损坏但整车没报废", tank.destroyed, false)
+	var gunner := PlayerUnit.new()
+	tank.operator = gunner
+	_check("部位：F-kill 后 can_fire 为假", tank.can_fire(), false)
+	_check("部位：F-kill 的开火原因是「火炮已损毁」", tank.fire_block_reason(), "火炮已损毁")
+	gunner.free()
+
+	# 弹药架：击穿 = 殉爆（K-kill）
+	var victim = VehicleScript.new()
+	victim.setup("mbt_t1", null)
+	victim.take_hit(99999.0, 99999.0, Vector2.RIGHT, "ammo_rack")
+	_check_true("部位：弹药架被击穿 ⇒ 殉爆（整车报销）", victim.destroyed)
+
+	# 履带：断带 = M-kill，但整车不死（8.4.3：打部件不扣整车结构值）
+	var tracked = VehicleScript.new()
+	tracked.setup("mbt_t1", null)
+	var track_hp: float = tracked.hp
+	tracked.take_hit(99999.0, 99999.0, Vector2.RIGHT, "track_l")
+	_check("部位：断一条履带 ⇒ 速度 ×0.7", tracked.speed_scale(),
+			GameConfig.VEHICLE_TRACK_ONE_SPEED_SCALE)
+	_check("部位：打履带不扣整车结构值（docx 8.4.3）", tracked.hp, track_hp)
+	_check("部位：断带整车仍没报废", tracked.destroyed, false)
+
+	# 未击穿：只吃 5% 零头、不伤部件
+	var chipped = VehicleScript.new()
+	chipped.setup("mbt_t1", null)
+	var chip: Dictionary = chipped.take_hit(1000.0, 1.0, Vector2.RIGHT, "hull")
+	_check("部位：未击穿只吃 5% 零头", float(chip["damage"]),
+			1000.0 * GameConfig.VEHICLE_NON_PEN_DAMAGE_SCALE)
+	_check("部位：未击穿不伤部件", chipped.parts["engine"]["state"],
+			VehiclePartsScript.STATE_OK)
+
+	# 起火：油箱被击穿后持续掉血（不蔓延）
+	var burning = VehicleScript.new()
+	burning.setup("mbt_t1", null)
+	VehiclePartsScript.set_state(burning.parts, "fuel_tank",
+			VehiclePartsScript.STATE_DESTROYED)
+	var burn_hp: float = burning.hp
+	burning._process(1.0)
+	_check_true("部位：油箱被击穿后起火掉血（1 s 掉约 %.0f）" % GameConfig.VEHICLE_FIRE_DPS,
+			burning.hp < burn_hp - GameConfig.VEHICLE_FIRE_DPS * 0.5)
+
+	# resolve_hit_part：玩家瞄高档位真的能选到部位
+	_check("路由：正面 + 炮塔档 ⇒ 炮塔环",
+			tank.resolve_hit_part("front", VehiclePartsScript.Gear.TURRET, 0.5), "turret_ring")
+	_check("路由：正面 + 弹药架档 ⇒ 弹药架",
+			tank.resolve_hit_part("front", VehiclePartsScript.Gear.AMMO_RACK, 0.5), "ammo_rack")
+	_check_true("路由：正面 + 车体档 ⇒ 不会落进弹药架",
+			tank.resolve_hit_part("front", VehiclePartsScript.Gear.HULL, 0.99) != "ammo_rack")
+
+	tank.free(); victim.free(); tracked.free(); chipped.free(); burning.free()

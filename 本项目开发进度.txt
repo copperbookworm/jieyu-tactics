@@ -3401,3 +3401,19 @@ base_url 也可能变。若把模型名写死在包里，玩家会遇到「选�
   · **临时文件已还原**：project.godot 的 main_scene 已改回 `res://scenes/app/App.tscn`；
     `scenes/_measure_boot.gd/.tscn` 保留在盘上（下一轮白名单后要复用，届时再决定要不要入库）。
 
+· 【新，2026-10-05 · 第七十二版】100 fps 冲刺第一轮：**先量天花板，发现天花板被钉在 60 Hz**（不是渲染问题）。
+  · 真机证据：本包运行时 `mActiveModeId=1`、`SurfaceFlinger period_ns=16666666`（60 Hz）、
+    AGPService `set active config - fps 60` + `iaware strange app type: -1`；而同机另一个游戏
+    （`com.windowsgames.firefightRUW`）运行时 `mActiveModeId=2`、`period_ns=8333333`（120 Hz）
+    ⇒ **面板与系统能给 120 Hz，是本应用没有请求**（`primaryRefreshRateRange=[0 60]` 要应用自己请求）。
+  · Godot 无 Android 高刷开关；`VSYNC_DISABLED/MAILBOX` 在 Android/Vulkan 不可用（回退 Enabled）
+    ⇒ FIFO 硬绑定，帧时间量化到 16.67/33.3/50 ms；「FPS 100」在 60 Hz 下不可观测，可达稳定态只有 120 / 60。
+  · 三轴八变体扫描（真机 · 20v20 · 每窗 2.5 s）：**像素不是瓶颈**（2880×1920 → 960×540 无改善，故**不降画质**）；
+    **仿真是主战场**（phys 60→1：27→53 fps）；但只关 AI 也只有 43 fps（draw=0）⇒ 还有非 AI 的 CPU 开销未定位；
+    `max_fps=120` 反而更差（buffer 饥饿）。PROC/PHYS 窗口粒度不可信，只用 fps/p50/p90/p99。
+  · 三条「不写 Java 上 120 Hz」的路都试过、都不行（frame_pacing=false / `application/run/max_fps=120` / vsync 关）。
+    唯一剩余路径：**Android 自定义构建 + `GodotApp.java` 请求 120 Hz**（模板只有 1 个 Java 文件，4302 字符）。
+  · 产出：`scenes/_measure_boot.gd` 升级为三轴扫描探针（跑完自动退出并还原全局口径）；
+    `docs/性能预算.md` 第十四节写了全表、口径与复现命令。**待拍板：是否改走 gradle 自定义 Android 构建。**
+  · 本轮测试：单元 EXIT=0；集成冒烟 通过 274 / 失败 0（EXIT=0）。
+

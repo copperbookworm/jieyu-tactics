@@ -1,69 +1,170 @@
 extends Node
 
-## 【临时 · 真机帧时间对照实验，跑完就删】
-## 对照设计：同一个 FPS 记录器，只换启动目标 —— 起大厅（几个 Control 节点、几乎无 AI）
-## 还是起 20v20 对局。用来分清「设备限帧」还是「我们的负载」：
-##   大厅也 ~7 fps ⇒ 设备/策略限帧；大厅 60 fps 而对局 7.6 ⇒ 是我们的负载。
-## 背景：dumpsys gfxinfo 对 Godot 结构性无效（SurfaceView 不进 HWUI，永远 0 帧 + 4950 ms 占位），
-## 所以真机帧时间用引擎自报：_process 逐帧收 delta，每 5 s 打 p50/p95/p99/max + Engine FPS。
+## 【临时 · 100 fps 冲刺探针】一次运行扫三轴，跑完可删
+##
+## 为什么要有它（2026-10-05 真机实测）：本包被华为 FrameRateManager 钉在 **60 Hz**——
+##   adb 里 "FrameRateManager: set active config - fps 60"、mActiveModeId=1、SurfaceFlinger
+##   报 period_ns=16666666（16.67 ms）。面板本身支持 60/120/144（supportedModes id=1/2/3），
+##   但系统的 appRequestRefreshRateRange=[0 Infinity] 要**应用自己请求**才会给高刷。
+##   ⇒ 「FPS 100」的头号前提不是优化，而是**先把 surface 请求到 120 Hz**。
+##
+## 三轴（每轴只改一个自变量，窗口时长固定，便于横向比）：
+##   ① 呈现：Engine.max_fps / vsync_mode —— 验证「max_fps>0 会不会让系统切到 120 Hz」
+##   ② 像素预算：content_scale_mode/size —— 2880x1920 (5.53 Mpx) → 960x540 (0.52 Mpx)
+##   ③ 仿真：Engine.physics_ticks_per_second —— 60（满 AI）→ 1（只渲染）/ 30（已拍板可降）
+##
+## 口径纪律：真机帧时间一律引擎自报（dumpsys gfxinfo 对 Godot 结构性无效，见 PerfOverlay.gd 头部）。
+## 每窗一行，变体切换单独一行，便于从 logcat 直接读。
 
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
 const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
 
-const BOOT_LOBBY := false     # true = 对照组（大厅）；false = 实验组（20 v 20 对局）
-const WINDOW_S := 3.0
+const WINDOW_S := 2.5      # 每个变体采样窗口（秒）
+const WARMUP_S := 3.0      # 起对局后的预热：地图 / 纹理上传 / 铺开
 
+## 自变量表：-1 = 本项不动；mode="" = 不动
+const VARIANTS: Array = [
+	{"name": "01_base_maxfps0_vsync_on", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60},
+	{"name": "02_maxfps120_vsync_off", "max_fps": 120, "vsync": 0, "mode": "", "size": Vector2i.ZERO, "phys": 60},
+	{"name": "03_maxfps100_mailbox", "max_fps": 100, "vsync": 3, "mode": "", "size": Vector2i.ZERO, "phys": 60},
+	{"name": "04_px960x540_maxfps120", "max_fps": 120, "vsync": 0, "mode": "viewport", "size": Vector2i(960, 540), "phys": 60},
+	{"name": "05_render_only_px960_phys1", "max_fps": 120, "vsync": 0, "mode": "viewport", "size": Vector2i(960, 540), "phys": 1},
+	{"name": "06_sim_only_hide_all", "max_fps": 120, "vsync": 0, "mode": "viewport", "size": Vector2i(960, 540), "phys": 60, "hide": true},
+	{"name": "07_phys30_canvasitems", "max_fps": 120, "vsync": 0, "mode": "canvas_items", "size": Vector2i.ZERO, "phys": 30},
+	{"name": "08_best_guess_px960_phys30_mf100", "max_fps": 100, "vsync": 3, "mode": "viewport", "size": Vector2i(960, 540), "phys": 30},
+]
+
+var _main = null
 var _samples: Array = []
 var _elapsed := 0.0
 var _window := 0.0
 var _last_phys := 0
+var _index := -1
+var _hidden: Array = []
 
 
 func _ready() -> void:
-	if BOOT_LOBBY:
-		add_child((load("res://scenes/app/App.tscn") as PackedScene).instantiate())
-		print("[测量包] 对照组：已起大厅 App.tscn")
-		return
 	MatchRulesScript.set_mode(ModeTableScript.Mode.PVP_CASUAL)
-	var main = (load("res://scenes/gameplay/Main.tscn") as PackedScene).instantiate()
-	main.enemy_count = ModeTableScript.enemy_count(ModeTableScript.Mode.PVP_CASUAL)
-	add_child(main)
-	print("[测量包] 实验组：已按 PVP_CASUAL 起对局（敌人 %d、队友 %d）"
-			% [main.enemy_count, MatchRulesScript.ally_count()])
+	_main = (load("res://scenes/gameplay/Main.tscn") as PackedScene).instantiate()
+	_main.enemy_count = ModeTableScript.enemy_count(ModeTableScript.Mode.PVP_CASUAL)
+	add_child(_main)
+	print("[探针] 起对局：敌人 %d、队友 %d | 屏幕 %s refresh=%.1fHz | 初始 vsync=%d max_fps=%d phys_hz=%d" % [
+			_main.enemy_count, MatchRulesScript.ally_count(),
+			str(DisplayServer.screen_get_size()), DisplayServer.screen_get_refresh_rate(),
+			DisplayServer.window_get_vsync_mode(), Engine.get_max_fps(), Engine.physics_ticks_per_second])
 
 
 func _process(delta: float) -> void:
 	_elapsed += delta
+	if _index < 0:
+		if _elapsed < WARMUP_S:
+			return
+		_elapsed = 0.0
+		_advance(0)
+		return
 	_window += delta
 	_samples.append(delta * 1000.0)
 	if _window < WINDOW_S:
 		return
 	_window = 0.0
+	_report()
+	if _index + 1 < VARIANTS.size():
+		_advance(_index + 1)
+	else:
+		print("[探针] 扫描结束")
+		set_process(false)
+		_restore_defaults()
+		# 扫完主动退出：真机上用 logcat 判定「扫完了」而不是被系统挂起；headless 里也一样
+		get_tree().quit(0)
+
+
+## 退出前把动过的全局口径还原，避免「探针跑完把工程留在怪状态」这种坑
+func _restore_defaults() -> void:
+	_unhide_scene_tree()
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+	Engine.max_fps = 0
+	Engine.physics_ticks_per_second = 60
+	Engine.max_physics_steps_per_frame = 2
+	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	print("[探针] 已还原默认口径（vsync=1 max_fps=0 phys=60 canvas_items）")
+
+
+func _advance(i: int) -> void:
+	_index = i
+	var v: Dictionary = VARIANTS[i]
+	var note := ""
+	if int(v.get("hide", false)) != 0:
+		note += _hide_scene_tree()
+	else:
+		note += _unhide_scene_tree()
+	if int(v["vsync"]) >= 0:
+		DisplayServer.window_set_vsync_mode(int(v["vsync"]))
+	Engine.max_fps = int(v["max_fps"])
+	if str(v["mode"]) == "viewport":
+		var w := get_window()
+		w.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+		w.content_scale_size = v["size"]
+	elif str(v["mode"]) == "canvas_items":
+		var w2 := get_window()
+		w2.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	var phys := int(v["phys"])
+	Engine.physics_ticks_per_second = phys
+	var steps_cap := 2 if phys > 2 else 1
+	Engine.max_physics_steps_per_frame = steps_cap
+	_samples.clear()
+	print("[探针·变体] %s | 请求 max_fps=%d vsync=%d mode=%s size=%s phys=%d %s" % [
+			v["name"], Engine.get_max_fps(), DisplayServer.window_get_vsync_mode(),
+			str(get_window().content_scale_mode), str(get_window().content_scale_size), phys, note])
+
+
+func _report() -> void:
 	var sorted := _samples.duplicate()
 	sorted.sort()
 	var count := sorted.size()
-	_samples.clear()
 	if count == 0:
 		return
-	var p50: float = sorted[int(float(count) * 0.5)]
-	var p90: float = sorted[mini(int(float(count) * 0.9), count - 1)]
-	var p95: float = sorted[mini(int(float(count) * 0.95), count - 1)]
-	var p99: float = sorted[mini(int(float(count) * 0.99), count - 1)]
-	# 2026-10-05：帧时间要与「引擎侧拆解」同一行打出来 —— 否则分不清是仿真还是渲染。
-	# steps = 这一窗里物理步进了几次：帧慢时 Godot 会一帧补跑多个物理步（默认上限 8），
-	# 而单位的 _physics_process（AI / 通视）在**每个**物理步里都跑一遍 ⇒ 帧越慢、AI 跑得越多（死亡螺旋）。
 	var phys_total := Engine.get_physics_frames()
 	var steps := phys_total - _last_phys
 	_last_phys = phys_total
-	print("[测帧] t=%.0fs 帧数=%d fps=%.1f steps=%d(%.1f/帧) | p50=%.1f p90=%.1f p95=%.1f p99=%.1f max=%.1f ms | PROC=%.1f PHYS=%.1f | draw=%d robj=%d nodes=%d objs=%d mem=%.1fMB" % [
-			_elapsed, count, Engine.get_frames_per_second(), steps,
-			float(steps) / maxf(float(count), 1.0),
-			p50, p90, p95, p99,
-			sorted[count - 1],
+	var p50: float = sorted[int(float(count) * 0.5)]
+	var p90: float = sorted[mini(int(float(count) * 0.9), count - 1)]
+	var p99: float = sorted[mini(int(float(count) * 0.99), count - 1)]
+	print("[测帧] %s | 帧数=%d fps=%.1f steps=%.1f/帧 | p50=%.1f p90=%.1f p99=%.1f max=%.1f ms | PROC=%.1f PHYS=%.1f | draw=%d robj=%d prim=%d nodes=%d objs=%d mem=%.1fMB | refresh=%.1fHz vsync=%d maxfps=%d" % [
+			VARIANTS[_index]["name"], count, Engine.get_frames_per_second(),
+			float(steps) / maxf(float(count), 1.0), p50, p90, p99, sorted[count - 1],
 			float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0,
 			float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0,
 			int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 			int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)),
+			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
 			int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 			int(Performance.get_monitor(Performance.OBJECT_COUNT)),
-			float(Performance.get_monitor(Performance.MEMORY_STATIC)) / 1048576.0])
+			float(Performance.get_monitor(Performance.MEMORY_STATIC)) / 1048576.0,
+			DisplayServer.screen_get_refresh_rate(),
+			DisplayServer.window_get_vsync_mode(), Engine.get_max_fps()])
+
+
+## 「只仿真」变体：把整棵树上所有 CanvasItem / CanvasLayer 藏起来（渲染≈0），保留 AI 与物理
+func _hide_scene_tree() -> String:
+	_hidden.clear()
+	var stack: Array = [get_tree().root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is CanvasLayer or n is CanvasItem:
+			if n.visible:
+				n.visible = false
+				_hidden.append(n)
+		for c in n.get_children():
+			stack.append(c)
+	return "已隐藏视觉节点 %d 个" % _hidden.size()
+
+
+func _unhide_scene_tree() -> String:
+	if _hidden.is_empty():
+		return "视觉节点本就可见"
+	var n := _hidden.size()
+	for node in _hidden:
+		if is_instance_valid(node):
+			node.visible = true
+	_hidden.clear()
+	return "已恢复视觉节点 %d 个" % n

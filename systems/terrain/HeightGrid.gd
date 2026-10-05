@@ -85,11 +85,27 @@ func cell_to_world_center(cell: Vector2i) -> Vector2:
 ## 斜穿格角时两格都收进来——遮挡判定宁多不漏。
 func cells_on_segment(from_world: Vector2, to_world: Vector2) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
+	_fill_cells_on_segment(cells, from_world, to_world)
+	return cells
+
+
+## 复用调用方缓冲的版本（通视热路径专用）：避免每次查询都新分配一个 Array。
+## 20v20 里每帧有十几条视线，每条一次分配是移动端 GC 抖动的主要来源之一。
+## 注意：返回值就是入参同一个数组，下一次调用会覆盖，只许当场用完。
+func cells_on_segment_into(out: Array[Vector2i], from_world: Vector2,
+		to_world: Vector2) -> Array[Vector2i]:
+	out.clear()
+	_fill_cells_on_segment(out, from_world, to_world)
+	return out
+
+
+func _fill_cells_on_segment(cells: Array[Vector2i], from_world: Vector2,
+		to_world: Vector2) -> void:
 	var start_cell := world_to_cell(from_world)
 	var end_cell := world_to_cell(to_world)
 	cells.append(start_cell)
 	if start_cell == end_cell:
-		return cells
+		return
 
 	var delta := to_world - from_world
 	var step_x := 0
@@ -129,7 +145,6 @@ func cells_on_segment(from_world: Vector2, to_world: Vector2) -> Array[Vector2i]
 			t_max_y += t_delta_y
 		cells.append(current)
 		guard -= 1
-	return cells
 
 
 ## docx 12.6 图②「求最高点」：同一条 DDA 上扫描并保留最高格及其高度

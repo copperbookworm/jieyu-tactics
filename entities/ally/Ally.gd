@@ -90,6 +90,25 @@ func _build_visual() -> void:
 	_visual.setup_figure(body_radius, GameConfig.UNIT_COLOR_PLAYER)
 
 
+## 每次重挑最多对几个候选做**贵**的通视检查（与 Enemy.TARGET_SCAN_MAX 同一口径）。
+## 2026-10-05 性能修复：队友原先没有这个上限 —— 按组顺序对每个更近的候选都查一次 DDA，
+## 最坏一次选敌 20 次 × ~150 µs ≈ 3 ms，19 名队友每 0.1 s 重挑一次 ⇒ ~9.5 ms/帧（实测队友一帧 668 µs）。
+const TARGET_SCAN_MAX := 3
+
+## 敌组列表的帧级缓存：一帧内多个队友取同一份，避免每人每次选敌 / 开火都新分配一个 Array。
+static var _enemy_cache: Array = []
+static var _enemy_cache_frame := -1
+
+
+static func _cached_enemies() -> Array:
+	var frame := Engine.get_physics_frames()
+	if frame != _enemy_cache_frame:
+		var loop := Engine.get_main_loop() as SceneTree
+		_enemy_cache = loop.get_nodes_in_group("enemy") if loop != null else []
+		_enemy_cache_frame = frame
+	return _enemy_cache
+
+
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
@@ -120,22 +139,33 @@ func _physics_process(delta: float) -> void:
 
 
 func _pick_target():
-	var tree := get_tree()
-	if tree == null:
+	var enemies := _cached_enemies()
+	if enemies.is_empty():
 		return null
+	# 按距离从近到远，最多对 TARGET_SCAN_MAX 个候选查通视（距离比较廉价、DDA 昂贵）。
+	# 语义取舍与 Enemy._pick_target 一致：只在前 3 近的候选里找可见目标，不做全场扫描。
 	var best = null
 	var best_distance := engage_range
-	for node in tree.get_nodes_in_group("enemy"):
-		if not (node is Node2D):
-			continue
-		var d: float = global_position.distance_to(node.global_position)
-		if d >= best_distance:
-			continue
-		if _sight != null and _sight.grid != null and not _has_sight(node):
-			continue
-		best_distance = d
-		best = node
-	return best
+	var scanned := 0
+	var floor_distance := 0.0
+	while scanned < TARGET_SCAN_MAX:
+		best = null
+		best_distance = engage_range
+		for node in enemies:
+			if not (node is Node2D):
+				continue
+			var d: float = global_position.distance_to(node.global_position)
+			if d >= best_distance or d <= floor_distance:
+				continue
+			best_distance = d
+			best = node
+		if best == null:
+			return null
+		scanned += 1
+		if _sight == null or _sight.grid == null or _has_sight(best):
+			return best
+		floor_distance = best_distance
+	return null
 
 
 func _has_sight(target) -> bool:
@@ -175,7 +205,7 @@ func _follow(delta: float) -> void:
 func _fire() -> void:
 	if main == null or _target == null:
 		return
-	var targets: Array = get_tree().get_nodes_in_group("enemy")
+	var targets: Array = _cached_enemies()
 	var result: Dictionary = BallisticsSystem.resolve_shot(global_position, facing,
 			engage_range, targets, GameConfig.ENEMY_HIT_RADIUS, _sight,
 			GameConfig.SOLDIER_EYE_HEIGHT)

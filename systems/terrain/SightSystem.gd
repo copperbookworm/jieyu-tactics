@@ -11,6 +11,14 @@ extends RefCounted
 
 var grid: HeightGrid = null
 
+## DDA 复用缓冲（见 HeightGrid.cells_on_segment_into）：只在本文件的热路径用
+var _dda_cells: Array[Vector2i] = []
+## 掩体组的帧级缓存：get_nodes_in_group 每次都新分配一个 Array，
+## 而一次 has_sight 里 occluder_blocks / first_cover 会把掩体组取好几遍。
+## ⚠ 烟雾组**不能**这样缓存（见 _smokes() 的注释）。
+var _occluder_cache: Array = []
+var _occluder_frame := -1
+
 
 func _init(height_grid: HeightGrid = null) -> void:
 	grid = height_grid
@@ -53,7 +61,7 @@ func terrain_first_blocker(origin: Vector2, origin_height: float,
 	if grid == null:
 		return result
 
-	var cells := grid.cells_on_segment(origin, target)
+	var cells := grid.cells_on_segment_into(_dda_cells, origin, target)
 	if cells.is_empty():
 		return result
 
@@ -151,14 +159,38 @@ func first_smoke_hit(from: Vector2, to: Vector2) -> Vector2:
 ## 站姿能透过窗看到屋里的人，卧姿（0.6 m）低于窗台（1.0 m）就看不到，与 C2 矮掩体同一套直觉。
 func occluder_blocks(origin: Vector2, origin_height: float,
 		target: Vector2, target_height: float) -> bool:
+	# 粗筛（2026-10-05 性能修复）：正式图「青岭走廊」掩体很多，逐块做「本地空间变换 + 4 次线段求交」
+	# 实测要 1.6 ms/次。先用「掩体包围圆 vs 线段」的距离测试挡掉绝大多数 —— 外接圆只可能多留，
+	# 不会漏掉真正相交的块，所以判定结果与原来完全一致。
+	var seg := target - origin
+	var seg_len_sq := seg.length_squared()
 	for node in _occluders():
 		var cover = node
-		if cover == null or not cover.has_method("segment_hit"):
+		if cover == null or not is_instance_valid(cover) or not cover.has_method("segment_hit"):
+			continue
+		if not circle_hits_segment(cover.global_position, cover_radius(cover),
+				origin, seg, seg_len_sq):
 			continue
 		if cover_blocks(cover, origin, origin_height, target, target_height,
 				_ground_under(cover)):
 			return true
 	return false
+
+## 圆与线段是否可能相交（粗筛用）：圆心到线段的最近距离 ≤ 半径。
+static func circle_hits_segment(center: Vector2, radius: float, from: Vector2,
+		seg: Vector2, seg_len_sq: float) -> bool:
+	if seg_len_sq <= 0.000001:
+		return center.distance_squared_to(from) <= radius * radius
+	var t := clampf((center - from).dot(seg) / seg_len_sq, 0.0, 1.0)
+	return (from + seg * t).distance_squared_to(center) <= radius * radius
+
+
+## 掩体粗筛半径 ＝ 矩形外接圆半径；取不到（非 Cover 的遮挡体）就给个大值 ⇒ 不粗筛、宁慢不漏。
+static func cover_radius(cover) -> float:
+	var half = cover.get("half_size")
+	if half is Vector2:
+		return (half as Vector2).length()
+	return 100000.0
 
 
 ## 单块掩体挡不挡这条视线（**纯静态判定**，不查组、不需要场景树 —— 便于单测与复用）。
@@ -216,9 +248,14 @@ func first_cover(from: Vector2, to: Vector2, sight_height_at: float = INF) -> Di
 	var nearest_node = null
 	var nearest_point := Vector2.INF
 	var nearest_distance := INF
+	var seg := to - from
+	var seg_len_sq := seg.length_squared()
 	for node in _occluders():
 		var cover = node
-		if cover == null or not cover.has_method("segment_hit"):
+		if cover == null or not is_instance_valid(cover) or not cover.has_method("segment_hit"):
+			continue
+		if not circle_hits_segment(cover.global_position, cover_radius(cover),
+				from, seg, seg_len_sq):
 			continue
 		var hit: Vector2 = cover.segment_hit(from, to, sight_height_at)
 		if hit == Vector2.INF:
@@ -239,13 +276,19 @@ func first_cover_hit(from: Vector2, to: Vector2) -> Vector2:
 
 ## "occluder" 组（掩体）——通过 main loop 取，省得每个调用方都传一遍列表
 func _occluders() -> Array:
+	var frame := Engine.get_physics_frames()
+	if frame == _occluder_frame:
+		return _occluder_cache
 	var loop := Engine.get_main_loop() as SceneTree
-	if loop == null:
-		return []
-	return loop.get_nodes_in_group(GameConfig.OCCLUDER_GROUP)
+	_occluder_cache = loop.get_nodes_in_group(GameConfig.OCCLUDER_GROUP) if loop != null else []
+	_occluder_frame = frame
+	return _occluder_cache
 
 
 ## 烟雾组（与掩体分开取：烟只挡视线，见 smoke_blocks 注释）
+## ⚠ 烟雾组**不做帧级缓存**（2026-10-05 实测被集成冒烟抓住）：4.12.5 要求「新放的烟当帧立刻生效」，
+## 缓存会让同一帧内刚生成的烟查不到，投烟后那一条视线仍判通 ⇒ 候选 P 的 6 条检查全红。
+## 烟雾层只要 ~1 µs，缓存它本来也省不到什么。
 func _smokes() -> Array:
 	var loop := Engine.get_main_loop() as SceneTree
 	if loop == null:

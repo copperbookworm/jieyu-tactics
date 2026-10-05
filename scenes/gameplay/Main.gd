@@ -195,6 +195,7 @@ func _wire_signals() -> void:
 	hud.vehicle_button.pressed.connect(vehicles.toggle)
 	hud.seat_button.pressed.connect(vehicles.switch_seat)
 	hud.ammo_type_button.pressed.connect(vehicles.switch_ammo)   # 弹种：主炮 ⇄ 反坦克导弹
+	hud.aim_gear_button.pressed.connect(vehicles.cycle_aim_gear)  # 瞄高：炮塔 / 车体 / 弹药架 / 机动件
 	# 战术地图
 	hud.tactical_map.mark_placed.connect(mark_ctl.place_at)
 	hud.tactical_map.closed.connect(hud.close_map)

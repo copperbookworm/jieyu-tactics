@@ -409,11 +409,21 @@ func _check_interactions() -> void:
 	# 瞄高（docx 8.4.2 · 2026-10-05 加第四档「弹药架」）：武器位能换、驾驶位换不动
 	var gear_before: int = v.aim_gear
 	_main.hud.mark_hint.text = ""
+	_check_true("瞄高：武器位显示瞄高键", _main.hud.aim_gear_button.visible)
+	var aim_rect: Rect2 = _main.hud.aim_gear_button.get_global_rect()
+	var clash := ""
+	for other in [_main.hud.fire_button, _main.hud.explosive_button, _main.hud.focus_button]:
+		if other != null and aim_rect.intersects(other.get_global_rect()):
+			clash += String(other.name) + " "
+	_check_true("瞄高：键不与开火 / 爆破 / 聚焦键重叠（枪手态几何）", clash == "")
+	_check_true("瞄高：键不出屏（右缘 %.0f ≤ 960）" % aim_rect.end.x, aim_rect.end.x <= 960.0)
 	_check_true("瞄高：武器位能换档", _main.vehicles.cycle_aim_gear())
+	_check_true("瞄高：HUD 状态行显示当前档", _main.hud.role_label.text.contains("瞄高"))
 	_check("瞄高：换到下一档", v.aim_gear,
 			(gear_before + 1) % VehiclePartsScript.GEAR_COUNT)
 	_check_true("瞄高：换档给了提示", _main.hud.mark_hint.text.contains("瞄高"))
 	_main.vehicles.switch_seat()
+	_check_true("瞄高：驾驶位不显示瞄高键", not _main.hud.aim_gear_button.visible)
 	var gear_after: int = v.aim_gear
 	_main.hud.mark_hint.text = ""
 	_check("瞄高：驾驶位换不动", _main.vehicles.cycle_aim_gear(), false)
@@ -423,6 +433,7 @@ func _check_interactions() -> void:
 	_main.vehicles.toggle()
 	_check_true("下车：按钮回到「上车」", not v.is_occupied()
 			and _main.hud.vehicle_button.text == "上车")
+	_check_true("瞄高：下车后瞄高键收起", not _main.hud.aim_gear_button.visible)
 	_check_true("下车：相机回到步兵档 [32,16,8] + 500 m 上限",
 			not _main.camera_controller.in_vehicle
 			and _main.camera_controller.zoom_levels() == GameConfig.ZOOM_LEVELS

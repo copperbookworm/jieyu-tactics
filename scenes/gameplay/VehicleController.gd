@@ -90,6 +90,7 @@ func toggle() -> void:
 		vehicle.exit_vehicle()
 		main.hud.set_vehicle_button_text("上车")
 		main.hud.show_hint("已下车")
+		main.hud.update_role()      # 瞄高键随座位立刻收起（不等 tick 节流）
 		_sync_camera_profile()
 		return
 	# 报废车不许上（2026-10-01 修）：上去之后武器位永远打不出炮，而且原来一句提示都没有，
@@ -104,6 +105,7 @@ func toggle() -> void:
 	vehicle.enter(main.player)
 	main.hud.set_vehicle_button_text("下车")
 	main.hud.show_hint("已上车：%s" % vehicle.vehicle_name())
+	main.hud.update_role()          # 上车后 HUD 立刻走载具分支
 	_sync_camera_profile()
 
 

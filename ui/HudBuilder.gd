@@ -27,6 +27,8 @@ const TipPanelScript := preload("res://ui/TipPanel.gd")
 const CommandWheelScript := preload("res://ui/CommandWheel.gd")
 ## 候选 O 第三轮：被击倒时的全屏视角（4.16）
 const DownedOverlayScript := preload("res://ui/DownedOverlay.gd")
+## 部件系统（docx 8.4）：HUD 状态行与瞄高键要读档位名
+const VehiclePartsScript := preload("res://systems/vehicles/VehicleParts.gd")
 
 var main = null                 # Main（不标类型：Main 无 class_name，用鸭子类型）
 var layer: CanvasLayer = null
@@ -59,6 +61,8 @@ var vehicle_button: Button = null
 var seat_button: Button = null
 ## 弹种键（ATGM 落地后加的）：武器位一键切「主炮 ⇄ 反坦克导弹」
 var ammo_type_button: Button = null
+## 瞄高键（docx 8.4.2 / 8.4.4 · 2026-10-05）：武器位切「炮塔 / 车体 / 弹药架 / 机动件」，只在武器位显示
+var aim_gear_button: Button = null
 ## 暂停键（2026-10-03 游戏外壳）：本文件只负责**建**，接线在 ui/screens/MatchHost.gd
 ## —— Main.gd 守着 398/400 的硬线，加不了这一行
 var pause_button: Button = null
@@ -332,6 +336,19 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	ammo_type_button.position = Vector2(104.0, 140.0 + _dy)
 	layer.add_child(ammo_type_button)
 	_tint(ammo_type_button, GROUP_VEHICLE, "列2 载具：主炮 ⇄ 反坦克导弹")
+
+	# 瞄高键（docx 8.4.2 / 8.4.4 · 2026-10-05）：武器位一键切「炮塔 / 车体 / 弹药架 / 机动件」。
+	# 位置 (700,292) 由 tools/hud_rects.gd 实测选出：在爆破键 (700,340) 正上方、
+	# 离开火键 (800,380) 与聚焦键 (680,420) 都留白，与既有控件零交集。
+	# 只在武器位显示（步兵 / 驾驶位 / 报废车都不出现）；枪手态的几何断言在集成冒烟里。
+	aim_gear_button = Button.new()
+	aim_gear_button.name = "AimGearButton"
+	aim_gear_button.text = "瞄高"
+	aim_gear_button.size = Vector2(80.0, 40.0)
+	aim_gear_button.position = Vector2(700.0, 292.0)
+	aim_gear_button.visible = false
+	layer.add_child(aim_gear_button)
+	_tint(aim_gear_button, GROUP_VEHICLE, "武器位：瞄高（炮塔 / 车体 / 弹药架 / 机动件）")
 	layer.add_child(map_button)
 
 	map_layer = CanvasLayer.new()
@@ -499,6 +516,14 @@ func update_role() -> void:
 	if role_label == null or main == null or main.player == null:
 		return
 	var vehicle = main.vehicles.vehicle if main.vehicles != null else null
+	# 瞄高键只在武器位显示（8.4.4）：步兵 / 驾驶位 / 报废车都不出现
+	# vehicle 是鸭子类型（Variant）：这条链推不出类型，必须显式标 bool
+	var gunner: bool = vehicle != null and vehicle.is_occupied() \
+			and not bool(vehicle.destroyed) and vehicle.seat_of(main.player) == "gunner"
+	if aim_gear_button != null:
+		aim_gear_button.visible = gunner
+		if gunner:
+			aim_gear_button.text = "瞄高:%s" % VehiclePartsScript.gear_name(int(vehicle.aim_gear))
 	if vehicle != null and vehicle.is_occupied():
 		# 载具数据没读到（导出包里少了 data/vehicles_data.txt 就是这样）时别只显示 0/0 ——
 		# 2026-10-01 真机上「车体 0/0 ｜ 余弹 0」被当成「正常车但开不了炮」，绕了一大圈才定位。
@@ -507,9 +532,10 @@ func update_role() -> void:
 			return
 		var seat_text := "武器位" if vehicle.seat_of(main.player) == "gunner" else "驾驶位"
 		# 弹种（武器位一键切）：主炮 ⇄ 反坦克导弹；余弹显示的是**当前弹种**的可用数
-		role_label.text = "%s（%s）｜ 弹种 %s %d/%d ｜ 车体 %.0f/%.0f ｜ 首上等效 %.0f mm" % [
+		role_label.text = "%s（%s）｜ 弹种 %s %d/%d ｜ 瞄高 %s ｜ 车体 %.0f/%.0f ｜ 首上等效 %.0f mm" % [
 			vehicle.vehicle_name(), seat_text, vehicle.ammo_type_name(),
 			vehicle.selected_ammo(), vehicle.selected_total(),
+			VehiclePartsScript.gear_name(int(vehicle.aim_gear)),
 			vehicle.hp, vehicle.max_hp, vehicle.armor_summary("front")]
 		return
 	# 炸药余量（2026-10-04）：工程兵才 >0；读的是控制器实时算出的剩余，不另存一份

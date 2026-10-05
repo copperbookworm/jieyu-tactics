@@ -53,24 +53,26 @@
 
 <h1>《解域》jieyu-1 · 架构 · 进度 · 路线图</h1>
 <p class="sub">工作副本 <code>D:\Godot4.7_Proj\jieyu-1</code>（Godot 4.7.1 · 纯 2D 俯视 · 960×540）
-· 实测日期 <b>2026-10-03</b> · 对应 <b>第四十八版 · 规模性能采样</b> · 上一轮 <code>ce06436</code>（第四十七版 · 游戏外壳）</p>
+· 实测日期 <b>2026-10-05</b> · 对应 <b>第六十五版 · 敌人按最近的可见目标选敌</b> · HEAD <code>fd94c9d</code>
+（真机帧时间对照：大厅 60 fps / 20v20 对局 ≥7.6 fps）</p>
 <div class="legend">
   <span><b style="color:var(--ok)">●</b> 已落地并验收</span>
   <span><b style="color:var(--wip)">●</b> 部分落地 / 有未完项</span>
   <span><b style="color:var(--plan)">●</b> 计划内（文档已定，工程未做）</span>
   <span><b style="color:var(--ask)">●</b> 待拍板</span>
   <span><b style="color:var(--dead)">●</b> 后续版本（已降级）</span>
-  <span><b style="color:var(--new)">●</b> 第四十七版新增</span>
+  <span><b style="color:var(--new)">●</b> 第六十五版为止新增</span>
 </div>
 
 <h2>一、体检卡（全部本轮真跑 / 真数）</h2>
 <div class="grid g6">
-  <div class="kpi"><div class="n">155</div><div class="l">个 .gd / <b>25986 行</b>（LF 字节口径）</div></div>
-  <div class="kpi"><div class="n">398</div><div class="l">Main.gd 行数（硬线 ≤400，守住）</div></div>
-  <div class="kpi"><div class="n">39 / 1337</div><div class="l">测试脚本 / 断言（全绿，退出码 0）</div></div>
-  <div class="kpi"><div class="n blue">5 + 25</div><div class="l">几何门禁：HUD 5 + 外壳五屏 25</div></div>
-  <div class="kpi"><div class="n blue">230</div><div class="l">集成冒烟项（真实例化 Main.tscn）</div></div>
-  <div class="kpi"><div class="n new">50</div><div class="l">版本轮次（本页随版本同步）</div></div>
+  <div class="kpi"><div class="n">176</div><div class="l">个 .gd / <b>31338 行</b>（LF 字节口径 · 不含 addons）</div></div>
+  <div class="kpi"><div class="n">352</div><div class="l">Main.gd 行数（硬线 ≤400 · 余量 48）</div></div>
+  <div class="kpi"><div class="n">52 / 1876</div><div class="l">测试脚本 / 断言（全绿 · 退出码 0）</div></div>
+  <div class="kpi"><div class="n blue">5 + 25 + 21</div><div class="l">几何门禁：HUD 5 + 外壳 25 + 规模接线 21</div></div>
+  <div class="kpi"><div class="n blue">263</div><div class="l">集成冒烟项（真实例化 Main.tscn）</div></div>
+  <div class="kpi"><div class="n new">65</div><div class="l">版本轮次（本页随版本同步）</div></div>
+  <div class="kpi"><div class="n" style="color:var(--wip)">≥7.6 / 60</div><div class="l">真机帧率：20v20 对局 / 大厅对照（fps）</div></div>
 </div>
 <div class="note">
   <b>口径（别用别的数）</b>：行数一律 <b>LF 字节数</b>（pwsh 的 <code>Get-Content</code> 在中文 UTF-8 上会少数约 6%，
@@ -97,18 +99,23 @@
   <div class="card">
     <h4>② 对局层（一局的世界）</h4>
     <ul>
-      <li><code>scenes/gameplay/Main.tscn</code> + <code>Main.gd</code>（398 行）</li>
-      <li>子模块：WorldSetup(191) · VehicleController(205) · MarkController(79) · HudBuilder(603) · IndirectController(67) · SupplyController(56) · LaneController(92)</li>
+      <li><code>scenes/gameplay/Main.tscn</code> + <code>Main.gd</code>（<b>352 行</b> · 第五十六 / 五十七版拆模块后回到余量内）</li>
+      <li>子模块：WorldSetup(<b>652</b>) · HudBuilder(<b>622</b>) · VehicleController(257) · <b>ExplosiveController(131)</b>
+        · <b>PlayerFireController(106)</b> · LaneController(92) · MarkController(79) · SmokeController(74)
+        · IndirectController(71) · SupplyController(58) · BootCheck(45)</li>
       <li>由 <code>MatchHost</code> 在 <code>add_child</code> <b>之前</b>灌 @export（模式 / 兵种 / 载具 / 敌人数 / 种子）—— 所以 Main.gd 一行未改</li>
     </ul>
   </div>
   <div class="card">
     <h4>③ 系统层 <code>systems/</code></h4>
     <ul>
-      <li>terrain：HeightGrid · SightSystem（地形 + 掩体 + 烟雾三层）· MapGenerator · TerrainZones · MapInspector</li>
-      <li>combat：BallisticsSystem · CaptureZone · SuppressionSystem · IndirectFire · Tracer</li>
+      <li>terrain：HeightGrid · SightSystem（地形 + 掩体 + 烟雾三层 + 感知节流）· MapGenerator · TerrainZones · MapInspector
+        · <b>SpawnPicker（出生点现挑，第六十一版）</b></li>
+      <li>combat：BallisticsSystem · CaptureZone · SuppressionSystem · IndirectFire · Tracer
+        · <b>explosives/ExplosiveSystem（炸药对人 / 对建筑两条衰减，第五十七版）</b></li>
       <li>quest / marks / comm / hud / audio / effects / camera / weapons / vehicles</li>
-      <li>match：MatchFlow（胜负流程）· MatchRules（本局规则）</li>
+      <li>match：MatchFlow（胜负流程）· MatchRules（本局规则）· <b>Organization（组 4 人 / 小队 ≥2 组）</b>
+        · <b>SquadOrders（主线 → 小队长 → 组任务）</b> · <b>EnemyDeployment（敌人按节点驻守 + 东侧预备队）</b></li>
       <li>ai：AiAdvisor + 10 个纯逻辑模块（BYO key · 本地账本 · 默认零联网）</li>
     </ul>
   </div>
@@ -116,16 +123,18 @@
     <h4>④ 实体层 <code>entities/</code></h4>
     <ul>
       <li>player · enemy · ally（3 名队友）· vehicle（我方 IFV + 敌方 MBT）</li>
-      <li>cover（20 个沙袋）· fob（工事）· lane（侧翼通路）· supply（补给车）· smoke</li>
-      <li>zone（泥泞 / 雪地 / 草丛）· effects（阴影 / 枪口火光 / 弹着）· visual（UnitFigure 上下半身）</li>
+      <li>cover（可摧毁 · 三段状态）· fob（工事）· lane（侧翼通路）· supply（补给车）· smoke · <b>explosive（C4 / TNT 安放）</b></li>
+      <li>zone（泥泞 / 雪地 / 草丛 + <b>RubblePatch 破坏残痕</b>）· effects（阴影 / 枪口火光 / 弹着）· visual（UnitFigure 上下半身）</li>
     </ul>
   </div>
   <div class="card">
     <h4>⑤ 数据层</h4>
     <ul>
-      <li><code>data/config/</code>：GameConfig · RoleTable（3 兵种）· <b>ModeTable（6 模式 · 新增）</b></li>
+      <li><code>data/config/</code>：GameConfig · RoleTable（<b>4 兵种</b>，新增工程兵）· ModeTable（6 模式）
+        · <b>ChargeTable（炸药唯一数值出口）</b></li>
       <li><code>data/weapons_data.txt</code> <b>25 把</b> · <code>vehicles_data.txt</code> <b>18 辆 × 27 列</b> · <code>quest_templates.txt</code> <b>8 条</b></li>
-      <li>自制高度图 <code>assets/maps/map_demo_height.png</code>（1000×1000 / 1 m 网格 / 最大海拔 150 m）</li>
+      <li>地图数据：<b>第一张正式图 <code>assets/maps/qingling_corridor/</code>（默认对局地图）</b>
+        ＋ 占位图 <code>map_demo_height.png</code> 与 <code>grassland_demo2/</code>（退化路径）</li>
       <li>随包 CJK 字体 <code>assets/fonts/JieyuCJK-Subset.otf</code>（1.66 MB · OFL）</li>
     </ul>
   </div>
@@ -134,9 +143,25 @@
     <ul>
       <li><code>core/EventBus.gd</code>（信号总线）</li>
       <li>autoload：<code>EventBus</code> · <code>Audio</code> · <code>AiAdvisor</code> · <code>_mcp_game_helper</code></li>
-      <li>门禁：<code>tools/geom_assertions.gd</code>（HUD）· <code>tools/screen_geom_check.gd</code>（外壳）· 共用 <code>tools/geom_checks.gd</code></li>
-      <li>跑批：<code>run_tests_headless.gd</code> · <code>run_integration_headless.gd</code></li>
+      <li>门禁：<code>tools/geom_assertions.gd</code>（HUD 5）· <code>tools/screen_geom_check.gd</code>（外壳 25）
+        · <b><code>tools/scale_wiring_check.gd</code>（规模接线 21）</b> · 共用 <code>tools/geom_checks.gd</code></li>
+      <li>跑批：<code>run_tests_headless.gd</code> · <code>run_integration_headless.gd</code>
+        · <b><code>probe_balance.gd</code>（20v20 平衡采样 · 桌面）</b></li>
       <li>专项自检：<code>ai_transport_check.gd</code>（71 项）· <code>ai_panel_check.gd</code>（26 项）</li>
+    </ul>
+  </div>
+  <div class="card" style="border-color:#4a3f6b">
+    <h4>⑦ 地图工具链 <code>addons/jieyu_map/</code> <span class="tag t-new">第五十版起</span></h4>
+    <ul>
+      <li>core 6：<code>JieyuMapSpec</code>（文档数字唯一出口）· <code>JieyuMapDoc</code>（12.8.1 / 12.8.7 读写）
+        · <code>JieyuMapGen</code>（噪声 / 布点 / 道路 / 内容层 / <b>出生区落脚地压平</b>）
+        · <code>JieyuMapPainter</code>（全部改高度的原子操作）· <code>JieyuMapChecks</code>（三级校验器）
+        · <code>JieyuMapRender</code>（审阅贴图）</li>
+      <li>editor 2：<code>JieyuMapDock</code> / <code>JieyuMapCanvas</code>（给鼠标用）＋ <code>plugin.gd</code></li>
+      <li>无头 <code>tools/jieyu_map_cli.gd</code>：list / info / render / snapshot / <b>validate</b> / generate（出 ERROR 即退出码 1）</li>
+      <li>产物约定：<code>assets/maps/&lt;id&gt;/</code>（heightmap / meta / zones / occluders / terrain / content / material ＋ layers/）
+        ＋ 扁平 <code>&lt;id&gt;_height.png</code></li>
+      <li>口径：<b>高度即字节</b>（绘制期直接改 heightmap ⇒ 工作副本与产物零漂移）；校验器把六章能机器判的指标全落成断言</li>
     </ul>
   </div>
 </div>
@@ -204,11 +229,16 @@
   （0 组占领 A / 1 组守住 B / 其余侦察循环），结果写回 world.squad_orders，端到端已被网关断言（9 → 18 项）。
   <b>执行层（第五十四版）</b>：队友真的按自己组的任务行动（有组任务去自己的占领节点、组内在 4 m 上错开；
   没有则逐字沿用旧的「跟在玩家后方」），HUD 任务卡多一行「[组任务] 小队长：占领 A」（只往已有 Label 里拼）。
-  <b>性能</b>：桌面脚本侧 <b>两个规模都用掉不到一成一帧预算</b> —— 20v20 <b>9.79 → 1.29 ms/帧</b>、
-  30E <b>6.40 → 1.30 ms/帧</b>（第五十一 / 五十二版两刀：感知节流 + 地形层快速排除 + 拆层节流）；
-  has_sight 282 → 195 µs，敌人一帧 137~155 → <b>21~32 µs</b>；
-  真机（PCE-W30）**FPS 60 稳定、物理 3.7 ms**，但 gfxinfo 与 vsync 都取不到，真机「余量」口径仍未拿到。
-  ⚠ 真机暴露：队友 DPS ≈ 2400 vs 敌人总血 2000 ⇒ 开局 10 s 就打光，20v20 打不成对抗（待拍板）。详见 docs/性能预算.md。
+  <b>性能 · 桌面 headless（仿真口径）</b>：第五十一 / 五十二版两刀（感知节流 ＋ 地形层快速排除 ＋ 拆层节流）
+  把 20v20 脚本侧从 9.79 压到 <b>1.29 ms/帧</b>（has_sight 282 → 195 µs，敌人一帧 137~155 → 21~32 µs）；
+  第六十五版改「目标选择」时一度涨到 <b>44.95 ms</b>（整帧墙钟，7× 回归），收紧重挑闸门后回到
+  <b>中位 4.58 ms / p95 20.91 ms</b>（130 s 推进场景 · 40 单位同场）。
+  <b>性能 · 真机（PCE-W30 / Android 12）</b>：大厅 <b>60 fps</b>（p50 = p95 = p99 = 16.7 ms，连续 35 s 稳如磐石），
+  而 20v20 对局只有 <b>≥7.6 fps</b>（p50 ≈ 133 ms）⇒ <b>瓶颈是渲染 ＋ 我们自己的负载，不是设备限帧</b>。
+  口径提醒：headless 不渲染，所以上面那组桌面数字**测不到渲染那一半**；真机又不能用 <code>dumpsys gfxinfo</code>
+  （Godot 走原生 SurfaceView、不进 HWUI，永远报 0 帧），改用**引擎自报**逐帧 delta。详见 <code>docs/性能预算.md</code> 十一 / 十二节。
+  <b>平衡</b>：第六十四版量清了「敌人 AI 只锁玩家、队友对敌方火力免疫」是单向屠杀的根因（节点 3 名守军 0.5 s 被清光、19 名队友零阵亡）；
+  第六十五版按拍板 B 让敌人能打队友，**但实测友军仍零阵亡** ⇒ 瓶颈在队友火力密度与 AI 反应（待拍板）。
   <b>默认模式＝PVP 休闲</b>：它是唯一「既有占领规则 + AI 参谋开放 + 关友伤」的组合，与第四十六版为止的行为最接近，回归面为零。
 </div>
 
@@ -237,31 +267,55 @@
     <li>第四十四版：随包 CJK 字体 / 价目表订正 / 仅调试包的立刻结束本局</li>
     <li>第四十五版：选完供应商自动填好模型名（走官方「列出模型」接口）</li>
     <li>第四十六版：价格表不发版也能改价（静态 JSON 清单 + 严格校验 + 默认零联网）</li></ul></div>
-  <div class="card" style="border-color:#4a3f6b"><h4>第四十七版 <span class="tag t-new">本页对应</span></h4>
+  <div class="card"><h4>第四十七版</h4>
     <ul><li><b>主场景换成 <code>App.tscn</code></b>：启动进大厅；<b>Main.tscn / Main.gd 一行未改</b></li>
     <li>屏幕路由 + 六屏（大厅 / 模式选择 / 设置 / 暂停 / 结算 / 说明）</li>
     <li>模式表：6 个模式按 11.4 列全，按 22.10 只有 3 个可选，三个的规则<b>全接线</b></li>
     <li>设置五项（补齐「音量界面」与「操作提示开关」两处既有欠账）</li>
     <li>局内暂停菜单（世界冻结 + HUD 收起）</li>
     <li>HUD 九宫格<b>几何一个没动</b>，只把「谁坐哪个格子」按用途摆正</li></ul></div>
+  <div class="card"><h4>第四十八版 ~ 第五十四版</h4>
+    <ul><li><b>规模化性能三刀</b>：感知节流 · 拆层节流 + 地形层快速排除 ⇒ 20v20 脚本侧 9.79 → <b>1.29 ms/帧</b></li>
+    <li><b>地图工具链（第五十版）</b>：编辑器插件 + 无头 CLI + 三级校验器，一份 recipe 生成整张图</li>
+    <li>破坏规则三章（第四十九~五十一版）：遮挡体可摧毁 / 建筑可命中体积与开口 / 结构值伤害来源</li>
+    <li>编成三层（第四十九 / 五十 / 五十三 / 五十四版）：组 4 人 · 一小队 ≥2 组 / 主线 → 小队长 → 组任务 / 队友真的按组任务行动</li>
+    <li>人数接线：PVP 20 v 20 · PVEVP 4P v 30E（按模式建场，单跑 Main 回落 2+3）</li></ul></div>
+  <div class="card"><h4>第五十五版 ~ 第五十九版</h4>
+    <ul><li><b>第一张正式地图「青岭走廊」（第五十五版）</b>：五节点 / 南北河谷 / 三条道路 / 235 个遮挡体，validate ERROR 0 WARN 0</li>
+    <li>Main.gd 债务：403 → 337（第五十六版拆出 PlayerFireController）</li>
+    <li><b>炸药 / 工程兵（第五十七版）</b>：C4 1500 / TNT 2000 · 准心落点放置 · 遥控引爆 · 兵种 3 → 4</li>
+    <li><b>载具相机三档（第五十八版）</b>：30 / 120 / 240 m ＋ ATGM 2000 m 拖拽上限</li>
+    <li><b>默认地图换成正式图（第五十九版）</b>：白旗点同时改读地图 zones.json</li></ul></div>
+  <div class="card"><h4>第六十版 ~ 第六十三版</h4>
+    <ul><li>第六十版：<b>纯文档回流</b>（把第四十八~五十九版写进 docx，不动代码）</li>
+    <li>第六十一版：出生区读地图 ＋ 出生点现挑（<code>SpawnPicker</code>：双尺度坡度 / 离掩体 5 m / 离节点 100 m）</li>
+    <li>第六十二版：地图工具链两个盲点（生成器压平出生区落脚地 · 校验器内部采样）</li>
+    <li>第六十三版：<b>敌人按 RAAS 节点驻守 ＋ 东侧预备队</b>（拍板 B；代价是「要拿点先清点」）</li></ul></div>
+  <div class="card" style="border-color:#4a3f6b"><h4>第六十四版 ~ 第六十五版 <span class="tag t-new">本页对应</span></h4>
+    <ul><li>第六十四版：<b>20v20 平衡采样</b>（<code>probe_balance.gd</code>）⇒ 根因是敌人 AI 只锁玩家、队友对敌方火力免疫</li>
+    <li>第六十五版：<b>敌人按最近的可见目标选敌</b>（拍板 B）—— 顺带量出并修掉一次 <b>7× 性能回归</b>（44.95 → 4.58 ms）</li>
+    <li><b>真机帧时间对照</b>（平板 PCE-W30）：大厅 <b>60 fps</b> 稳如磐石 / 20v20 对局 <b>≥7.6 fps</b> ⇒ 瓶颈是我们的负载，不是设备限帧</li>
+    <li>口径修正：<code>dumpsys gfxinfo</code> 对 Godot 无效（SurfaceView 不进 HWUI）⇒ 真机改用引擎自报</li></ul></div>
   <div class="card"><h4>下一版（未开工）</h4>
-    <ul><li>真机确认这一轮的外壳（可读性 / 触摸 / 软键盘）</li>
-    <li>结算屏补回放 / 分享 / 信誉分</li>
-    <li>候选 S（信誉分与治理）· 载具相机三档（19 章 ②）· 5.4 攻防转换</li>
-    <li>候选 M 剩「需要美术资产」的部分（12.7.6 帧规格 / 骨骼手部 / 阵亡帧）+ 音频定位</li></ul></div>
+    <ul><li><b>渲染 vs 仿真判别</b>（真机）：<code>wm size</code> 降分辨率 vs 关 AI 两组对照，先判清 7.6 fps 的主项在哪一侧</li>
+    <li>再出一张正式地图（城镇 / 山地）· 内容层观感（正式图解出 205 片碎圆饼）</li>
+    <li>炸药三条尾巴：自伤 / 投掷 / 安放时间</li>
+    <li>地图数据仍有两项没喂进工程：<code>rally_zones</code>（要先有 RALLY 系统）与 <code>flags</code> 的压制圈</li></ul></div>
 </div>
 
 <h2>六、门禁健康度（三道，全绿才允许提交）</h2>
 <table>
   <tr><th style="width:120px">门禁</th><th>命令</th><th style="width:120px">项数</th><th style="width:96px">状态</th><th>它钉住什么</th></tr>
-  <tr><td>单元测试</td><td><code>--script res://tools/run_tests_headless.gd</code></td><td>39 脚本 / <b>1337 项</b></td>
+  <tr><td>单元测试</td><td><code>--script res://tools/run_tests_headless.gd</code></td><td>52 脚本 / <b>1876 项</b></td>
     <td><span class="tag t-ok">全绿</span></td><td>纯逻辑：规则表 / 弹道 / 任务 / 标记 / 模式表 / 设置 / 路由栈 等</td></tr>
   <tr><td>HUD 几何门禁</td><td><code>--script res://tools/geom_assertions.gd</code></td><td><b>5 项</b></td>
     <td><span class="tag t-ok">全绿</span></td><td>不出屏 / 同级不新增重叠（基线 6 组）/ 点按 ≥32 px / 层号合法</td></tr>
   <tr><td>外壳几何门禁</td><td><code>--script res://tools/screen_geom_check.gd</code></td><td><b>25 项</b></td>
     <td><span class="tag t-ok">全绿</span></td><td>大厅 / 模式 / 设置 / 暂停 / 结算五屏各 5 条（零重叠）</td></tr>
-  <tr><td>集成冒烟</td><td><code>--script res://tools/run_integration_headless.gd</code></td><td><b>230 项</b></td>
-    <td><span class="tag t-ok">全绿</span></td><td>真实例化 Main.tscn：装配关系 + 九条交互链</td></tr>
+  <tr><td>规模接线门禁</td><td><code>--script res://tools/scale_wiring_check.gd</code></td><td><b>21 项</b></td>
+    <td><span class="tag t-ok">全绿</span></td><td>人数 / 编成 / 队友组任务是否真的接到装配链上（不是「常量在那儿」就算接线）</td></tr>
+  <tr><td>集成冒烟</td><td><code>--script res://tools/run_integration_headless.gd</code></td><td><b>263 项</b></td>
+    <td><span class="tag t-ok">全绿</span></td><td>真实例化 Main.tscn：装配关系 + 交互链（含炸药 / 相机三档 / 地图数据驱动 / 敌人驻守与支援）</td></tr>
   <tr><td>解析 / 导入自检</td><td><code>--import</code></td><td>—</td><td><span class="tag t-ok">通过</span></td><td>脚本能编译、场景能加载</td></tr>
   <tr><td>真启动冒烟</td><td><code>--headless --quit-after 90</code></td><td>—</td><td><span class="tag t-ok">退出码 0</span></td><td>真主场景 App.tscn 跑起来无 ERROR</td></tr>
 </table>
@@ -286,19 +340,26 @@
     <td>已落地并可选；三个模式的规则差别全接线；另外 3 个模式置灰写明理由</td>
     <td><span class="tag t-ok">✅ 已做</span></td></tr>
   <tr><td><b>人数与编成</b>（PVP 20 v 20 / PVEVP 4P v 30E / 4 人战斗小组）</td>
-    <td>2026-10-03 使用者拍板（docx 5.8 + 模式表新增列）；工程未落地：敌人可调 1~8、队友固定 3、无编成系统</td>
-    <td><span class="tag t-plan">🔵 未做</span> 须先做 40 单位性能采样</td></tr>
+    <td>已落地：模式定人数（PVP 20+19 / PVEVP 30+3）· <code>Organization</code> 组 4 人 / 一小队 ≥2 组 ·
+      <code>SquadOrders</code> 主线 → 小队长 → 组任务 · 队友按组任务行动 · 敌人按节点驻守 + 东侧预备队</td>
+    <td><span class="tag t-ok">✅ 已做</span>（第四十九~五十四 / 六十三版；单跑 Main.tscn 仍回落 2+3）</td></tr>
+  <tr><td><b>1 张地图</b>（第一张 <b>正式图</b>）</td>
+    <td>已落地「青岭走廊」并成为默认对局地图（第五十五 / 五十九版）：五节点 / 河谷 / 三条道路 / 235 遮挡体，
+      validate ERROR 0 / WARN 0；出生区与白旗点都读地图数据</td>
+    <td><span class="tag t-ok">✅ 已做</span></td></tr>
 </table>
 
 <h3>7.2 下一批建议（来自 <code>本项目开发进度.txt</code> 四、接下来）</h3>
 <ul>
-  <li><span class="tag t-wip">优先级最高</span> <b>真机确认第四十七版的外壳</b>：大厅 / 模式选择 / 设置的可读性与触摸；
-    已知问题：软键盘弹出会顶掉设置屏下半截（Android ADJUST_RESIZE，第四十三版登记未处理）。</li>
-  <li><b>结算屏补齐</b>：现在只有结论 + 战报，没有回放 / 分享 / 信誉分变化（4.8 信誉分工程为零）。</li>
-  <li>从这三条里挑一个开工：<b>候选 S</b>（信誉分与治理）· <b>载具相机三档</b>（docx 19 章 ②）· <b>5.4 攻防转换</b>。</li>
-  <li><b>候选 M 剩下的「需要美术资产」那部分</b>：12.7.6 的 91 帧规格表 · 骨骼手部动作 · 全身倒地 / 阵亡帧；
-    以及<b>音频的定位与距离衰减</b>（音量界面已于第四十七版落地）。</li>
-  <li>两个调试值待恢复：<code>Enemy.detection_range</code>（工作区 20 m，原 120 m）等（见七节）。</li>
+  <li><span class="tag t-wip">优先级最高</span> <b>真机「渲染 vs 仿真」判别</b>：已知大厅 60 fps、20v20 对局 ≥7.6 fps，
+    但主项在哪一侧还没判 —— <code>wm size</code> 降分辨率（渲染侧）与关掉 AI（仿真侧）两组对照就能定，
+    不做判别直接优化等于蒙。</li>
+  <li><b>再出一张不同地形的正式地图</b>（城镇 / 山地，按第五十五版那套流程）—— 也顺带验证「一张图调好的参数是否通用」。</li>
+  <li><b>内容层观感</b>（需拍板）：正式图 <code>material.png</code> 解出 205 片碎圆饼（雪 139 / 草 61）。</li>
+  <li><b>炸药自己的三条尾巴</b>（需拍板）：自伤口径 · 投掷形态 · 安放时间与起爆倒计时。</li>
+  <li><b>地图数据剩下两项</b>：<code>rally_zones</code>（要先有 RALLY 集结点系统）与 <code>flags</code> 的压制圈 / 进入通道条数
+    （接法与白旗点 / 出生区相同）。</li>
+  <li><b>编成线的下一步</b>：兵棋模式人数与编成（需拍板）· 22.7 的压测梯度按 20 v 20 复核。</li>
 </ul>
 
 <h3>7.3 docx 20.6「文档里有设计、工程为零」——可直接当任务清单</h3>
@@ -331,24 +392,42 @@
     <td><span class="tag t-ask">待拍板</span> 整块不做</td></tr>
   <tr><td>新增</td><td><b>模式差异要不要再拉大？</b>当前差别全在「规则层」；若要做「编成层」差异（步兵对抗 / 装甲对抗：有没有载具、坦克几辆）需在 ModeTable 加字段并接线</td>
     <td><span class="tag t-ask">待拍板</span> 未做</td></tr>
-  <tr><td>㊵</td><td><b>「4 人战斗小组」与 4.10.8「小队 ＝ 5 人」的关系</b>：是同一单位改口径（5 → 4），还是「战斗小组（4）⊂ 小队（5）」的两层编制？4.10.8 与 21 章 ㉔ 都写 5 人</td>
-    <td><span class="tag t-ask">待拍板</span> 5.8 一律按 4 人表述</td></tr>
+  <tr><td class="done">㊵</td><td><b>「4 人战斗小组」与 4.10.8「小队 ＝ 5 人」的关系</b> —— 已结清：组 ＝ 4 人、一小队 ≥ 2 组</td>
+    <td><span class="tag t-ok">✅ 已结清</span>（第四十九 / 五十版落地；docx 4.10.8 与 21 章同步改口径）</td></tr>
   <tr><td>㊶</td><td><b>兵棋模式的人数与编成</b>：使用者只拍了 PVP（20 v 20）与 PVEVP（4P v 30E）</td>
     <td><span class="tag t-ask">待拍板</span> 模式表该行标「未定」</td></tr>
   <tr><td>㊷</td><td><b>22.7 / ㉑ 的旧规模口径要按 20 v 20 复核</b>：原文写「32v32」「压测 1 / 16 / 32 人」「1 个 16v16 房间」—— 20 v 20 的房间是 <b>40 人</b></td>
     <td><span class="tag t-ask">待拍板</span> 未改（等确认）</td></tr>
-  <tr><td>㊹</td><td><b>20 v 20 的 AI 阵营不平衡</b>（真机实测暴露）：队友 Ally 45 伤害 / 0.35 s，19 名合计 DPS ≈ 2400，敌人总血仅 2000 ⇒ 开局 10 s 打光，打不成对抗</td>
-    <td><span class="tag t-ask">待拍板</span> 怎么配平：敌人加血/加甲 · 队友降火力 · 敌我数量不对称</td></tr>
+  <tr><td>㊹</td><td><b>20 v 20 的 AI 阵营不平衡</b> —— 第六十四版量清了根因：<code>Enemy</code> 的 AI <b>只锁玩家、从不打队友</b>，
+    而队友会打敌人 ⇒ 单向屠杀（节点 3 名守军 0.5 s 被清光、19 名队友零阵亡）。第六十五版按<b>拍板 B</b> 让敌人能打队友了，
+    但**实测友军仍然零阵亡** ⇒ 真正的瓶颈是<b>队友火力密度与 AI 反应</b></td>
+    <td><span class="tag t-ask">待拍板</span> 怎么配平：队友降火力 / 给敌人驻守姿态与掩体利用 / 缩小队友编成</td></tr>
+  <tr><td class="done">㊿</td><td>敌人要不要能打队友</td>
+    <td><span class="tag t-ok">✅ 已拍板 B 并落地</span>（第六十五版：按最近的可见目标选敌，玩家与队友同权）</td></tr>
+  <tr><td>㊺ ㊻ ㊼</td><td><b>炸药的三条尾巴</b>：要不要给自己人吃爆炸伤害（第一版有意不打自己人）· 要不要投掷形态（与 4.12 投掷物同一套）· 要不要安放时间 / 起爆倒计时</td>
+    <td><span class="tag t-ask">待拍板</span> 现状：只打 enemy / fob_enemy 组 · 只贴放 · 都是瞬时</td></tr>
+  <tr><td>㊽</td><td><b>地形内容层的表达方式</b>：正式图 <code>material.png</code> 解出 205 片（泥 5 / 雪 139 / 草 61），每片画成等面积圆 ⇒ 观感像一地碎圆饼</td>
+    <td><span class="tag t-ask">待拍板</span> A 调大 <code>MATERIAL_MIN_CELLS</code> · B 改多边形 / 逐格查询 · C 保持现状</td></tr>
   <tr><td>19 ①</td><td>逻辑分辨率与 PPU：文档 1920×1080 + 64/32/16，工程 960×540 + 32/16/8</td><td>保持工程口径</td></tr>
   <tr><td>19 ⑥</td><td>数据表规模口径：文档写全量、工程按切片（任务模板已结清）</td><td>已扩到武器 25 / 载具 18</td></tr>
   <tr><td>19 ⑨</td><td>4.8 信誉分是否进第一版</td><td>只有战力分，无信誉分</td></tr>
   <tr><td>㉛ / ㉜</td><td>AI 参谋的 key 是否上 Android Keystore · 是否做流式（SSE）</td><td>混淆存放 · 非流式</td></tr>
-  <tr><td>—</td><td><code>Enemy.detection_range</code> 保留 20 m（近视）还是退回 120 m</td><td>保持工作区现状</td></tr>
+  <tr><td class="done">—</td><td><code>Enemy.detection_range</code> 保留 20 m（近视）还是退回 120 m</td>
+    <td><span class="tag t-ok">✅ 已是 120 m</span>（<code>Enemy.gd</code> 默认值，无场景覆盖；测试用例里单独设 60 m）</td></tr>
 </table>
 
 <h3>7.5 工程债（docx 20.5 · 已修 / 仍欠）</h3>
 <table>
   <tr><th>条目</th><th style="width:220px">状态</th></tr>
+  <tr><td><b>真机 20v20 只有 ≥7.6 fps</b>（大厅对照 60 fps ⇒ 不是设备限帧）</td>
+    <td><span class="tag t-wip">🟡 第六十五版登记 · 待「渲染 vs 仿真」判别后再优化</span></td></tr>
+  <tr><td><b>内容层是等面积圆</b>：正式图解出 205 片（雪 139 / 草 61 是碎块），观感像一地碎圆饼</td>
+    <td><span class="tag t-ask">🟠 待拍板</span></td></tr>
+  <tr><td>地图的 <code>rally_zones</code> 与 <code>flags</code> 压制圈仍未读进工程</td>
+    <td><span class="tag t-wip">🟡 登记未做</span></td></tr>
+  <tr><td class="done"><b>Main.gd 破线 403</b>（第五十一版结构值接线后超 ≤400 硬线）</td><td><span class="tag t-ok">✅ 第五十六版拆出 PlayerFireController 后 337</span></td></tr>
+  <tr><td class="done"><b>ATGM 载具 2000 m 拖拽上限</b>（常量在、但根本没接上，实际一直用 500 m）</td><td><span class="tag t-ok">✅ 第五十八版已接并做出三档</span></td></tr>
+  <tr><td class="done"><b>地图工具链两个盲点</b>（不压平出生区 / 校验只看顶点）</td><td><span class="tag t-ok">✅ 第六十二版已修</span></td></tr>
   <tr><td>HUD 控件重叠 6 组（含 3 组「有意」、3 组「无意待修」）</td><td><span class="tag t-wip">🟡 已建基线，逐条定案</span></td></tr>
   <tr><td>地图报点与准心报点的通视口径不一致</td><td><span class="tag t-wip">🟡 登记未修</span></td></tr>
   <tr><td>烟雾表现层不是真遮挡（程序绘制圆饼，后生成的单位画在烟上面）</td><td><span class="tag t-wip">🟡 登记未修</span></td></tr>
@@ -365,8 +444,11 @@
 <h2>八、这一页的数据从哪来（可复现）</h2>
 <table>
   <tr><th style="width:240px">数字</th><th>取证方式</th></tr>
-  <tr><td>149 个 .gd / 24974 行</td><td>LF 字节口径统计（不含 <code>addons/</code> <code>gdtoolkit/</code> <code>.godot/</code>），用只读检查脚本与本机实测交叉核对</td></tr>
-  <tr><td>39 / 1337 · 5 · 25 · 230</td><td>本轮真跑：<code>run_tests_headless.gd</code> + <code>run_integration_headless.gd</code>，取日志汇总行，退出码均为 0</td></tr>
+  <tr><td>176 个 .gd / 31338 行</td><td>LF 字节口径统计（不含 <code>addons/</code> <code>gdtoolkit/</code> <code>.godot/</code>），用只读检查脚本与本机实测交叉核对</td></tr>
+  <tr><td>52 / 1876 · 5 · 25 · 21 · 263</td><td>本轮真跑：<code>run_tests_headless.gd</code> + <code>run_integration_headless.gd</code> +
+    <code>geom_assertions.gd</code> / <code>screen_geom_check.gd</code> / <code>scale_wiring_check.gd</code>，取日志汇总行，退出码均为 0</td></tr>
+  <tr><td>真机 ≥7.6 / 60 fps</td><td>平板 PCE-W30：测量专用包（引导脚本按 PVP_RANKED 起对局）＋ 引擎自报逐帧 delta 的 p50/p95/p99；
+    <b><code>dumpsys gfxinfo</code> 对 Godot 无效</b>（SurfaceView 不进 HWUI，永远 0 帧）—— 详见 <code>docs/性能预算.md</code> 十二节</td></tr>
   <tr><td>版本 / git HEAD</td><td><code>git log -1</code></td></tr>
   <tr><td>数据表行数</td><td>直接数 <code>data/*.txt</code>（含表头）</td></tr>
 </table>

@@ -39,6 +39,15 @@ const VARIANTS: Array = [
 	# jitter0 把 p50 1.389→0.698 ms）。与 01_base 同口径，只差这两项。
 	{"name": "09_jitter0", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60, "jitter": 0.0},
 	{"name": "10_cap1", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60, "cap": 1},
+	# 2026-10-06 M2 复测：真机首轮里 01 是第 1 窗、09/10 是最后两窗，而运行内漂移实测可达 +68%
+	# （见 docs/性能预算.md 第十八节 M3）⇒ 直接比 01 vs 10 会把漂移算进"变体收益"。
+	# 这里给 09/10 **各夹一对基线**，用「前后相邻基线均值」当参考，把漂移压到一阶小量。
+	# 11 与 01 参数完全一致 ⇒ 11 vs 01 的差就是这段运行内的纯漂移。
+	{"name": "11_base_again_a", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60},
+	{"name": "12_jitter0_again", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60, "jitter": 0.0},
+	{"name": "13_base_again_b", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60},
+	{"name": "14_cap1_again", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60, "cap": 1},
+	{"name": "15_base_again_c", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60},
 ]
 
 var _main = null

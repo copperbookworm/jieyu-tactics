@@ -1,0 +1,50 @@
+// jieyu-1 自定义：把 Godot 生成的 API 31 splash 属性挪到 values-v31 —— 目的是让**编出来的 APK**
+// 也真正修好，而不只是"lint 干净"。
+//
+// 背景（2026-10-06 实测）：
+//   Godot 每次导出都会重写 `android/build/res/values/themes.xml`，并在其中放
+//       <item name="android:windowSplashScreenBackground">@mipmap/icon_background</item>
+//   该属性是 **API 31** 才有的，却位于**无版本限定**的 values/ 里。本工程 minSdk=24，
+//   低版本设备上厂商自定义属性 id 可能与之冲突（Android Lint 报 NewApi/Error）。
+//
+// 为什么必须是 Gradle 级钩子，而不是导出后打补丁：
+//   Godot 在**同一次导出里**就把 res/ 编进了 APK；导出后再改文件只影响源码树（lint 会变干净），
+//   对已经生成的 APK 无效；而且导出结束后 `assets/` 不残留，无法"只重跑 Gradle"补救。
+//   在资源合并任务之前改，APK 里的资源布局才是对的。
+//
+// 用法：本文件由 tools/android_overrides/install_build_template.ps1 复制进 android/build/，
+//       并在 build.gradle 末尾追加 `apply from: 'jieyu_splash_fix.gradle'`。
+// 幂等：base 里已经没有该 item 时直接返回。
+//
+// ⚠ 本文件是 **UTF-8 无 BOM**（Groovy 解析器不认 BOM，会报 unexpected character）。
+//    与同目录的 .ps1（必须带 BOM）相反，别弄混。
+
+def jieyuSplashItem = 'android:windowSplashScreenBackground'
+
+def jieyuFixSplashTheme = {
+    ['res', 'src/main/res'].each { rel ->
+        def resDir = new File(projectDir, rel)
+        def base = new File(resDir, 'values/themes.xml')
+        if (!base.exists()) { return }
+        def text = base.getText('UTF-8')
+        if (!text.contains(jieyuSplashItem)) { return }   // 已处理过，幂等
+        // values-v31 必须放**完整** style：资源限定符是整体替换同名资源，
+        // 只写一行会让 API 31+ 丢掉 postSplashScreenTheme 等其它 item。
+        def v31Dir = new File(resDir, 'values-v31')
+        v31Dir.mkdirs()
+        new File(v31Dir, 'themes.xml').setText(text, 'UTF-8')
+        def kept = text.readLines().findAll { !it.contains(jieyuSplashItem) }.join('\n') + '\n'
+        base.setText(kept, 'UTF-8')
+        logger.lifecycle("[jieyu] splash 主题已挪到 values-v31/（${rel}）")
+    }
+}
+
+// 资源合并/处理之前动手（这两个任务在每次导出后都会因 res/ 变化而重新执行）
+tasks.matching { it.name ==~ /(merge|process)\w*Resources/ }.configureEach { t ->
+    t.doFirst { jieyuFixSplashTheme() }
+}
+
+// lint 直接读源码 res/，顺手也挂上：避免"没先导出就跑 lint"时又报那条 Error
+tasks.matching { it.name.startsWith('lint') }.configureEach { t ->
+    t.doFirst { jieyuFixSplashTheme() }
+}

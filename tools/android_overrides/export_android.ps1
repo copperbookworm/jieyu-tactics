@@ -1,4 +1,4 @@
-<#
+﻿<#
   export_android.ps1 -- 一条命令把 Android 出包做"对"
   ---------------------------------------------------------------------------
   为什么要有这个包装脚本：出包这条链上有四个反复踩过的坑，任何一步漏掉都会
@@ -88,11 +88,24 @@ Write-Host '[export] 4/4 复核产物'
 $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
 $aapt2 = Join-Path $sdk 'build-tools\36.1.0\aapt2.exe'
 $badging = (Invoke-Tool $aapt2 @('dump', 'badging', $Out)).Output
-$minSdk = ([regex]::Match($badging, "sdkVersion:'(\d+)'")).Groups[1].Value
+# aapt2 的输出里 "minSdkVersion:'24'" 与 "targetSdkVersion:'36'" 只有首字母大小写不同，
+# 用小写 sdkVersion 去匹配会同时踩到 target 那条（或一条都匹配不上）。两种写法都兜。
+$minSdk = ([regex]::Match($badging, "minSdkVersion:'(\d+)'")).Groups[1].Value
+if (-not $minSdk) { $minSdk = ([regex]::Match($badging, "sdkVersion:'(\d+)'")).Groups[1].Value }
 $targetSdk = ([regex]::Match($badging, "targetSdkVersion:'(\d+)'")).Groups[1].Value
 $abis = ([regex]::Match($badging, "native-code: '([^']+)'")).Groups[1].Value
 $debuggable = if ($badging -match 'application-debuggable') { 'yes' } else { 'no' }
 $sizeMB = (Get-Item $Out).Length / 1MB
+# .so 在 APK 里是"存储"还是"压缩"（决定体积，与 strip 无关）
+$soStored = $null
+try {
+	Add-Type -AssemblyName System.IO.Compression.FileSystem
+	$zip = [System.IO.Compression.ZipFile]::OpenRead($Out)
+	try {
+		$e = $zip.Entries | Where-Object { $_.FullName -like 'lib/*/libgodot_android.so' } | Select-Object -First 1
+		if ($e) { $soStored = ($e.CompressedLength -lt $e.Length * 0.95) }
+	} finally { $zip.Dispose() }
+} catch { }
 
 Write-Host ''
 Write-Host ("  产物     : {0}" -f $Out)
@@ -101,9 +114,15 @@ Write-Host ("  minSdk   : {0}" -f $minSdk)
 Write-Host ("  targetSdk: {0}" -f $targetSdk)
 Write-Host ("  ABI      : {0}" -f $abis)
 Write-Host ("  debuggable: {0}" -f $debuggable)
-if ([int]$minSdk -ne 24) {
-	Write-Warning "minSdk=$minSdk，预期 24。检查 export_presets.cfg 的 gradle_build/min_sdk，以及 preset 是否被编辑器重写。"
+if ($null -ne $soStored) {
+	Write-Host ("  .so 在包内 : {0}" -f $(if ($soStored) { '压缩' } else { '存储' }))
 }
-if ($Mode -eq 'debug' -and $sizeMB -gt 40) {
-	Write-Warning ("debug 包 {0:N1} MB 偏大 —— 多半是 NDK 没被找到、.so 未 strip（debug 模板未 strip 为 72.65 MB）。" -f $sizeMB)
+if ([int]$minSdk -ne 24) {
+	Write-Warning "minSdk=$minSdk，预期 24。检查 export_presets.cfg 的 gradle_build/min_sdk（空串会得到 Godot 默认 29），以及 preset 是否被编辑器重写。"
+}
+if ($Mode -eq 'debug' -and $sizeMB -gt 60 -and $soStored -eq $false) {
+	# 2026-10-06 更正：体积差**不是** strip 造成的。两个 APK 里的 .so 都是 72.65 MB 且都已 strip
+	# （llvm-readelf 无 .symtab）；差的是"存储 vs 压缩"。旋钮 = gradle_build/compress_native_libraries
+	# （false = 存储 = 包大但安装/启动更快），本工程**有意**保持 false。别再往 NDK/strip 方向查。
+	Write-Host ("  [说明] 包体 {0:N1} MB 属预期：.so 以存储方式打包（compress_native_libraries=false，有意为之）。" -f $sizeMB)
 }

@@ -3588,3 +3588,20 @@ base_url 也可能变。若把模型名写死在包里，玩家会遇到「选�
   ① `compress_native_libraries`：改回 true（APK ~34 MB，但安装期要解压）还是保持 false（~89 MB，启动更快）？
   ② patch_themes 目前**只让 lint 干净**：Godot 在同一次导出里就把资源编进 APK，补丁改不到那个 APK
      （`assets/` 不残留，无法只重跑 Gradle）。要真进包需改成 **Gradle 级钩子**（资源合并前改），做不做？
+
+  六、第七十六版补（同日）：splash 主题改两道 + 修两个真 bug
+  · 新增 `jieyu_splash_fix.gradle`（Gradle 级钩子，install_build_template.ps1 会装入并 apply from）：
+    在资源合并前把 API31 属性挪进 values-v31 ⇒ **修好真的进了 APK**。实证 `aapt2 dump resources`：
+    `GodotAppSplashTheme` 的 `()` 组 3 个 item（不含 0x0101062c）、`(v31)` 组 4 个 item（含之）。
+    导出后补丁 `patch_themes.ps1` 保留但职责收窄为「源码树/lint」（Gradle 内容级 up-to-date 会让钩子
+    在内容未变时不跑）。只留补丁 → APK 里错；只留钩子 → lint 可能报 Error。两道都要。
+  · **更正我自己写进 AGENTS.md 的错误结论**：曾写「.so 只有 NDK 在才会被 strip、strip 后约 24 MB」——
+    错的，已改为「存储 vs 压缩」，并标注「别再往 NDK/strip 方向查」；export_android.ps1 里同类误报也改了。
+  · `export_android.ps1` 修两 bug：minSdk 正则（aapt2 是 `minSdkVersion:` 不是 `sdkVersion:`，而小写那版
+    又会误踩 targetSdkVersion）、体积警告文案。现输出 minSdk=24 / ABI / 体积 / `.so 在包内: 存储`。
+  · 新增 `tools/android_overrides/fix_ps1_bom.ps1`（自带 Parser 自检；自身纯 ASCII 以免也中招）。
+    当场抓出两个真受害者：我自己的 export_android.ps1、以及
+    **`.dsh/skills/release-engineering-android/scripts/build_aab.ps1`** —— 用 .NET 取 git blob 原始字节验证：
+    它在 PS 5.1 下**解析 FAIL（10 个错误，首个 L55）＝发布脚本根本跑不起来**，已修。
+    ⚠ `.gradle` 相反必须无 BOM（Groovy 不认 BOM）。
+  · 测试：单元 53/0 EXIT=0；集成 274/0 EXIT=0。lint 仍 0 Error / 28 Warning。

@@ -65,20 +65,33 @@
   （华为把包名钉在 60 Hz，只能由应用自己请求高刷）。
 - Android 真机的「呈现刷新率」口径：`adb shell dumpsys display | Select-String mActiveModeId`（2=120Hz）
   与 `adb shell dumpsys SurfaceFlinger --latency <layer>` 首行 `period_ns`（8333333=120Hz / 16666666=60Hz）
-- **出包一律走 `tools/android_overrides/export_android.ps1`**（2026-10-06 新增）：它把四件必做的事串起来
-  —— ① headless 测试 ② `--export-debug/-release` ③ **导出后打 splash 主题补丁** ④ `aapt2 badging` 复核。
-  三个已知坑见该脚本头部注释：Godot 每次导出都会重写 `res/values/themes.xml`（会把 API31 属性放回
-  无限定的 `values/`，必须跑 `patch_themes.ps1`，否则 lint 重新报 Error）；`min_sdk` 由 Godot 通过
-  Gradle 属性注入、**留空会用 Godot 默认值 29 而不是 config.gradle 的 24**；`libgodot_android.so`
-  **只有 NDK 存在时才会被 strip**（未 strip 的 debug .so 是 72.65 MB，strip 后约 24 MB）。
-- ⚠ **`edit`/`write` 类工具会剥掉 .ps1 的 BOM**（2026-10-06 实测：编辑后文件头从 `EF BB BF` 变成 `3C 23 0A`）。
-  本机 PS 5.1 会把无 BOM 的 UTF-8 当 ANSI 读，**含中文的 .ps1 会直接语法崩**。
-  ⇒ 用这类工具改过 `tools/**/*.ps1` 后，必须重新加 BOM 并做一次 Parser 语法自检
-  （`[System.Management.Automation.Language.Parser]::ParseFile(...)`）。`install_build_template.ps1`
-  曾经就是无 BOM 的，就是被这么弄掉的。
-- Android 侧静态检查（2026-10-06 起可用）：对 `android/build/` 跑
-  `lintStandardDebug`（注意 flavor 是 standard/mono/instrumented，任务名必须带 flavor）。
-  当前基线 **0 Error / 28 Warning**；报告在 `android/build/build/reports/`。
+- **出包一律走 `tools/android_overrides/export_android.ps1`**（2026-10-06 新增）：四步串起来
+  —— ① headless 测试 ② `--export-debug/-release` ③ 导出后打 splash 主题补丁 ④ `aapt2 badging` 复核
+  （minSdk / ABI / 体积 / `.so` 是压缩还是存储）。手敲导出会漏掉 ③，并忘记 `JAVA_HOME=jdk-17`。
+- **splash 主题（API31 属性归位）有两道，各管一段，都不可省**：
+  · `jieyu_splash_fix.gradle`（Gradle 级钩子；由 install_build_template.ps1 装入并 `apply from`）
+    在资源合并前把 `android:windowSplashScreenBackground` 挪进 `values-v31/`，**这样编出来的 APK 才是对的**。
+    实证：`aapt2 dump resources` 里 `GodotAppSplashTheme` 分两组 —— `()` 3 个 item 不含 0x0101062c，
+    `(v31)` 4 个 item 含之。
+  · `patch_themes.ps1`（导出后补丁，幂等）管**源码树 / lint**：Gradle 是内容级 up-to-date 判定，
+    内容没变时钩子不执行，所以导出后仍需它把文件摆正，否则 lint 重新报 Error。
+  · 只留补丁 → APK 里是错的；只留钩子 → lint 可能报 Error。
+- `gradle_build/min_sdk` **必须显式写 "24"**：留空会拿到 **Godot 默认 29**（badging 实证），
+  而 `config.gradle` 写的是 24 —— 会静默丢掉 Android 7~9 用户。出包后必须用 badging 复核。
+- **包体 ~89 MB 是预期，不是 bug**（2026-10-06 更正）：`.so` 在 APK 里是**存储**而非压缩。
+  两个包内的 `.so` 都是 72.65 MB 且都已 strip（`llvm-readelf` 查无 `.symtab`）；旧 34 MB 包是**压缩**态。
+  旋钮 = `gradle_build/compress_native_libraries`，**本工程有意保持 false**（安装/启动更快）。
+  ⚠ 别再往"NDK 缺失导致未 strip"方向查——那个判断是错的（曾据它误装 NDK 并误报）。
+- ⚠ **`edit`/`write` 类工具会剥掉 .ps1 的 BOM**（实测：`EF BB BF` → `3C 23 0A`）。PS 5.1 把无 BOM 的
+  UTF-8 当 ANSI 读，含中文的 `.ps1` **直接解析崩**。改过 `*.ps1` 后跑
+  `& tools/android_overrides/fix_ps1_bom.ps1`（自扫、补 BOM、并重新 ParseFile 自检）。
+  **`.gradle` 文件相反：必须无 BOM**（Groovy 解析器不认 BOM）。
+  · 已实证受害：`export_android.ps1`（本轮踩了 3 次）、
+    `.dsh/skills/release-engineering-android/scripts/build_aab.ps1` —— 后者在 HEAD 里就是无 BOM 的 UTF-8，
+    **在 PS 5.1 下解析 FAIL（10 个错误，首个 L55）＝根本跑不起来**，已修。
+- Android 侧静态检查（2026-10-06 起可用）：对 `android/build/` 跑 `lintStandardDebug`
+  （flavor 是 standard/mono/instrumented，任务名必须带 flavor）。当前基线 **0 Error / 28 Warning**；
+  报告在 `android/build/build/reports/`。
 
 ## 知识 / 记忆落点
 - `docs/kb/` —— 从手机端 agent 迁来的知识库（含 `refs/godot-api`、`refs/godot-guide` 官方文档）

@@ -93,6 +93,15 @@
   （flavor 是 standard/mono/instrumented，任务名必须带 flavor）。当前基线 **0 Error / 28 Warning**；
   报告在 `android/build/build/reports/`。
 
+- **技能（skills）改了必须同步工程镜像**：技能的单一来源是 `D:\dsh-data\skills`，但 agent 实际加载的是
+  **rank100 的工程镜像** `<工程>\.dsh\skills`（2026-10-06 实测：`skill` 工具返回的 resourceBase 就是它）。
+  改完 dsh-data 里的技能必须跑
+  `& "D:\dsh-data\skills\_tools\sync_skills.ps1" -Project "D:\Godot4.7_Proj\jieyu-1"`，
+  并用 `-WhatIfOnly` 复核「两边已经一致」（退出码 0）。否则改动**对 agent 不可见** ——
+  第七十七版就漏了这一步：v2 的 `godot-perf-profile/SKILL.md` 与新增的 `perf_frame.ps1` 整轮没人看到。
+  ⚠ 用 `run_code` 里的 `String.replace` 改脚本时，替换串里的 `$'` / `$1` 会被当成**替换模式**展开，
+  能把文件炸成几倍长且难恢复 —— 一律用函数型 replacer（`s.replace(a, () => b)`）或 `split/join`。
+
 ## 知识 / 记忆落点
 - `docs/kb/` —— 从手机端 agent 迁来的知识库（含 `refs/godot-api`、`refs/godot-guide` 官方文档）
 - `docs/notes.md` —— 从 agent 持久记忆筛出的「Godot 通用坑 + 《解域》设计定标 + 工程实现」条目

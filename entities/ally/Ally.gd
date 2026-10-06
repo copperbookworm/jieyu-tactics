@@ -113,6 +113,19 @@ static func _cached_enemies() -> Array:
 		var loop := Engine.get_main_loop() as SceneTree
 		_enemy_cache = loop.get_nodes_in_group("enemy") if loop != null else []
 		_enemy_cache_frame = frame
+	# 组查询只保证「查的那一刻」有效：同一物理帧里单位还会被 die()/free()，缓存里就会留下已释放的引用。
+	# 消费方（Ally._pick_target / ui/DebugEnemyArrow）要遍历它，而 `node as Node2D` 碰到已释放对象会报
+	# "Trying to cast a freed object"（2026-10-06 集成冒烟实测 3 次；改前是每帧新查询所以看不出）。
+	# 返回前剪掉失效项：常见情况（无失效）只多一次 n≈20 的 is_instance_valid 扫描。
+	for n in _enemy_cache:
+		if is_instance_valid(n):
+			continue
+		var kept: Array = []
+		for m in _enemy_cache:
+			if is_instance_valid(m):
+				kept.append(m)
+		_enemy_cache = kept
+		break
 	return _enemy_cache
 
 

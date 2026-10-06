@@ -74,9 +74,18 @@ if ($LASTEXITCODE -ne 0) { throw "单元测试没全绿，停止出包" }
 & $g --headless --main-pack "D:\tmp\jieyu1.pck" --log-file "$p\_rel_probe2.log" --script res://tools/probe_export_pack.gd
 
 # ③ 真正导出（AAB 要先把 export_format 改成 1）
+#    优先走包装脚本（它会顺带跑测试、打 splash 主题补丁、并用 badging 复核 minSdk/ABI/体积）：
+#    & "D:\Godot4.7_Proj\jieyu-1\tools\android_overrides\export_android.ps1" -Mode release -Out "D:\Godot4.7_Proj\APK\jieyu-<version>.aab"
 & $g --headless --path $p --export-release "Android" "D:\Godot4.7_Proj\APK\jieyu-<version>.aab" `
       --log-file "$p\_rel_export.log"
 ```
+
+> ⚠ 手敲导出必须补两步，否则包会不对：
+> ① `$env:JAVA_HOME="C:\Program Files\Java\jdk-17"`（Gradle 用，不能用 IDE 的 JBR 25）；
+> ② 导出后跑 `tools\android_overrides\patch_themes.ps1` —— Godot 每次导出都会重写
+> `res/values/themes.xml`，把 API 31 的属性放回无限定的 `values/`。
+> 还要用 `aapt2 dump badging` 复核 **minSdk 实数**（preset 里 `min_sdk` 留空会得到 Godot 默认 **29**，
+> 而不是 `config.gradle` 写的 24 —— 这会导致"能上架但悄悄丢掉 Android 7~9 用户"）。
 
 > `--export-release` 用的是 **release** 模板。要用 Gradle 构建（自定义 Android 插件、
 > 单独改 AndroidManifest）才需 `gradle_build/use_gradle_build=true`，那时才需要 Gradle 与完整 SDK 构建链。

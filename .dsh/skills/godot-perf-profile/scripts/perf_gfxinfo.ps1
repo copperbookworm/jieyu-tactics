@@ -90,7 +90,7 @@ $lines += "包名      : $Package"
 $lines += "采样      : 抓取前 reset，人工操作 $DoSeconds 秒后抓取"
 $lines += "总帧数    : $(if ($null -ne $total) { $total } else { '取不到' })"
 $lines += "50th/90th/95th/99th : $(if ($null -ne $p50) { $p50 } else { '?' }) / $(if ($null -ne $p90) { $p90 } else { '?' }) / $(if ($null -ne $p95) { $p95 } else { '?' }) / $(if ($null -ne $p99) { $p99 } else { '?' }) ms"
-$lines += "Janky     : $(if ($null -ne $janky) { $janky } else { '?' }) 帧$(if ($null -ne $jankyPct) { "（$jankyPct%）" } else { "" })"
+$lines += "Janky     : $(if ($null -ne $janky) { $janky } else { '?' }) 帧$(if ($null -ne $jankyPct) { '（$jankyPct%）' } else { '' })"
 
 $verdicts = @()
 function Judge([string]$name, $value, [double]$budget, [string]$unit) {

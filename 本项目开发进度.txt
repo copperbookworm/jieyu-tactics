@@ -3801,3 +3801,42 @@ base_url 也可能变。若把模型名写死在包里，玩家会遇到「选�
     "帧数÷墙钟"会明显更低；逐帧分布是可信的那部分。取数脚本应按"完成标志"等待而不是固定秒数（已登记）。
   · 代价：过载时一帧最多 1 个物理步 ⇒ 物理时间落后墙钟（时间膨胀）。已交人拍板并明确接受。
   · 门禁：单元 54/0、集成 274/0（两个 EXIT=0）。文档：`docs/性能预算.md` 新增第二十六节。
+
+· 【新，2026-10-06 · 第七十八版】测量收口 M4：取数改等「完成标志」+ 技能镜像同步 + 修 C3 缓存报错。
+  ── 为什么 ──
+  · 第二十六节 cap1 三点曲线的 60 s 探针**只拿到 40.7 s 引擎时间**：取数侧按固定墙钟秒数等待，到点就取走；
+    本轮同一探针实测**墙钟 102 s 才走完 60.01 s 引擎时间**（中间约 14 s 进程被系统挤出调度）。
+  ── 改了什么 ──
+  · `systems/debug/PerfCsvWriter.gd`：`stop()` 写 `perf_<ts>.done` 完成标志（tag/driver/csv/frames/span_ms/unix），
+    被强杀就没有它；`start()` 计数器归零；新增 `done_path()` / `is_done()`。
+  · 技能 `godot-perf-profile/scripts/perf_frame.ps1`（dsh-data）：新增 `-Launch`（清旧样本 + monkey 起包）与
+    `-WaitForDone`（轮询 run-as 找哨兵；进程先死且无哨兵就报「被强杀」）；`.done` 一并取回；报告加 **`完整`** 列
+    + 完成标志明细；`-WaitForDone` 拿不到干净样本**退 4**。SKILL.md 升 **v3**。
+  · 新增单测 `test/perf_csv_writer_test.gd`（15 项：跑完前无哨兵 / stop 后出现 / 内容对得上 / driver 守卫 /
+    stop 幂等 / CSV 行数 / 清理）。
+  ── 真机复测（同一台 PCE-W30 · 同一固定场景 20v20 · 冷装包；debug 包 89.4 MB / minSdk 24 / arm64-v8a）──
+  · 取数等哨兵等了 **102 s**，拿到**完整 60.01 s / 3653 帧**：fps **60.9**、p50 16.7、p90 20.4、p99 28.7、
+    max 33.3、jank 46.26%、最长连击 8（`.done` 写死 frames=3653 / span_ms=60008.5）。
+  · 与第二十六节被切的 40.7 s 窗口（61.9 / 16.7 / 21.7 / 28.7 / 33.3）**同一量级**（p50/p99/max 一致）
+    ⇒ 上轮结论没被截断带偏；M4 的增量是**样本完整性可证明**，不是数字变好。
+  ── 两件顺带修的（都是上一轮的尾巴）──
+  · **技能镜像不同步（真问题）**：技能单一来源是 dsh-data，但 agent 实际加载的是 rank100 项目镜像
+    `<工程>\.dsh\skills` ⇒ 第七十七版的 v2 SKILL.md 与 perf_frame.ps1 **整轮对 agent 不可见**（实测加载到的仍是 v1）。
+    已跑 `sync_skills.ps1`（19 文件、回读校验一致、`-WhatIfOnly` 退 0），并把「改完 dsh-data 技能必须同步」写进 AGENTS.md。
+  · **C3 尾巴：已释放对象报错**：集成日志里 **3 条** `SCRIPT ERROR: Trying to cast a freed object`
+    （`DebugEnemyArrow.gd:70` → `Ally._cached_enemies()`）—— 断言全绿所以没被测试门禁拦住。根因是 C3 帧级缓存
+    会留下同帧 `die()/free()` 掉的引用（改前每帧新查询，所以从没暴露）。已在 `Ally._cached_enemies()` 返回前
+    剪掉失效项（n≈20 单扫）。复跑集成冒烟：**274/0、SCRIPT ERROR 0 条**（改前 3 条）。
+  · 同步时顺带扫出并修好 11 个含中文却**无 BOM** 的技能 `.ps1`（android-studio 10 + build_aab.ps1）—— 它们在
+    PS 5.1 下会解析崩；另修 perf_gfxinfo.ps1 L93 一处未转义双引号。现 17 个技能 `.ps1` 全部 ParseFile 通过。  ── 验收 ──
+  · 单元 **55 脚本 / 0 未全绿**（含新 perf_csv_writer_test 15 项）、集成冒烟 **274/0**、`--import` 自检退 0；
+    **两个退出码都是 0**。导出走 `export_android.ps1`（badging 复核 minSdk 24 / arm64-v8a / 89.4 MB / `.so` 存储）。
+  · 文档：`docs/性能预算.md` 新增第二十七节；`改动1.md` 结果区新增 M4 行与收尾记录。
+    规模 **177 个 .gd / 32424 行**（口径：工程内 `.gd`，不含 `addons/`、`docs/`、`android/`、`.dsh/` 与 7 个
+    `scenes/_*.gd` 临时探针）、`scenes/gameplay/Main.gd` **353 行** 未动。
+  ── 没做 / 交拍板 ──
+  · **B2（远处降频）仍不做**（§6 闸门 + 第二十五节再判定：cap1 已收口尾巴，B2 打平均成本）；**E（掩体索引 P3）未做**。
+  · **手感复测要人**：cap1 过载时一帧最多 1 个物理步 ⇒ 物理时间会慢于墙钟；完整窗口 max=33.3 ms（恰好两个 vsync），
+    但「极端过载下的慢动作体感」只有人打一局能判。
+  · **小地图 10 Hz**：现为 `MiniMap.REDRAW_INTERVAL=0.1`（10 Hz 步进）；若不顺眼改 0.05 即 20 Hz。
+  · **C3 真机单独 A/B 未做**：机制层实测只值 0.33 µs/次（低于设备噪声），据实登记无法分辨。

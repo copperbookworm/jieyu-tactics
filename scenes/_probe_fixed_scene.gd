@@ -9,8 +9,10 @@ extends Node
 ## 用法（导出侧）：
 ##   临时把 project.godot 的 run/main_scene 指向 res://scenes/_probe_fixed_scene.tscn
 ##   → export_android.ps1 -Mode debug -Out <apk> → 导出后立刻还原 project.godot
-## 用法（取数侧）：
-##   & perf_frame.ps1 -Serial <dev> -OutDir D:\Godot4.7_Proj\_perf -Scenario "固定场景 20v20 60s"
+## 用法（取数侧，M4 起一条命令）：
+##   & perf_frame.ps1 -Launch -WaitForDone -Serial <dev> -OutDir D:\Godot4.7_Proj\_perf -Scenario "固定场景 20v20 60s"
+##   `-WaitForDone` 等的是 PerfCsvWriter.stop() 写的 `perf_<ts>.done` 完成标志（探针自退即写，
+##   引擎累计约 64 s）。**不要再按固定秒数睡**：系统挤占调度时引擎时间会慢于墙钟（实测 60 s 只跑到 40.7 s）。
 
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
 const MatchRulesScript := preload("res://systems/match/MatchRules.gd")

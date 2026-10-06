@@ -43,14 +43,19 @@ $adb = "C:\Users\feiyun\AppData\Local\Android\Sdk\platform-tools\adb.exe"
 - 架构：APK **只有 arm64-v8a**。x86 模拟器装不上，别在 x86 模拟器上浪费时间。
 - 换包失败先卸载：`& $adb uninstall com.example.jieyu1`（会清 `user://` 存档/日志）。
 
-**重新出包**（改了代码要重装时）：
+**重新出包**（改了代码要重装时）——**一律走包装脚本**，不要手敲 Godot 导出：
 
 ```powershell
-$g = "E:\Godot_v4.7.1-stable_win64.exe\Godot_v4.7.1-stable_win64_console.exe"
-$p = "D:\Godot4.7_Proj\jieyu-1"
-& $g --headless --path $p --export-debug "Android" "D:\Godot4.7_Proj\APK\解域MVP.apk" `
-      --log-file "$p\_export_android.log"
+& "D:\Godot4.7_Proj\jieyu-1\tools\android_overrides\export_android.ps1" `
+    -Mode debug -Out "D:\Godot4.7_Proj\APK\解域MVP.apk"
 ```
+
+它按顺序做四件事并复核：① headless 测试（红就停）② Godot 导出 ③ **导出后打 splash 主题补丁**
+④ `aapt2 badging` 打印 minSdk/ABI/体积。
+> ⚠ 手敲导出会漏掉第 ③ 步：Godot 每次导出都会重写 `res/values/themes.xml`，把 API 31 才有的
+> `android:windowSplashScreenBackground` 放回无限定的 `values/`，于是 lint 重新报 Error、低版本设备
+> 有厂商属性 id 冲突风险。另外手敲时**必须带** `$env:JAVA_HOME="C:\Program Files\Java\jdk-17"`。
+> minSdk 要看 badging 的实数（留空 preset 会得到 Godot 默认 29，不是 24）；体积异常大说明 NDK 没被找到、`.so` 没 strip。
 
 > 导出前**必须先跑一遍** `res://tools/run_tests_headless.gd`；本项目踩过两次「开发机跑得好、
 > 导出包跑不起来」（高度图、数据表）。要抓这类问题再跑 `--export-pack` + `probe_export_pack.gd`。

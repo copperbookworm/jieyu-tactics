@@ -1,4 +1,4 @@
-<#
+﻿<#
   install_build_template.ps1 -- 安装 / 刷新 Android 构建模板（jieyu-1 专用）
 
   为什么：华为 FrameRateManager 把本包钉在 60 Hz，而 Godot 4.7 在 Android 上没有高刷开关

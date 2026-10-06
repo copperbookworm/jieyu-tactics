@@ -65,6 +65,20 @@
   （华为把包名钉在 60 Hz，只能由应用自己请求高刷）。
 - Android 真机的「呈现刷新率」口径：`adb shell dumpsys display | Select-String mActiveModeId`（2=120Hz）
   与 `adb shell dumpsys SurfaceFlinger --latency <layer>` 首行 `period_ns`（8333333=120Hz / 16666666=60Hz）
+- **出包一律走 `tools/android_overrides/export_android.ps1`**（2026-10-06 新增）：它把四件必做的事串起来
+  —— ① headless 测试 ② `--export-debug/-release` ③ **导出后打 splash 主题补丁** ④ `aapt2 badging` 复核。
+  三个已知坑见该脚本头部注释：Godot 每次导出都会重写 `res/values/themes.xml`（会把 API31 属性放回
+  无限定的 `values/`，必须跑 `patch_themes.ps1`，否则 lint 重新报 Error）；`min_sdk` 由 Godot 通过
+  Gradle 属性注入、**留空会用 Godot 默认值 29 而不是 config.gradle 的 24**；`libgodot_android.so`
+  **只有 NDK 存在时才会被 strip**（未 strip 的 debug .so 是 72.65 MB，strip 后约 24 MB）。
+- ⚠ **`edit`/`write` 类工具会剥掉 .ps1 的 BOM**（2026-10-06 实测：编辑后文件头从 `EF BB BF` 变成 `3C 23 0A`）。
+  本机 PS 5.1 会把无 BOM 的 UTF-8 当 ANSI 读，**含中文的 .ps1 会直接语法崩**。
+  ⇒ 用这类工具改过 `tools/**/*.ps1` 后，必须重新加 BOM 并做一次 Parser 语法自检
+  （`[System.Management.Automation.Language.Parser]::ParseFile(...)`）。`install_build_template.ps1`
+  曾经就是无 BOM 的，就是被这么弄掉的。
+- Android 侧静态检查（2026-10-06 起可用）：对 `android/build/` 跑
+  `lintStandardDebug`（注意 flavor 是 standard/mono/instrumented，任务名必须带 flavor）。
+  当前基线 **0 Error / 28 Warning**；报告在 `android/build/build/reports/`。
 
 ## 知识 / 记忆落点
 - `docs/kb/` —— 从手机端 agent 迁来的知识库（含 `refs/godot-api`、`refs/godot-guide` 官方文档）

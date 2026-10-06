@@ -207,30 +207,49 @@ public class GodotApp extends GodotActivity {
 			Log.w(TAG, "[高刷] 还没找到 SurfaceView，等下一次重试");
 			return;
 		}
-		// ① Surface 层（API 30+）：这是 Android 11+ 真正的"帧率投票"入口，
+		// ① Surface 层：这是 Android 11+ 真正的"帧率投票"入口，
 		//    SurfaceFlinger 的 DisplayModeDirector 就是按它决定 display mode 的。
-		try {
-			Surface surface = surfaceView.getHolder().getSurface();
-			if (surface != null && surface.isValid()) {
-				surface.setFrameRate(fps, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE,
-						Surface.CHANGE_FRAME_RATE_ALWAYS);
-				Log.i(TAG, "[高刷] Surface.setFrameRate(" + fps + ") 已下发");
-			} else {
-				Log.w(TAG, "[高刷] Surface 还不可用，等下一次重试");
+		//    ⚠ 这里用的是 3 参重载 setFrameRate(float, int, int)，它需要 **API 31(S)**，
+		//    不是 2 参版的 API 30 —— 2026-10-06 用 javap 逐个查本机 android.jar 确证
+		//    （android-33/34/35/36 都有该重载，android-28 没有）。minSdk 是 24，
+		//    所以低版本上必须显式守卫；否则每次调用都抛异常被 catch 吞掉，
+		//    表现是"这条腿静默失效"，而不是崩溃——最难查的那种。
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+			try {
+				Surface surface = surfaceView.getHolder().getSurface();
+				if (surface != null && surface.isValid()) {
+					surface.setFrameRate(fps, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE,
+							Surface.CHANGE_FRAME_RATE_ALWAYS);
+					Log.i(TAG, "[高刷] Surface.setFrameRate(" + fps + ") 已下发");
+				} else {
+					Log.w(TAG, "[高刷] Surface 还不可用，等下一次重试");
+				}
+			} catch (Throwable t) {
+				Log.w(TAG, "[高刷] Surface.setFrameRate 失败: " + t);
 			}
-		} catch (Throwable t) {
-			Log.w(TAG, "[高刷] Surface.setFrameRate 失败: " + t);
+		} else {
+			Log.i(TAG, "[高刷] 跳过 Surface.setFrameRate：API " + Build.VERSION.SDK_INT + " < 31");
 		}
-		// ② View 层：setRequestedFrameRate 是 API 34 才有的 —— 2026-10-05 真机教训：
-		//    在 Android 12(API 31) 上直接调会抛 NoSuchMethodError，而且会把 ① 那条腿一起带崩。
-		//    （javap 查的是 android-36 的 android.jar，只能证明编译期存在，不能证明运行期存在。）
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+		// ② View 层：View.setRequestedFrameRate 需要 **API 35（VANILLA_ICE_CREAM）**，
+		//    不是 34 —— 2026-10-06 用 javap 逐个查本机 android.jar 确证：
+		//    android-33 ✗ / android-34 ✗ / android-35 ✓ / android-36 ✓。
+		//    这里原来写的是 UPSIDE_DOWN_CAKE(34)、注释也写"API 34 才有的"，
+		//    于是 Android 14(API 34) 上仍会抛 NoSuchMethodError（被 catch 吞掉
+		//    ⇒ 这条腿在 34 上永远静默失效）。
+		//    2026-10-05 真机教训：在 Android 12(API 31) 上直接调会抛 NoSuchMethodError，
+		//    而且会把 ① 那条腿一起带崩。
+		//    （javap 只查 android-36 的 android.jar 只能证明"编译期存在"，证不了运行期；
+		//     要跨所有已装 platform 逐个查才能定 API 等级。）
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
 			try {
 				surfaceView.setRequestedFrameRate(fps);
 				Log.i(TAG, "[高刷] View.setRequestedFrameRate(" + fps + ") 已下发");
 			} catch (Throwable t) {
 				Log.w(TAG, "[高刷] View.setRequestedFrameRate 失败: " + t);
 			}
+		} else {
+			// 显式记录"跳过"，否则这条腿在低版本上是无声消失、无法与"日志没打出来"区分。
+			Log.i(TAG, "[高刷] 跳过 View.setRequestedFrameRate：API " + Build.VERSION.SDK_INT + " < 35");
 		}
 	}
 

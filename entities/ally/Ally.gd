@@ -35,6 +35,9 @@ var is_squad_leader := false
 var _fire_cooldown := 0.0
 ## 目标重挑计时（s）：原来每物理帧都遍历敌组、逐候选查通视；现在 0.1 s 才重挑一次
 var _pick_timer := 0.0
+## B1（施工单 §6）：AI 决策的累积计时（秒）。到 `1/GameConfig.AI_DECISION_HZ` 才跑一次
+## 「重挑目标 + 开火判定」这两件贵的；目标失效判定、瞄准、移动都仍在每物理步（见 `_physics_process`）。
+var _decision_accum := 0.0
 ## 组任务（docx 4.10.8 的「执行层」）：本组被派到的占领节点坐标。
 ## 由 WorldSetup 在派发完组任务后写入；order_active = false 时退回「跟随玩家」的旧行为。
 var order_target := Vector2.ZERO
@@ -124,19 +127,36 @@ func _physics_process(delta: float) -> void:
 		return
 	if _fire_cooldown > 0.0:
 		_fire_cooldown = maxf(_fire_cooldown - delta, 0.0)
-	# 目标失效立刻重挑；否则按 AI_TARGET_RETRY_INTERVAL 节流（省的是逐候选通视查询）
-	_pick_timer -= delta
-	if _target == null or not is_instance_valid(_target) or _pick_timer <= 0.0:
-		_target = _pick_target()
-		_pick_timer = GameConfig.AI_TARGET_RETRY_INTERVAL
+	# B1（施工单 §6）：AI 决策与物理步解耦（`GameConfig.AI_DECISION_HZ`，拍板 10 Hz）。队友这一侧的切法比
+	# 敌人细，因为三件事必须留在**每物理步**：
+	#   ① **目标失效判定** —— 不每步查就会对已释放的目标取 `global_position`（会报错）；
+	#   ② **瞄准** —— `facing` 是 `_fire()` 的射击方向，节流会让命中率**悄悄变差**（敌人那侧不受影响，
+	#      因为 `_try_fire` 的方向是从位置现算的）；
+	#   ③ **`_follow(delta)`（移动）** —— 它内含 `move_and_slide()`，而 `move_and_slide` 每次只推进
+	#      一个物理步的距离 ⇒ 若跟着决策一起节流，队友会变成 1/6 速度。
+	# 所以只有"贵的两件"（逐候选查通视的 `_pick_target`、弹道结算的 `_fire`）进决策周期。
+	if _target != null and not is_instance_valid(_target):
+		_target = null
+	_decision_accum += delta
+	var decision_period := 1.0 / maxf(GameConfig.AI_DECISION_HZ, 0.001)
+	var decide := _decision_accum >= decision_period
+	if decide:
+		var ai_step := _decision_accum
+		_decision_accum = 0.0
+		# 目标失效立刻重挑；否则按 AI_TARGET_RETRY_INTERVAL 节流（省的是逐候选通视查询）
+		_pick_timer -= ai_step
+		if _target == null or _pick_timer <= 0.0:
+			_target = _pick_target()
+			_pick_timer = GameConfig.AI_TARGET_RETRY_INTERVAL
 	if _target != null:
 		velocity = Vector2.ZERO
+		# 瞄准每步都更新（便宜，且射击方向用它）
 		var aim: Vector2 = _target.global_position - global_position
 		if aim.length() > 0.05:
 			facing = aim.normalized()
 			if _visual != null:
 				_visual.set_aim(facing.angle())
-		if _fire_cooldown <= 0.0:
+		if decide and _fire_cooldown <= 0.0:
 			_fire()
 	else:
 		_follow(delta)

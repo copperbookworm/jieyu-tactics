@@ -74,6 +74,9 @@ var _repick_left := 0.0
 var _camera: Camera2D = null
 var _grid: HeightGrid = null
 var _visibility_timer := 0.0
+## B1（施工单 §6）：AI 决策的累积计时（秒）。到 `1/GameConfig.AI_DECISION_HZ` 就跑一次 `_update_ai`，
+## 且把**累积值**当作这一步的 delta 传进去（见 `_physics_process` 的说明）。
+var _decision_accum := 0.0
 
 ## friendly 组的帧级缓存（2026-10-06 · 第七十四版 · 轨 2）。
 ## `get_nodes_in_group` 每次都新分配一个 Array：20 敌 × 每 0.3 s 一次重挑 = 每秒约 67 次分配，
@@ -180,7 +183,20 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
-	_update_ai(delta)
+	# B1（施工单 §6）：**AI 决策与物理步解耦** —— 决策按 `GameConfig.AI_DECISION_HZ`（拍板 10 Hz）跑，
+	# 而**移动仍每物理步**（`move_and_slide()` 在下面；`velocity` 是状态、帧间保持，所以位移总量不变）。
+	# ⚠ 传进 `_update_ai` 的是**累积 delta**（6 个物理步 = 0.1 s）：它内部有一串时间量
+	# （倒地计时 / `_last_known_age` / `_repick_left` / `_fire_cooldown` / `_hold_fire_time`），
+	# 用累积值才能保持时间语义不变 —— 只把"多久算一次"从每步改成每 6 步。
+	# ⚠ 命中率不受影响（特意先查过）：`_try_fire` 的方向是从 `aim_at`（位置）**现算**的，
+	# 不依赖被一起节流的 `_visual.set_aim()`；后者只影响上半身的视觉朝向（10 Hz 步进）。
+	# ⚠ 与 `SIGHT_THROTTLE_FRAMES` 不叠加：AI 周期 6 帧 > 节流的 4 帧 ⇒ 节流器在决策周期内不会命中。
+	_decision_accum += delta
+	var decision_period := 1.0 / maxf(GameConfig.AI_DECISION_HZ, 0.001)
+	if _decision_accum >= decision_period:
+		var ai_step := _decision_accum
+		_decision_accum = 0.0
+		_update_ai(ai_step)
 	move_and_slide()
 	# 12.7.1：下半身随移动方向；速度太小时保持上一个朝向（站住时腿停在原地不抽）
 	if _visual != null:

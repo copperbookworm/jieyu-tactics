@@ -17,6 +17,10 @@ extends CanvasLayer
 
 const VIEW := Vector2(960.0, 540.0)
 const REFRESH := 0.5
+## M1（施工单 改动1.md §4）：逐帧把帧时间写 user://perf_<时间戳>.csv，供 adb pull 拿"整局"分布。
+## 挂在这里而不是 _measure_boot 里，是因为**整局跑**（正常对局）也走 MatchHost → 本 overlay
+## 这条路径，而 logcat 只能拿到 6~9 s 就被华为私有层掐掉。
+const PerfCsv := preload("res://systems/debug/PerfCsvWriter.gd")
 
 var main = null
 var _label: Label = null
@@ -34,6 +38,7 @@ func setup(main_node) -> void:
 	if OS.is_debug_build():
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 		Engine.max_fps = 0
+	PerfCsv.start("overlay")
 	var box := ColorRect.new()
 	box.color = Color(0.0, 0.0, 0.0, 0.62)
 	box.position = Vector2(378.0, 0.0)
@@ -50,6 +55,8 @@ func setup(main_node) -> void:
 
 
 func _process(delta: float) -> void:
+	# 必须放在下面那个「每 REFRESH 秒才刷新」的早退**之前**，否则会漏帧。
+	PerfCsv.frame("overlay", delta)
 	_timer += delta
 	var ms := float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
 	if ms > _worst_ms:
@@ -68,3 +75,8 @@ func _process(delta: float) -> void:
 	_label.text = "FPS %d（不限帧）｜引擎 %.1f ms（峰 %.0f）｜物理 %.1f ms ｜ 敌 %d 友 %d" % [
 			Engine.get_frames_per_second(), ms, _worst_ms, phys, enemy_count, ally_count]
 	_worst_ms = 0.0
+
+
+## 对局结束 / 退出时收尾落盘（stop 幂等，_measure_boot 提前 stop 过也不会重复写）
+func _exit_tree() -> void:
+	PerfCsv.stop()

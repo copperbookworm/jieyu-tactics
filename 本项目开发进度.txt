@@ -3605,3 +3605,42 @@ base_url 也可能变。若把模型名写死在包里，玩家会遇到「选�
     它在 PS 5.1 下**解析 FAIL（10 个错误，首个 L55）＝发布脚本根本跑不起来**，已修。
     ⚠ `.gradle` 相反必须无 BOM（Groovy 不认 BOM）。
   · 测试：单元 53/0 EXIT=0；集成 274/0 EXIT=0。lint 仍 0 Error / 28 Warning。
+
+· 【新，2026-10-06 · 第七十七版】M1 落地：逐帧帧时间落盘 CSV + 一键取回解析（施工单 `改动1.md` §4 M1）。
+  ── 为什么先做它（施工单定的 P0）──
+  · 原口径只能拿到 1~2 个 2.5~3 s 的 logcat 窗口，不足以断言整局不掉帧；改为工程侧**逐帧写 CSV**。
+  ── 改了什么 ──
+  · 新增 `systems/debug/PerfCsvWriter.gd`（静态、幂等、每 120 帧 flush 一次、只写 `user://`）：
+    列 `tag,frame_index,delta_ms,fps,physics_frames,physics_steps_delta`。
+  · `ui/PerfOverlay.gd`（debug-only，正常对局的天然落点）逐帧驱动，driver="overlay"；
+    `scenes/_measure_boot.gd` 也驱动，driver="sweep" 且把**变体名写进 tag**。
+    加 driver 守卫是因为：变体扫描**直接实例化 Main.tscn、不经 MatchHost**，那条路径上根本没有 overlay；
+    两条路径都驱动时必须保证只有一个在写。
+  · 新增技能脚本 `godot-perf-profile/scripts/perf_frame.ps1`：pull CSV → 按 tag 分组 →
+    出「帧数/时长/fps/p50/p90/p99/max/jank%/最长连击」+ 与**同轮 logcat 分位数并排交叉验证**。
+    支持 `-LocalCsvDir` / `-LogcatFile`（不接真机也能自检链路）。
+  ── 验收（本地已过；真机被设备侧拦住，见下）──
+  · 桌面 headless 跑 `_measure_boot.tscn` → CSV **2965 帧 / 123756 字节**；
+    `perf_frame.ps1` 解析后与同轮 logcat 逐变体比对：**p50 全部 0 偏差、p90 全等、p99 差 0~2.5 ms**
+    （差异在窗口边界）。新增量：`最长连击`（连续超 16.7 ms 的最大帧数），logcat 窗口看不到。
+  · 测试：单元 53/0 EXIT=0；集成 274/0 EXIT=0。
+  ── 真机受阻：华为 iaware 在杀/冻结本包（**需要人工放行**）──
+  · 现象：装测量包/正常包都一样 —— 引擎能起来（`Godot native layer initialization completed: true`、
+    `OnInitRenderView`、`renderingDevice: vulkan`、`[高刷]` 日志也在），但**止步于 `OnInitRenderView`**：
+    不再打 `OnGodotSetupCompleted` / `OnGodotMainLoopStarted`，屏幕全黑，进程 132 MB / **0.0% CPU** / 线程全睡。
+  · **已排除是我的改动**：把 40 分钟前还能跑通的 `解域MVP_fixA2.apk` 装回去，**症状完全一致**
+    （同样 132 MB / 0% CPU / 黑屏 26493 字节）⇒ 设备侧状态问题，与 M1 代码无关。
+  · 抓到真凶日志：`Force stopping com.example.jieyu1 ... iAwareF[SystemManager]`、
+    `KILLED_BY_USER`、`SWAP_AK: UserKilled com.example.jieyu1`；清掉 files/vulkan + shader_cache 后
+    第二次直接被强停。
+  · ⇒ 与施工单 §4 M1 的前提（"华为私有管理器 6~9 s 后停掉采样、adb 关不掉私有层、**解法需要人工**"）
+    是同一个机制，只是这次更彻底：从"停采样"升级成"冻结/杀掉"。
+  · **需要人工做的事**：在手机上把《解域》加进放行名单 —— 设置 → 应用 → 应用启动管理 → 解域 →
+    关闭"自动管理"并允许 **自启动 / 关联启动 / 后台活动**；再到 电池 → 更多电池设置 里关掉"智能省电/休眠"。
+    放行后重跑：`export_android.ps1 -Mode debug -Out 解域MVP_measure.apk` → 装 → 跑 →
+    `perf_frame.ps1 -Serial <dev> -OutDir _perf`（本脚本已能自动 pull 并从内部目录取；见下）。
+  · 顺带更正：`user://` 在真机上是**内部** `/data/data/<pkg>/files`，不是
+    `/sdcard/Android/data/<pkg>/files`（后者实测为空）⇒ 取 CSV 要走 `run-as`（debug 包可用）。
+    `perf_frame.ps1` 的默认取数路径**待按此修正**（本轮未及改）。
+  ── 待拍板（施工单 §11 原样）──
+  ① B1 的 AI 频率 10 Hz 还是 20 Hz？ ② M1 单次采样时长多久算够（建议 ≥120 s）？ ③ E 掩体索引还做不做？

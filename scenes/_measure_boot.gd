@@ -18,6 +18,9 @@ extends Node
 
 const ModeTableScript := preload("res://data/config/ModeTable.gd")
 const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
+## M1（施工单 改动1.md §4）：变体名写进 CSV 的 tag 列，这样一份 CSV 里能按变体分组复算分位数。
+## 正常对局那条路径由 ui/PerfOverlay.gd 负责开写（tag 保持默认 "match"）。
+const PerfCsv := preload("res://systems/debug/PerfCsvWriter.gd")
 
 const WINDOW_S := 2.5      # 每个变体采样窗口（秒）
 const WARMUP_S := 3.0      # 起对局后的预热：地图 / 纹理上传 / 铺开
@@ -68,6 +71,8 @@ func _process(delta: float) -> void:
 		return
 	_window += delta
 	_samples.append(delta * 1000.0)
+	# M1：本场景自己驱动逐帧落盘（不经过 MatchHost ⇒ 没有 PerfOverlay）
+	PerfCsv.frame("sweep", delta)
 	if _window < WINDOW_S:
 		return
 	_window = 0.0
@@ -77,6 +82,7 @@ func _process(delta: float) -> void:
 	else:
 		print("[探针] 扫描结束")
 		set_process(false)
+		PerfCsv.stop()
 		_restore_defaults()
 		# 扫完主动退出：真机上用 logcat 判定「扫完了」而不是被系统挂起；headless 里也一样
 		get_tree().quit(0)
@@ -97,6 +103,9 @@ func _restore_defaults() -> void:
 func _advance(i: int) -> void:
 	_index = i
 	var v: Dictionary = VARIANTS[i]
+	# 幂等；overlay 若已开写则保持它的 driver（本场景不经过 MatchHost，通常没有 overlay）
+	PerfCsv.tag = str(v["name"])
+	PerfCsv.start("sweep")
 	var note := ""
 	if int(v.get("hide", false)) != 0:
 		note += _hide_scene_tree()

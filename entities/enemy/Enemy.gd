@@ -196,6 +196,13 @@ func _process(delta: float) -> void:
 	if _visibility_timer >= 0.1:
 		_visibility_timer = 0.0
 		_update_visibility()
+	# C4（施工单 §7）：压制与闪白**都归零、且上一帧也没画过** ⇒ 这一帧什么都不用做，直接返回。
+	# 省掉的是每帧固定开销：`Color(...)` 构造 + `_visual.modulate` 赋值 + 重绘判定（20 敌 × 60 帧/秒）。
+	# ⚠ 不能把"从有到无"的那一帧也跳掉：`_suppression_drawn` / `_flash_drawn` 为真时必须走完整流程，
+	# 否则屏幕上会**永久残留**最后一帧的小橙弧 —— 2026-09-28 真机 bug（停手 20 s 后弧还在）。
+	# `SuppressionSystem.decayed` 是 `maxf(v - rate*delta, 0.0)` ⇒ 一定会精确到 0，提前返回不会卡在极小值上。
+	if suppression <= 0.0 and _hit_flash_left <= 0.0 and not _suppression_drawn and not _flash_drawn:
+		return
 	# 压制随时间衰减（与玩家同一套衰减，docx 7.3）
 	suppression = SuppressionSystem.decayed(suppression, delta)
 	if _visual != null:

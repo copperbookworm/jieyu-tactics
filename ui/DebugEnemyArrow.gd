@@ -4,6 +4,11 @@ extends Node2D
 ## 开发阶段专用：实时黄色箭头指向最近的存活敌人（带距离，米）
 ## 只在 debug 构建显示（编辑器里按 F5 运行就是 debug），导出 release 后自动隐藏
 ## 这是"地图太大找不到敌人"的开发辅助，不要带进正式玩法
+##
+## C3（施工单 §7）：`_nearest_alive_enemy` 原先每帧 `get_tree().get_nodes_in_group("enemy")` ——
+## 每次调用都**新分配一个数组**。改走**帧级缓存**（复用 Ally 里既有的那份），**不降频率**：
+## 箭头方向随玩家与相机每帧变化，降到 5~10 Hz 会明显卡顿。本项只影响 debug 包（显隐门在 `_ready`）。
+const AllyScript := preload("res://entities/ally/Ally.gd")
 
 @export var enabled := true
 @export var arrow_radius := 140.0  # px，箭头距玩家屏幕位置的距离
@@ -60,7 +65,8 @@ func _process(_delta: float) -> void:
 func _nearest_alive_enemy() -> Node2D:
 	var nearest: Node2D = null
 	var best_distance := INF
-	for node in get_tree().get_nodes_in_group("enemy"):
+	# C3：帧级缓存（同一物理帧内共用一份），只读遍历，不要改返回的数组
+	for node in AllyScript._cached_enemies():
 		var enemy := node as Node2D
 		if enemy == null or enemy.is_queued_for_deletion():
 			continue

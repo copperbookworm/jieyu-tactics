@@ -9,9 +9,23 @@ extends Node2D
 ## 取数统一走 MapLayerSource（与战术地图同一份口径，别在两张图上各写一套）。
 
 const MapLayerSourceScript := preload("res://ui/MapLayerSource.gd")
+## C1（施工单 §7）：敌组帧级缓存 —— 复用 Ally 里既有的那一份（`static _cached_enemies()`，
+## 口径是"物理帧号变了才重建"），不在小地图里另造一套。Ally 刻意无 class_name，故 preload 成常量。
+const AllyScript := preload("res://entities/ally/Ally.gd")
 
 const MINI_SIZE := 150.0
 const MAP_SIZE := 1000.0
+## C1（施工单 §7）：重绘节流到 **10 Hz**（施工单授权的 5~10 Hz 档）。
+## 为什么必须节流：`_draw` 自己要画 20 个敌人光点 + 玩家点 + 占领圈 + 间瞄落点 + 报点标记 +
+## 世界图层（通路/补给车/FOB），M3 消融实测"整块关掉小地图"值 **+228.8 fps**（≈0.34 ms/帧）——
+## 这笔钱几乎全在 `_draw` 里，而**不是**组查询（实测只省 0.33 µs/次）。
+## 为什么不用"占领变化才重绘"（施工单的另一个选项）：同一个 `_draw` 里还画着每帧都在动的东西
+## （敌人光点、补给车与其目标线、报点渐隐、间瞄落点），只在占领变化时重绘会让它们**冻住**。
+## 代价（写在明处）：这些动画元素现在是 10 Hz 步进而不是 60 Hz。若观感不可接受，调大下面这个常数
+## （0.05 = 20 Hz）即可，开销按比例回升。
+const REDRAW_INTERVAL := 0.1
+
+var _redraw_left := 0.0
 
 var _terrain_texture: ImageTexture = null
 var _player: Node2D = null
@@ -59,7 +73,14 @@ func _mini_texture() -> ImageTexture:
 	return ImageTexture.create_from_image(small)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# C1（施工单 §7）：节流到 REDRAW_INTERVAL（10 Hz）。`queue_redraw()` 本身很便宜，
+	# 省的是**引擎随后真的跑一遍 `_draw`** 的次数（60 Hz → 10 Hz = 少画 5/6）。
+	# 组查询那部分另走帧级缓存（见 `_draw`）—— 它只值 0.33 µs/次，不是本项的大头。
+	_redraw_left -= delta
+	if _redraw_left > 0.0:
+		return
+	_redraw_left = REDRAW_INTERVAL
 	queue_redraw()
 
 
@@ -80,7 +101,8 @@ func _draw() -> void:
 	if _player != null:
 		draw_circle(_player.global_position * scale_factor, 3.5, Color(1.0, 0.9, 0.3))
 	if is_inside_tree():
-		for enemy in get_tree().get_nodes_in_group("enemy"):
+		# C1：走帧级缓存，消掉每次 `_draw` 的组查询与数组分配。**只读遍历**（返回的是共享引用，不要改它）。
+		for enemy in AllyScript._cached_enemies():
 			var enemy_node := enemy as Node2D
 			if enemy_node == null or enemy_node.is_queued_for_deletion():
 				continue

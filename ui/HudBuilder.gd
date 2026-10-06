@@ -82,6 +82,14 @@ var downed_overlay = null
 var _hint_timer := 0.0
 var _focusing := false
 var _capture_timer := 0.0
+## C2（施工单 §7）：血量文本写入去重。原先每帧都 `hp_label.text = "血量 %d" ...` ——
+## 值没变也重建 String 并触发 Label 排版。缓存"上一次写进去的三个输入"，三者都没变就不写。
+## 三个输入缺一不可：hp / 压制百分比 / **要不要显示压制后缀**。
+## 反例：suppression=0.010 与 0.015 的百分数都是 1，但前者不带后缀、后者带 ——
+## 只比百分比会漏掉一次必要更新（标签会停在"血量 80"）。
+var _hp_last := -1
+var _hp_sup_pct_last := -1
+var _hp_sup_on_last := false
 
 
 ## 分组色（2026-10-03）：九宫格三列各管一件事，用颜色把「这是哪一组」显出来。
@@ -410,9 +418,20 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 ## 两者都是 0.25 s 节流刷新，观感无差别。
 func tick(delta: float) -> void:
 	if hp_label != null and main.player != null:
-		hp_label.text = "血量 %d" % int(main.player.hp)
-		if main.player.suppression > 0.01:
-			hp_label.text += " ｜ 压制 %d%%" % int(main.player.suppression * 100.0)
+		# C2：值没变就不重建 String、不写 Label（三个输入见 _hp_last 附近的说明）
+		# ⚠ `main` 是鸭子类型（无 class_name / 无类型标注）⇒ 这里**必须显式标注类型**，不能用 `:=`
+		# （施工单 §9.3 的老坑：`main.player.suppression > 0.01` 推不出类型，会让整个 Main.gd 编译失败）。
+		var hp_now: int = int(main.player.hp)
+		var sup_on: bool = main.player.suppression > 0.01
+		var sup_pct: int = int(main.player.suppression * 100.0)
+		if hp_now != _hp_last or sup_pct != _hp_sup_pct_last or sup_on != _hp_sup_on_last:
+			_hp_last = hp_now
+			_hp_sup_pct_last = sup_pct
+			_hp_sup_on_last = sup_on
+			var text_now: String = "血量 %d" % hp_now
+			if sup_on:
+				text_now += " ｜ 压制 %d%%" % sup_pct
+			hp_label.text = text_now
 	update_crosshair()
 	_capture_timer -= delta
 	if _capture_timer <= 0.0:

@@ -76,9 +76,18 @@ func terrain_first_blocker(origin: Vector2, origin_height: float,
 	# 2026-10-03 实测：地形层 223 µs 里绝大部分花在每格的 cell_to_world_center 与点积上，
 	# 而绝大多数格子本来就远低于两端眼高。
 	var floor_skip := minf(origin_height, target_height) + margin_base
-	# 跳过起点格（原来是 remove_at(0)：180 元素数组上的 O(n) 搬移）—— 改成下标从 1 开始，
-	# 遍历顺序与旧实现逐字一致，所以「第一个挡住视线的格子」也一致。
-	for i in range(1, cells.size()):
+	# 起点格的处理（2026-10-06 修正方向不对称）：
+	# 旧实现从下标 1 开始 = **跳过起点格**（注释说是为了逐字沿袭更早的 remove_at(0) 版本）。
+	# 但"起点格"是**跟方向走的**：`terrain_first_blocker(P→E)` 跳玩家所在格、`(E→P)` 跳敌人所在格
+	# ⇒ 两个方向跳的不是同一个格子，端点那两格是否参与判定会随方向翻转。
+	# 实测（`scenes/_probe_sight_symmetry.gd`，14.4 万组随机对）：可达状态里有 5 组、含虚构输入共 15 组
+	# 因此给出**相反**的答案，即" A 能看见 B" ≠ "B 能看见 A"。判据与机制见 docs/性能预算.md 第十九节。
+	# 现在改成**两端都不跳**：
+	#   · 起点格本来就几乎总被上面的 floor_skip 快速路径跳过（该格地面通常在起点眼高之下），
+	#     所以"把起点格加回来"的实际行为变更极小；
+	#   · 而"跳掉终点格"会删掉**目标所在格自己的遮挡判定**，那才是更大的改动 —— 所以不选那条路。
+	#   · 结果：地形层判定与射线方向无关（对称），这是"通视"作为物理关系应有的性质。
+	for i in range(0, cells.size()):
 		var cell: Vector2i = cells[i]
 		var ground_height := grid.height_at_cell(cell.x, cell.y)
 		if ground_height <= floor_skip:

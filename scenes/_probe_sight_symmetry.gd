@@ -18,16 +18,20 @@ const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
 
 const WARMUP_S := 4.0
 const SAMPLES := 6            # 每轮采样间隔（秒）；采 SAMPLES 轮后出结论
-const RANDOM_PAIRS := 4000    # 每轮随机对数量
+const RANDOM_PAIRS := 12000   # 每轮随机对数量（可达桶 + 虚构桶各这么多）
 
 var _main: Node = null
 var _t := 0.0
 var _tick := 0
 var _pair_total := 0
 var _pair_bad := 0
-var _rand_total := 0
+var _phys_total := 0          # 可达桶（眼高 ≥ 地面）
+var _phys_bad := 0
+var _rand_total := 0          # 虚构桶（可能与地面矛盾）
 var _rand_bad := 0
 var _rand_core_bad := 0
+var _answer_total := 0        # 答案分布（量化行为变更幅度）
+var _answer_blocked := 0
 var _examples: Array = []
 
 
@@ -87,26 +91,48 @@ func _sample() -> void:
 				_examples.append("真实对 P=(%.1f,%.1f,眼%.2f) E=(%.1f,%.1f,眼%.2f) P→E=%s E→P=%s" % [
 						pp.x, pp.y, hp, ep.x, ep.y, he, str(a), str(b)])
 
-	# ② 随机对：样本大得多，用来估"边界反例"的出现频率
+	# ② 随机对：**分两桶**，因为"眼高能不能低于地面"决定了起点格到底会不会挡：
+	#    · 可达桶（reachable）：高度 ≥ 该点地面，即"站在地上的人" —— 真实单位永远落在这里
+	#    · 虚构桶（unphysical）：允许把"眼睛"采到地面以下 —— 用来验证"跳过起点格"确实是差异来源
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 20261006 + _tick
 	for i in RANDOM_PAIRS:
 		var ap: Vector2 = pp + Vector2(rng.randf_range(-60.0, 60.0), rng.randf_range(-60.0, 60.0))
 		var bp: Vector2 = pp + Vector2(rng.randf_range(-60.0, 60.0), rng.randf_range(-60.0, 60.0))
-		var ah: float = float(sight.eye_height_at(ap)) + rng.randf_range(-0.4, 0.4)
-		var bh: float = float(sight.eye_height_at(bp)) + rng.randf_range(-0.4, 0.4)
-		var f: bool = bool(sight.has_sight(ap, ah, bp, bh))
-		var r: bool = bool(sight.has_sight(bp, bh, ap, ah))
+		var ga: float = float(sight.eye_height_at(ap))
+		var gb: float = float(sight.eye_height_at(bp))
+		# 可达桶：眼高之上 0~1 m（永远不会低于地面）
+		_one_bucket(ap, ga + rng.randf_range(0.0, 1.0), bp, gb + rng.randf_range(0.0, 1.0), sight)
+		# 虚构桶：眼高 ± 0.5 m（可能低于地面）
+		_one_bucket(ap, ga + rng.randf_range(-0.5, 0.5), bp, gb + rng.randf_range(-0.5, 0.5), sight)
+
+
+func _one_bucket(ap: Vector2, ah: float, bp: Vector2, bh: float, sight) -> void:
+	var physical := ah >= float(sight.eye_height_at(ap)) - 0.001 and bh >= float(sight.eye_height_at(bp)) - 0.001
+	var f: bool = bool(sight.has_sight(ap, ah, bp, bh))
+	var r: bool = bool(sight.has_sight(bp, bh, ap, ah))
+	# 答案分布：用来量化"修完对称性之后整体判定变了多少"（改前/改后各跑一次对比）
+	_answer_total += 1
+	if f:
+		_answer_blocked += 1
+	if physical:
+		_phys_total += 1
+		if f != r:
+			_phys_bad += 1
+			if _examples.size() < 10:
+				_examples.append("[可达] A=(%.1f,%.1f,h%.2f) B=(%.1f,%.1f,h%.2f) A→B=%s B→A=%s" % [
+						ap.x, ap.y, ah, bp.x, bp.y, bh, str(f), str(r)])
+	else:
 		_rand_total += 1
 		if f != r:
 			_rand_bad += 1
 			if _examples.size() < 10:
-				_examples.append("随机对 A=(%.1f,%.1f,h%.2f) B=(%.1f,%.1f,h%.2f) A→B=%s B→A=%s" % [
+				_examples.append("[虚构] A=(%.1f,%.1f,h%.2f) B=(%.1f,%.1f,h%.2f) A→B=%s B→A=%s" % [
 						ap.x, ap.y, ah, bp.x, bp.y, bh, str(f), str(r)])
-		var cf: bool = bool(sight.sight_core(ap, ah, bp, bh))
-		var cr: bool = bool(sight.sight_core(bp, bh, ap, ah))
-		if cf != cr:
-			_rand_core_bad += 1
+	var cf: bool = bool(sight.sight_core(ap, ah, bp, bh))
+	var cr: bool = bool(sight.sight_core(bp, bh, ap, ah))
+	if cf != cr:
+		_rand_core_bad += 1
 
 
 func _finish() -> void:
@@ -115,14 +141,21 @@ func _finish() -> void:
 		print("  ① 真实单位对（玩家 ↔ 活敌）：%d 对，方向不等价 **%d 对（%.1f%%）**" % [
 				_pair_total, _pair_bad, 100.0 * float(_pair_bad) / float(_pair_total)])
 	if _rand_total > 0:
-		print("  ② 随机对（±60 m、随机眼高）：%d 对" % _rand_total)
-		print("     has_sight 方向不等价 **%d 对（%.2f%%）**｜sight_core 不等价 %d 对（%.2f%%）" % [
-				_rand_bad, 100.0 * float(_rand_bad) / float(_rand_total),
-				_rand_core_bad, 100.0 * float(_rand_core_bad) / float(_rand_total)])
+		print("  ② 随机对（±60 m）：可达桶 %d 对，方向不等价 **%d 对（%.3f%%）**｜虚构桶（眼高可低于地面）%d 对，不等价 %d 对（%.2f%%）" % [
+				_phys_total, _phys_bad, 100.0 * float(_phys_bad) / float(maxi(_phys_total, 1)),
+				_rand_total, _rand_bad, 100.0 * float(_rand_bad) / float(maxi(_rand_total, 1))])
+		print("     sight_core 不等价 %d 对（两桶合计，%.3f%%）" % [
+				_rand_core_bad, 100.0 * float(_rand_core_bad) / float(maxi(_phys_total + _rand_total, 1))])
+	if _answer_total > 0:
+		print("  ③ 答案分布（用于对比修改前后整体判定的位移）：%d 对里 has_sight(A→B)=true 共 %d 对（%.3f%%）" % [
+				_answer_total, _answer_blocked, 100.0 * float(_answer_blocked) / float(_answer_total)])
 	for ex in _examples:
 		print("    " + str(ex))
-	if _pair_bad == 0 and _rand_bad == 0:
+	if _pair_bad == 0 and _phys_bad == 0 and _rand_bad == 0:
 		print("  ⇒ 两个方向经验上等价：A 改动的前提成立")
+	elif _pair_bad == 0 and _phys_bad == 0:
+		print("  ⇒ **真实/可达状态全等价**；不等价只出现在「眼高低于地面」的虚构输入里")
+		print("     ⇒ 说明差异来源就是 SightSystem.gd:81 跳过起点格，而真实单位的高度永远在地面之上 ⇒ 实际不可达")
 	else:
-		print("  ⇒ **不等价**：A（把 core(敌→玩家) 当 has_sight(玩家→敌) 用）会改变显隐结果，不能按原方案做")
+		print("  ⇒ **不等价，且可达状态里也会出现**：A（把 core(敌→玩家) 当 has_sight(玩家→敌) 用）会改变显隐结果")
 	get_tree().quit(0)

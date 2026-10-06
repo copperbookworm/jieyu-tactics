@@ -271,6 +271,10 @@ func _update_ai(delta: float) -> void:
 	if _target != null and is_instance_valid(_target):
 		distance = global_position.distance_to(_target.global_position)
 		sees_target = _can_see(_target)
+		_cache_sees(_target, sees_target)
+	else:
+		# 没目标 ⇒ 缓存作废，_update_visibility 会走原路自己重算
+		_cache_sees(null, false)
 	if sees_target:
 		_last_known = _target.global_position
 		_has_last_known = true
@@ -419,6 +423,31 @@ func blind_aim_target() -> Vector2:
 ## **烟雾层每帧都新鲜查**（~1 µs）—— docx 4.12.5「无通视 → 转入盲射」靠的就是烟雾那一下翻转，
 ## 把它一起节流会让状态转换延迟数帧（2026-10-03 就是这么把集成冒烟三条断言弄红的）。
 var _sight_throttle := SightSystem.Throttle.new()
+
+## A 改动（施工单 §5）：把 `_update_ai` 里刚算出的 `_can_see(_target)` 缓存下来，供 `_update_visibility`
+## 复用，省掉一次完整 `has_sight`（地形 + 掩体 + 烟雾三层都白算）。
+##
+## 三条红线（施工单 §5 原文）：
+##   · **只在目标就是玩家时复用**（目标是队友时谓词对象不同，不能复用）；
+##   · 必须连**目标对象**一起缓存 —— `_sight_throttle` 是**单槽**的、换目标会 `reset()`（见上面 need_pick 分支），
+##     不校验目标就可能把"上一个目标"的结论当成这个目标的；
+##   · **不动 `in_world_view`（框检测）** —— 它跟 AI 无关，保持原样。
+##
+## 新鲜度代价（写在明处）：复用的 core 层（地形 + 掩体）受 `_sight_throttle` 的 4 帧节流约束
+## ⇒ 可见性最多比"当场重算"旧 SIGHT_THROTTLE_FRAMES 个物理帧；而可见性本身就是 0.1 s（≈6 帧）的节拍。
+##
+## ⚠ 这与 2026-10-03 那次"让敌人 AI 和可见性共用节流器"**不是一回事**：那次连 AI 自己的判定都被拖旧，
+## 使「无通视 → 转入盲射」（docx 4.12.5）的转换延迟数帧、当场弄红三条集成断言。本改动**完全不碰 AI 路径**
+## （`_can_see` 与 `_smoke_blocks_target` 一字未改），只让**渲染用的 `visible`** 最多旧 4 帧 ——
+## 盲射状态机因此不受影响。这是"行为契约优先于开销"那条纪律下的合规做法。
+var _sees_cache_target = null
+var _sees_cache_result := false
+
+
+## 记下"对这个目标，此刻看得见吗"（`_update_ai` 每次判定后调用；无目标时传 null 作废缓存）
+func _cache_sees(target, result: bool) -> void:
+	_sees_cache_target = target
+	_sees_cache_result = result
 
 
 ## 【为什么敌人不参与通视节流】2026-10-03 试过：敌人 AI + 可见性共用节流器（SightSystem.Throttle）后，
@@ -576,6 +605,14 @@ func _update_visibility() -> void:
 		zoom = _camera.zoom.x
 	if not _sight.in_world_view(global_position, center, zoom):
 		visible = false
+		return
+
+	# A 改动（施工单 §5）：目标就是玩家、且缓存正对着当前目标 ⇒ 直接复用 AI 刚算出的结果，
+	# 不再调一次完整 has_sight。方向等价性已实测（修掉 SightSystem 起点格的单向跳过后，
+	# 14.4 万组随机对里方向不等价 = 0，见 docs/性能预算.md 第十九节）；
+	# 新鲜度代价见 _sees_cache_target 附近的注释。**框检测在上面，不受本分支影响**。
+	if _target == _player and _sees_cache_target == _player:
+		visible = _sees_cache_result
 		return
 
 	# 玩家侧视线高度按其姿态（卧姿 0.6 m）：趴在沙袋后应该「看不见」，而不是「看得见但打不到」

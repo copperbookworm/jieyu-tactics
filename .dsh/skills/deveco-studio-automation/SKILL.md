@@ -110,11 +110,77 @@ verify-app              → Verify success
 
 ## 游戏（Godot）与鸿蒙的关系
 
-- Godot 4.7.1 **没有 HarmonyOS/OpenHarmony 导出模板**（导出预设里只有 Android/iOS/Web…）
-  ⇒ "用 DevEco + Godot 一起做鸿蒙游戏"当前只有两条真实路径：
-  A. Godot 出 Android 包（现状），DevEco/鸿蒙工具链只用来做**配套应用与真机度量**；
-  B. 自己给 Godot 写鸿蒙平台导出（工作量大，不在本技能范围）。
-  说结论时必须点明是哪一条，不要含糊成"已经用 DevEco 开发游戏"。
+**Godot 官方没有鸿蒙导出**（4.7.1 的导出预设里只有 Android/iOS/Web…）。社区 port 的实情（2026-10-06
+逐个仓库实测核实，不是照抄搜索结果）：
+
+| 方案 | 网址 | 版本 | 实测状态 |
+|---|---|---|---|
+| **kdada/godot（首选）** | [github.com/kdada/godot](https://github.com/kdada/godot) 分支 `port-to-openharmony` / `openharmony` | 4.5.0-beta（2025-08-23）/ 4.4.1-stable（2025-08-07） | ✅ 真移植：`platform/openharmony/` + `export/export_plugin.cpp` + `platform/openharmony/template/`（完整 DevEco 工程） |
+| 提给官方的 PR | [godot PR #108553](https://github.com/godotengine/godot/pull/108553) · [proposal #12734](https://github.com/godotengine/godot-proposals/issues/12734) | — | ⚠️ **未合并**（refs 只有 `pull/108553/head`，无 merge 提交） |
+| 作者教程 | [imkira.com/posts/Godot-HarmonyOS-Port](https://imkira.com/posts/Godot-HarmonyOS-Port/) | 4.4.1 | 编译命令 / 工具链路径 / 编辑器设置项 |
+| Ceyase/godot-hm | [github.com/Ceyase/godot-hm](https://github.com/Ceyase/godot-hm) | 4.5-dev | ❌ **名不副实**：`platform/` 无任何鸿蒙代码，是 Godot 整树拷贝 |
+| ambitiouscat/godot-harmonyos（4.7 移植） | 文章：[博客园](https://www.cnblogs.com/ambitiouscat/articles/22380392) | 4.7 | ❌ **仓库取不到**（`Repository not found`），只能当技术情报读 |
+| kdada 的二进制 | — | — | ❌ **无 tag / 无 release** ⇒ 只能自己编 |
+
+**关键接口（已读源码确认，接我们这套 CLI 正好）**：
+- Godot 编辑器设置 `export/openharmony/openharmony_tool_path` 要指向 **DevEco 安装根**（如 `E:\Huawei\DevEco Studio`），
+  因为导出插件按 `<tool_path>/tools/hvigor/bin/hvigorw.bat` 找 hvigor、按 `<tool_path>/tools/node` 找 node、
+  按 `<tool_path>/jbr` 找 Java；另有一个 `export/openharmony/java_sdk_path`。
+- `get_hdc_path()` = `<tool_path>/sdk/default/openharmony/toolchains/hdc` ⇒ 与手动 `hdc` 是同一个。
+- 编译模板：`scons platform=openharmony target=template_debug arch=arm64 generate_bundle=yes
+  OPENHARMONY_SDK_PATH="<DevEco>\sdk\default\openharmony"`（`detect.py` 会去
+  `native/llvm/bin` 找 `clang/llvm-ar/ld.lld/llvm-ranlib`，头文件写死 `lib/clang/15.0.4/include`
+  ——所以 **DevEco 6.0 自带的 SDK 正好够用**，无需另下 OpenHarmony SDK）。
+- **它没有"请求高刷"**：只有 `ohos_wrapper_get_display_refresh_rate()`（读），没有 set/request；
+  且鸿蒙侧默认**没有 vsync 节流**（有移植者用硬编码 `delay_usec(16000)` 锁 60 FPS 防 GPU 空转）
+  ⇒ 鸿蒙上的帧率天花板问题与 Android 的"厂商按包名钉 60"是**两套不同机制**，必须真机实测。
+
+**说结论时的口径**：Godot 出 Android 包（现状）与 Godot 出鸿蒙 HAP（需自编社区 port）是两条不同的路，
+不许含糊成"已经用 DevEco 开发游戏"；HAP 也**装不进 Android 平板**（内核/运行时不同）。
+
+## 已跑通：Godot → 鸿蒙 HAP 全链路（2026-10-06 实测验收）
+
+本机实测一遍走完，**每一步都有验收输出**：
+
+| 步骤 | 命令要点 | 验收 |
+|---|---|---|
+| 1. 编导出模板 | `scons platform=openharmony target=template_debug arch=arm64 generate_bundle=yes OPENHARMONY_SDK_PATH="E:\Huawei\DevEco Studio\sdk\default\openharmony"` | 17 分 26 秒，产出 `bin/openharmony_debug_arm64-v8a.zip`（30.9 MB，含 `libgodot.so` 108.9 MB） |
+| 2. 编编辑器 | `scons platform=windows target=editor arch=x86_64 use_mingw=yes` | 36 分 9 秒，`bin/godot.windows.editor.x86_64.exe`（141 MB） |
+| 3. 建预设 | 写 `export_presets.cfg`：`platform="OpenHarmony"`、`export_filter="all_resources"`、`build/override_project_dir=true`、`build/sign=false` | — |
+| 4. 导出 | `godot.windows.editor.x86_64.console.exe --headless --path <工程> --export-debug "OpenHarmony" <出.hap>` | `Build completed successfully.` EXIT=0 |
+| 5. 签名 | `deveco.ps1 sign -Hap <未签名.hap> -Bundle <包名> -Out <签名.hap>` | 89.2 MB → 85.8 MB |
+| 6. 验签 | `deveco.ps1 verify -Hap <签名.hap>` | `verify-app: Verify success` |
+
+产物 HAP 内含：`libs/arm64-v8a/{libgodot.so 87.6MB, libentry.so, libc++_shared.so}` +
+`resources/rawfile/template.pck`（游戏数据）+ `ets/modules.abc`。
+
+**主机侧前置**：Python 3.14 + `pip install scons`（4.11.1）+ MinGW-w64（`F:\w64devkit`，gcc 16.1，
+官方要求 GCC 9+）。**交叉编译不需要额外下 OpenHarmony SDK** —— DevEco 6.0 自带的
+`<DevEco>\sdk\default\openharmony` 里 clang 15.0.4 / llvm-ar / ld.lld / libcxx-ohos / sysroot 全都有
+（detect.py 里路径写死 `lib/clang/15.0.4/include`，正好对上）。
+
+### 四个坑（每个都卡过我一次，按顺序）
+
+1. **`--script` 与 `--editor` 互斥**：`godot --headless --editor --script foo.gd` 里 `--script` **根本不执行**
+   （main.cpp 分支决定），所以"用 EditorScript 自动化导出"这条路不通，必须写 **EditorPlugin**
+   （它由编辑器实例化，能拿到编辑器上下文，也能自己 `get_tree().quit()`）。
+2. **`EditorExport` / `EditorSettings` / `EditorInterface` 都不是 GDScript 全局类**，
+   `EditorExport.get_singleton()` 直接 Parse Error；`Engine.get_singleton("EditorExport")` 也是 null
+   —— 因为 `EditorExport` **没注册进 ClassDB**（只有 `EditorExportPlatform`/`EditorExportPreset` 注册了）。
+   正解：`ClassDB.instantiate("EditorExportPlatformOpenHarmony")` 自己 new 平台，编辑器设置走
+   `EditorInterface.get_editor_settings()`；`preset.name/export_path` 也不能点号赋值（用 `set()/get()`）。
+3. **新建预设的 `files` 列表是空的**，`update_files()` 又没绑给脚本 ⇒ 直接 `export_project()` 会报
+   `Must select at least one file to export.`（来自 `save_pack` 的 `p_total < 1`）。
+   正解：**别用 `export_project()`，走官方 CLI `--export-debug`**，它会自己处理文件列表。
+4. **`--export-debug` 的两项必备工程设置**：`textures/vram_compression/import_etc2_astc=true`
+   （否则报 "ETC2/ASTC texture compression must be enabled for OpenHarmony export"），
+   以及预设 `build/override_project_dir=true`（否则第二次导出报 "Project dir is already exists"）。
+
+**插件内置签名的坑**：`build/sign=true` 时它调 `hap-sign-tool sign-app -profileFile <你给的>`，
+但**必须给 `.p7b`**（给 `.pem` 报 `11012005 Not support file`）。
+⇒ 推荐 `build/sign=false` 出未签名 HAP，再用本技能 `deveco.ps1 sign` 签（那条链已验证）。
+
+
 - 鸿蒙真机上量帧率/刷新率的可用口径：`hidumper -s RenderService -a screen`、
   `hdc shell aa dump`、应用内 `@ohos.graphics.displaySync`（帧回调）。
 

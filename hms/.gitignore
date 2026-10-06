@@ -1,0 +1,14 @@
+# 鸿蒙工程（DevEco / hvigor）构建产物不入库
+.hvigor/
+**/build/
+oh_modules/
+oh-package-lock.json5
+local.properties
+
+# 自签产物与签名校验留档（本机临时）
+_sign/
+
+# 模拟器 / IDE 本地文件
+.idea/
+*.iml
+.DS_Store

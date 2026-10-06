@@ -57,6 +57,10 @@ func setup(main_node, player, sight, grid, formation_index: int = 0) -> void:
 	index = formation_index
 	add_to_group("friendly")
 	_build_visual()
+	# 2026-10-05 轨 2（性能）：**重挑相位错开**。19 名队友原来相位完全一致（同一步里一起重挑），
+	# 实测每 0.1 s 在同一个物理步里爆一次 10~50 ms 的卡顿（v4 探针：关掉 Ally 后 >10ms 卡顿 11→5 次、
+	# p99 19.9→2.8 ms）。相位错开后这笔成本摊到各帧。
+	_pick_timer = randf() * GameConfig.AI_TARGET_RETRY_INTERVAL
 	if player != null:
 		global_position = player.global_position + formation_offset(index, follow_distance)
 

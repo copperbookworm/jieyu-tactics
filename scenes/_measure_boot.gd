@@ -32,6 +32,10 @@ const VARIANTS: Array = [
 	{"name": "06_sim_only_hide_all", "max_fps": 120, "vsync": 0, "mode": "viewport", "size": Vector2i(960, 540), "phys": 60, "hide": true},
 	{"name": "07_phys30_canvasitems", "max_fps": 120, "vsync": 0, "mode": "canvas_items", "size": Vector2i.ZERO, "phys": 30},
 	{"name": "08_best_guess_px960_phys30_mf100", "max_fps": 100, "vsync": 3, "mode": "viewport", "size": Vector2i(960, 540), "phys": 30},
+	# 2026-10-05 轨 2 新增：物理两参数在真机上的效果（桌面 v3 探针：cap1 把最大帧 49.9→33.0 ms，
+	# jitter0 把 p50 1.389→0.698 ms）。与 01_base 同口径，只差这两项。
+	{"name": "09_jitter0", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60, "jitter": 0.0},
+	{"name": "10_cap1", "max_fps": 0, "vsync": 1, "mode": "", "size": Vector2i.ZERO, "phys": 60, "cap": 1},
 ]
 
 var _main = null
@@ -85,6 +89,7 @@ func _restore_defaults() -> void:
 	Engine.max_fps = 0
 	Engine.physics_ticks_per_second = 60
 	Engine.max_physics_steps_per_frame = 2
+	Engine.physics_jitter_fix = 0.5
 	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	print("[探针] 已还原默认口径（vsync=1 max_fps=0 phys=60 canvas_items）")
 
@@ -110,11 +115,15 @@ func _advance(i: int) -> void:
 	var phys := int(v["phys"])
 	Engine.physics_ticks_per_second = phys
 	var steps_cap := 2 if phys > 2 else 1
+	if v.has("cap"):
+		steps_cap = int(v["cap"])
 	Engine.max_physics_steps_per_frame = steps_cap
+	Engine.physics_jitter_fix = float(v["jitter"]) if v.has("jitter") else 0.5
 	_samples.clear()
-	print("[探针·变体] %s | 请求 max_fps=%d vsync=%d mode=%s size=%s phys=%d %s" % [
+	print("[探针·变体] %s | 请求 max_fps=%d vsync=%d mode=%s size=%s phys=%d cap=%d jitter=%.2f %s" % [
 			v["name"], Engine.get_max_fps(), DisplayServer.window_get_vsync_mode(),
-			str(get_window().content_scale_mode), str(get_window().content_scale_size), phys, note])
+			str(get_window().content_scale_mode), str(get_window().content_scale_size), phys,
+			Engine.max_physics_steps_per_frame, Engine.physics_jitter_fix, note])
 
 
 func _report() -> void:

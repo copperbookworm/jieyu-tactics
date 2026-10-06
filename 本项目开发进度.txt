@@ -3435,3 +3435,51 @@ base_url 也可能变。若把模型名写死在包里，玩家会遇到「选�
     **轨 2（CPU 帧时间 / 先把 60 Hz 锁住）继续。**
   · 测试：本轮只改 Java / 导出配置 / 场景接线，GDScript 未动；提交前单元 EXIT=0、集成 274/0（EXIT=0）。
 
+
+· 【新，2026-10-06 · 第七十四版】两条线并行：**① 让 agent 能自主用 DevEco Studio（鸿蒙）出包**；
+  **② 轨 2 掩体层索引：做了、量了、回滚了**。
+
+  ── ① DevEco / 鸿蒙（新能力，已落地并验证）──
+  · 结论（口径必须说清）：DevEco Studio 是 IntelliJ 平台 IDE，**没有「把 GUI 当人用」的脚本接口**；
+    能自动化的是它自带的 CLI（与 IDE 点 Run 走**同一套** hvigor + SDK）。已把这条链编成技能：
+    `D:\dsh-data\skills\deveco-studio-automation\`（SKILL.md + scripts/deveco.ps1，动作：
+    env / doctor / new / build / sign / verify / devices / install / run / stop / log / shell / screenshot）。
+  · 环境事实：DevEco 6.0（API 26 / platformVersion 26.0.0）装在 `E:\Huawei\DevEco Studio`；
+    hvigor 6.26.8、ohpm 26.0.0.630、hdc 3.2.0f；工程模板取 `plugins\codegenie-plugin\previewProject`；
+    **机器 JAVA_HOME 是 jdk-11，签名工具要用 jdk-17**（脚本已默认切 17，可用 DEVECO_JAVA_HOME 覆盖）。
+  · **自签 HAP 全链路打通**（这是最费劲的一段，三个坑都验证过）：
+    ① `OpenHarmony.p12` 里的 `openharmony application release` 是**自签证书**，直接当 appCertFile 会被拒
+    （单证书 → `11013004 Profile cert must a cert chain`；拼进 CA 链 → `verify certificate chain failed`）
+    ⇒ 正解：自己 `generate-keypair`，让 SDK 的 `openharmony application ca` 用 `generate-app-cert` 签发；
+    ② profile 的 `development-certificate` 必须换成**签 HAP 用的那张证书**，且 `not-before/not-after` 要改到有效期内
+    （模板是 2021 年的，早过期）；③ PEM 必须 **LF + 无 BOM**（PS 5.1 的 Set-Content 会写 BOM → `Illegal header`）。
+    验收：`sign-app` → `verify-app` 输出 `Verify success`。
+  · **鸿蒙工程已入库进本工程**：`hms/jieyu-probe/`（bundle `com.jieyu.probe`，ArkTS）。
+    它是「解域 · 鸿蒙呈现链路探针」：读屏幕能力（分辨率/密度/系统 refreshRate），
+    再用 `@ohos.graphics.displaySync` 分别按 30/60/120 fps 请求帧回调，量真实到达间隔给 p50/p95/实测 fps，
+    回答「这台鸿蒙设备愿不愿意给 >60 Hz」——与 Android 侧第十四/十五节的结论互证。
+    验收：hvigor `assembleHap` BUILD SUCCESSFUL（ArkTS 编译通过），自签 + `verify-app` 通过。
+  · **Godot 与鸿蒙的现实关系（不许含糊）**：Godot 4.7.1 **没有 HarmonyOS / OpenHarmony 导出模板**
+    ⇒ 「用 DevEco + Godot 一起做鸿蒙游戏」目前只有两条真路径：A. Godot 出 Android 包（现状），
+    DevEco/鸿蒙工具链用来做**配套应用与真机度量**；B. 自己给 Godot 写鸿蒙平台导出（工作量大）。
+    本版走的是 A。另外：鸿蒙**模拟器镜像没下载**（`%LOCALAPPDATA%\Huawei\Sdk\system-image\HarmonyOS-5.0.5` 空），
+    且当前没有真机 `hdc list targets` 为空 ⇒ 鸿蒙侧目前只验到「出包 + 签名」，**没有装到设备跑过**。
+
+  ── ② 轨 2 · 掩体空间索引（否定结果，已回滚）──
+  · 动机：掩体层 319 µs/次，瓶颈在**粗筛本身**——每查一条视线都对 235 块掩体算「圆心到线段最近距离」。
+    建 1 m 格的「掩体 → 格」索引后，候选从 **235 收到均 1.9（约 124×）**，且「索引 vs 全表」在集成冒烟
+    覆盖到的 **146/146 次查询上判定完全一致（0 次不一致）**（把 `_scan_covers` 抽成单一实现、只换候选集合来比）。
+  · **但集成冒烟恒定红两条**（`三个节点经真实状态机翻蓝` / `全占 → 胜利结算 + 胜利文字出现`）：
+    单独把 `SightSystem.gd` stash 回上一版 ⇒ 274/0 全绿；`JIEYU_NO_COVER_INDEX=1` 退回全表 ⇒ 也全绿。
+    排查过两条否定线索：第一版用「线段 DDA 经过的格」（**DDA 斜穿格角只吐对角两格** ⇒ 真漏掩体）已改成
+    两个包围盒格范围求交；又给 `first_cover` 的候选加就地拷贝防重入 —— **仍然红两条，根源没定位到**。
+  · **工程决定：回滚**（「没定位到根因的优化」不上主干）。完整过程、否定证据与下一轮的正确做法
+    写在 `docs/性能预算.md` 第十六节。
+  · 本轮顺带核实的性能基数（桌面 headless · debug · 20v20 · `tools/scale_probe.gd`）：
+    脚本侧每帧 **4.98 ms**（典型 5.19 / 最坏 5.80，占 16.67 ms 预算 30~35%，不含物理与渲染）；
+    通视 126.3 µs/次；敌人一帧 149 µs（巡逻态）；队友一帧 116 µs（交战态）；
+    通视内部：取格 34 + 地形 127 + 掩体 319 + 烟雾 1 µs。
+    ⇒ **脚本侧只占三成，下一个大杠杆不在脚本层**，而在「物理 60 → 30 Hz」（改手感，需拍板）或继续压物理步成本。
+  · 本轮另一处小改动：`Enemy._target_candidates()` 的 friendly 组改走**帧级缓存**（与 `Ally._cached_enemies()`
+    同一口径），20 敌 × 每 0.3 s 一次重挑不再各自 `get_nodes_in_group` 分配数组。
+  · 测试：单元 EXIT=0；集成冒烟 **274/0（EXIT=0）**。

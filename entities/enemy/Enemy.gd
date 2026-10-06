@@ -75,6 +75,22 @@ var _camera: Camera2D = null
 var _grid: HeightGrid = null
 var _visibility_timer := 0.0
 
+## friendly 组的帧级缓存（2026-10-06 · 第七十四版 · 轨 2）。
+## `get_nodes_in_group` 每次都新分配一个 Array：20 敌 × 每 0.3 s 一次重挑 = 每秒约 67 次分配，
+## 而同一物理帧里 20 个敌人的候选列表**完全相同**（都是「玩家 + 19 名队友」）。
+## 与 Ally._cached_enemies() 同一口径：帧号变了才重建。
+static var _friendly_cache: Array = []
+static var _friendly_cache_frame := -1
+
+
+static func _cached_friendlies() -> Array:
+	var frame := Engine.get_physics_frames()
+	if frame != _friendly_cache_frame:
+		var loop := Engine.get_main_loop() as SceneTree
+		_friendly_cache = loop.get_nodes_in_group("friendly") if loop != null else []
+		_friendly_cache_frame = frame
+	return _friendly_cache
+
 
 func setup(sight: SightSystem, player: Node2D, camera: Camera2D, grid: HeightGrid) -> void:
 	_sight = sight
@@ -154,6 +170,11 @@ func _ready() -> void:
 	_build_collision()
 	_build_visual()
 	visible = false
+	# 2026-10-05 轨 2（性能）：**把周期性贵查询错相**。0.1 s 的可见性刷新与 0.3 s 的目标重挑
+	# 原来 20 个敌人同相位 —— 同一个物理步里一起做 DDA/掩体查询，本文件上面的注释就记过
+	# 「整帧墙钟从 6.19 ms 涨到 44.95 ms（7×）」。错相后同样的总量摊到各帧，不再撞在一起。
+	_visibility_timer = randf() * 0.1
+	_repick_left = randf() * TARGET_REPICK_INTERVAL
 
 
 func _physics_process(delta: float) -> void:
@@ -317,14 +338,13 @@ func _pick_target() -> Node2D:
 
 
 ## 候选目标：玩家 + friendly 组（玩家可能也在 friendly 组里，去重）
+## 走帧级缓存（同帧所有敌人共用一份），但**每帧仍重新拷贝成局部数组**——
+## 下面会按距离做「最近 3 个」筛选，不能就地改写共享缓存，否则会把别人的列表改坏。
 func _target_candidates() -> Array:
 	var out: Array = []
 	if _player != null and is_instance_valid(_player):
 		out.append(_player)
-	var tree := get_tree()
-	if tree == null:
-		return out
-	for node in tree.get_nodes_in_group("friendly"):
+	for node in _cached_friendlies():
 		if node == _player or not (node is Node2D):
 			continue
 		if out.has(node):

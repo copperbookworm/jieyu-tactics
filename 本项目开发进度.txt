@@ -3644,3 +3644,21 @@ base_url 也可能变。若把模型名写死在包里，玩家会遇到「选�
     `perf_frame.ps1` 的默认取数路径**待按此修正**（本轮未及改）。
   ── 待拍板（施工单 §11 原样）──
   ① B1 的 AI 频率 10 Hz 还是 20 Hz？ ② M1 单次采样时长多久算够（建议 ≥120 s）？ ③ E 掩体索引还做不做？
+
+  ── 七、第七十七版补（同日）：M3 子系统分组关停归属实验 ──
+  · 发现你们**已有** `scenes/_probe_systems.gd`（v4）就在做"一次只关一个子系统"（自动按脚本路径分组，
+    实测 46 组；逐组 set_process(false)+set_physics_process(false)）⇒ M3 不是新写，而是**升级**它：
+    加 fps / Δfps 排序，并补上施工单点名却缺的 x3/x4/x5/x7 项
+    （DebugEnemyArrow / Tracer / MuzzleFlash / PlayerFireController / ExplosiveController / IndirectFire / PerfOverlay）。
+  · **方法学修正（这条比数字更重要）**：原设计只有"首基线 + 末基线"各一个，实测**运行内漂移 +68.0%**
+    （首基线 786.6 → 末基线 1321.2 fps：对局在演进、单位在死）。不夹基线时很多单项算出**负增益**
+    （关 HUD −196 fps、关小地图 −107 fps），**归因无效**。⇒ 改为**每个单项后面夹一个基线**，
+    每项与「前后相邻基线均值」比。
+  · 结果（headless · debug · 20v20 · 每窗 1.2s · 已消漂移）：**Ally.gd +628.2 / Enemy.gd +271.7** 是脚本侧
+    绝对主项；**MiniMap.gd +228.8** 是最大 UI 项（正好命中施工单 C1 的每帧 queue_redraw）；
+    MatchFlow +184.5；其余（HUD 文本/任务/标记/特效/debug 箭头/音频）|Δ|≲60 ⇒ **全在噪声内，不列为对象**。
+  · 局限已写进 `docs/性能预算.md` 第十八节：headless 不渲染 ⇒ 不能外推真机帧率（铁律 1）；
+    `关_X` 同时关 _process 与 _physics_process ⇒ 对 AI 实体是"该脚本总成本上界"，不是"AI 独占成本"。
+  · 测试：单元 53/0 EXIT=0；集成 274/0 EXIT=0；`--import` 自检 EXIT=0。
+  · 下一步按施工单 §10：A（显隐复用）→ C1/C2/C4 → C3 → B1（**按你拍板用 10 Hz**）→ 真机复测。
+    真机仍等你在手机上放行 iaware（M1 真机验收 + M2 一起做）。

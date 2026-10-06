@@ -1,9 +1,0 @@
-﻿I/godot   (14939): [测帧] 03_maxfps100_mailbox | 帧数=76 fps=23.0 steps=2.0/帧 | p50=32.1 p90=44.4 p99=48.0 max=48.0 ms | PROC=6.8 PHYS=24.8 | draw=194 robj=1125 prim=9380 nodes=924 objs=2783 mem=94.3MB | refresh=60.0Hz vsync=3 maxfps=100
-I/godot   (14939): [测帧] 04_px960x540_maxfps120 | 帧数=76 fps=23.0 steps=2.0/帧 | p50=31.8 p90=42.6 p99=49.4 max=49.4 ms | PROC=7.6 PHYS=25.8 | draw=205 robj=653 prim=6724 nodes=924 objs=2782 mem=92.9MB | refresh=60.0Hz vsync=1 maxfps=120
-I/godot   (14939): [测帧] 05_render_only_px960_phys1 | 帧数=136 fps=54.0 steps=0.0/帧 | p50=16.6 p90=17.8 p99=83.3 max=83.3 ms | PROC=21.6 PHYS=115.1 | draw=180 robj=432 prim=5426 nodes=928 objs=2795 mem=93.1MB | refresh=60.0Hz vsync=1 maxfps=120
-I/godot   (14939): [测帧] 06_sim_only_hide_all | 帧数=159 fps=42.0 steps=1.1/帧 | p50=16.7 p90=26.6 p99=43.7 max=44.8 ms | PROC=13.2 PHYS=107.3 | draw=0 robj=0 prim=0 nodes=952 objs=2840 mem=92.9MB | refresh=60.0Hz vsync=1 maxfps=120
-I/godot   (14939): [测帧] 07_phys30_canvasitems | 帧数=88 fps=40.0 steps=0.9/帧 | p50=21.7 p90=72.5 p99=98.3 max=98.3 ms | PROC=17.7 PHYS=108.7 | draw=126 robj=461 prim=5608 nodes=952 objs=2847 mem=95.3MB | refresh=60.0Hz vsync=1 maxfps=120
-I/godot   (14939): [测帧] 08_best_guess_px960_phys30_mf100 | 帧数=99 fps=41.0 steps=0.8/帧 | p50=17.8 p90=33.3 p99=83.1 max=83.1 ms | PROC=20.6 PHYS=107.6 | draw=180 robj=431 prim=5548 nodes=952 objs=2838 mem=93.3MB | refresh=60.0Hz vsync=3 maxfps=100
-I/godot   (14939): [测帧] 09_jitter0 | 帧数=99 fps=35.0 steps=1.5/帧 | p50=26.0 p90=34.3 p99=46.5 max=46.5 ms | PROC=7.7 PHYS=100.2 | draw=178 robj=438 prim=5500 nodes=947 objs=2831 mem=93.3MB | refresh=60.0Hz vsync=1 maxfps=0
-I/godot   (14939): [测帧] 10_cap1 | 帧数=154 fps=48.0 steps=1.0/帧 | p50=16.7 p90=20.0 p99=26.9 max=29.4 ms | PROC=17.0 PHYS=95.4 | draw=179 robj=427 prim=5416 nodes=941 objs=2823 mem=93.2MB | refresh=60.0Hz vsync=1 maxfps=0
-I/godot   (14939): [perf-csv] 落盘结束：/data/data/com.example.jieyu1/files/perf_20261006-204620.csv（1042 帧）

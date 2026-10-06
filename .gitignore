@@ -18,3 +18,7 @@ gdtoolkit/
 /tmp_*.log
 /tmp_*.json
 /tmp_*.png
+
+# 性能产物（CSV 等）**不要放在工程内**：Godot 会把 .csv 当翻译表导入，
+# 生成 *.csv.import / *.translation。放到 D:\Godot4.7_Proj\_perf\。
+/_perf/

@@ -10,8 +10,14 @@ extends RefCounted
 
 ## 少于这个人数就不留预备队：2 个敌人的测试局也该能立刻碰上，而不是全堆在东侧发呆。
 const MIN_FOR_RESERVE := 6
-## 预备队占比（四舍五入，至少 1 人）。20 敌 ⇒ 5 人预备 ＋ 15 人分 5 个节点各 3 名。
-const RESERVE_RATIO := 0.25
+## 预备队占比（四舍五入，至少 1 人）。
+## 2026-10-07 第八十五版（docx 19 ㊹ 第二根杠杆）：**0.25 → 0.35**。
+## 为什么加大：实测 19 名队友集团推进时每个节点只有 3 名守军（局部 19:3），
+## 单兵数值怎么调都是秒清（见 本项目开发进度.txt 第八十四版）—— 要靠**集中兵力**才能把局部比压回来。
+## 20 敌 ⇒ **7 人预备 ＋ 13 人分 5 个节点（3/3/3/2/2）**。
+const RESERVE_RATIO := 0.35
+## 增援比例：邻近节点按「驻军 × 它」派人（每个节点至少 1 人、且至少留 1 人）
+const REINFORCE_RATIO := 0.5
 
 
 ## 返回 {"per_node": Array[int], "reserve": int, "total": int}
@@ -32,6 +38,43 @@ static func plan(node_count: int, enemy_count: int) -> Dictionary:
 	for i in field:
 		per_node[i % nodes] += 1
 	return {"per_node": per_node, "reserve": reserve, "total": total}
+
+
+## 增援编成（纯算术 · 可无头单测）：某个节点**正在被打**时，从哪儿抽多少人过去。
+##
+## 规则（每条都有理由）：
+##   ① 被攻节点自己不动 —— 它已经在打；
+##   ② 驻军 ≤ 1 的节点**不派人** —— 不能让后方变成空门，否则玩家绕后一路白拿；
+##   ③ 每个节点派 max(1, floor(驻军 × ratio))，但**至少留 1 人**（同上）；
+##   ④ 东侧预备队出一半（floor(预备队 × ratio)，至少 1）；只剩 1 人时全出。
+##
+## 为什么这是「第二根杠杆」而不是数值：第八十四版实测证明，20 v 20 打不成对抗的瓶颈是
+## **局部兵力比**（19 打 3），不是单兵 DPS。把邻近守军与预备队压向交火点，才能把 6:1 压到 2:1。
+##
+## 返回 {"from_nodes": {节点序号: 人数}, "from_reserve": int, "total": int}
+static func reinforcement_plan(per_node: Array, reserve: int, attacked_index: int,
+		ratio: float = REINFORCE_RATIO) -> Dictionary:
+	var from_nodes := {}
+	var total := 0
+	for i in per_node.size():
+		if i == attacked_index:
+			continue
+		var garrison := maxi(int(per_node[i]), 0)
+		if garrison <= 1:
+			continue
+		var take := maxi(int(floor(float(garrison) * ratio)), 1)
+		take = mini(take, garrison - 1)
+		if take <= 0:
+			continue
+		from_nodes[i] = take
+		total += take
+	var from_reserve := 0
+	if reserve >= 2:
+		from_reserve = maxi(int(floor(float(reserve) * ratio)), 1)
+	elif reserve == 1:
+		from_reserve = 1
+	total += from_reserve
+	return {"from_nodes": from_nodes, "from_reserve": from_reserve, "total": total}
 
 
 ## 第 index 个节点上的第 slot 名敌人的落点偏移（黄金角散开 + 一圈圈往外，避免叠在一起）

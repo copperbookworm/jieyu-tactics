@@ -45,6 +45,16 @@ var main_ref = null
 var _map_zones: Dictionary = {}
 ## 东侧出生区的预备队（拍板 B）：节点被我方占下后，这些人向前支援下一个节点
 var reserve_enemies: Array = []
+## 节点序号 → 驻守在该节点上的敌人（2026-10-07 第八十五版）：受攻增援要从这里点名
+var node_defenders: Array = []
+
+## 【2026-10-07 第八十五版 · docx 19 ㊹ 第二根杠杆】受攻增援：
+## 某个节点「我方在区内、敌方没人在」= 正在被我们打 ⇒ 邻近节点按比例派人 + 预备队出一半，
+## 一起压向交火点。为什么需要：第八十四版实测 19 名队友集团推进时每个节点只有 3 名守军
+## （局部 19:3），单兵数值怎么调都是秒清。编成规则是纯函数（EnemyDeployment.reinforcement_plan）。
+const REINFORCE_POLL_S := 0.5
+var _reinforced_zones: Dictionary = {}
+var _reinforce_timer := 0.0
 
 
 ## 建场。map_preview_mode 时只建地形 + 预览层（游戏循环一行都不动）
@@ -224,6 +234,10 @@ func _spawn_enemies(main, enemy_count: int) -> void:
 		return
 	spawned_enemy_count = enemy_count
 	reserve_enemies.clear()
+	node_defenders.clear()
+	for node_index in _zone_node_positions(_map_zones).size():
+		node_defenders.append([])
+	_reinforced_zones.clear()
 	for index in enemy_count:
 		var slot: Dictionary = slots[index % slots.size()]
 		var enemy := Enemy.new()
@@ -232,6 +246,10 @@ func _spawn_enemies(main, enemy_count: int) -> void:
 		enemy.setup(main.sight, main.player, main.camera, main.grid)
 		if bool(slot.get("reserve", false)):
 			reserve_enemies.append(enemy)
+		else:
+			var node_index := int(slot.get("node", -1))
+			if node_index >= 0 and node_index < node_defenders.size():
+				(node_defenders[node_index] as Array).append(enemy)
 		main.add_child(enemy)
 
 
@@ -249,7 +267,7 @@ func _enemy_slots(main, enemy_count: int) -> Array:
 		for slot in int(plan["per_node"][node_index]):
 			var ideal: Vector2 = nodes[node_index] \
 					+ EnemyDeploymentScript.node_slot_offset(slot)
-			slots.append({"position": _nudged(main, ideal), "reserve": false})
+			slots.append({"position": _nudged(main, ideal), "reserve": false, "node": node_index})
 	for slot in int(plan["reserve"]):
 		var ideal: Vector2 = reserve_center + EnemyDeploymentScript.reserve_slot_offset(slot)
 		slots.append({"position": _nudged(main, ideal), "reserve": true})
@@ -291,13 +309,122 @@ func _spawn_area_center(main, zones: Dictionary, side: String) -> Vector2:
 	return Vector2.INF
 
 
-## 拍板 B 的后半句：我方占下一个节点 → 东侧预备队「向前支援」下一个节点。
-## 口令走 Enemy.set_move_target()（换 _patrol_target，到点后它自己回到原地巡逻）——
-## 不新增 AI 状态机，也不给敌人加寻路：第一版的战场很小，直线过去就够。
+## 受攻增援的节拍（2026-10-07 第八十五版）：0.5 s 扫一遍，不必每帧。
+func _process(delta: float) -> void:
+	if main_ref == null:
+		return
+	_reinforce_timer -= delta
+	if _reinforce_timer > 0.0:
+		return
+	_reinforce_timer = REINFORCE_POLL_S
+	poll_reinforcements()
+
+
+## 扫一遍所有节点：哪个「我方有人在区内、敌方没人在」= 正在被我们打 ⇒ 派一次增援。
+## 双方同在 = 对冲（CaptureZone 的口径），不算单方推进；已经是我们的（BLUE）不用增援。
+## 一个节点只派一次（_reinforced_zones）—— 否则每 0.5 s 派一批，后方会被抽空。
+func poll_reinforcements() -> void:
+	if main_ref == null or main_ref.capture_zones == null:
+		return
+	var zones: Array = main_ref.capture_zones
+	for i in zones.size():
+		var zone = zones[i]
+		if zone == null or not is_instance_valid(zone):
+			continue
+		if zone.enemy_inside:
+			continue
+		if not _friendly_inside(zone):
+			continue
+		if int(zone.state) == 1:          # CaptureZone.State.BLUE：已经是我们的
+			continue
+		if _reinforced_zones.has(i):
+			continue
+		reinforce_zone(i, zone.global_position)
+
+
+## 「我方有人在区内」：玩家**或者任一队友**。
+## ⚠ 为什么不用 CaptureZone.player_inside：那个字段只统计**玩家**（队友不算占领兵力），
+## 而增援的触发条件不该依赖玩家站在哪里 —— 探针（玩家留在出生点、19 名队友推进）
+## 就因为这条口径一次都没触发过（第八十五版实测踩到）。
+func _friendly_inside(zone) -> bool:
+	if main_ref.player != null and zone.is_inside(main_ref.player.global_position):
+		return true
+	for node in get_tree().get_nodes_in_group("friendly"):
+		if node is Node2D and zone.is_inside((node as Node2D).global_position):
+			return true
+	return false
+
+
+## 派增援：编成走纯函数，派兵走 Enemy.set_move_target()（与拍板 B 的预备队支援同一个口令）
+func reinforce_zone(index: int, target: Vector2) -> int:
+	# 幂等：一个节点只派一次（poll_reinforcements 也会查，但直接调用方不该绕过这条）
+	if _reinforced_zones.has(index):
+		return 0
+	_reinforced_zones[index] = true
+	var per_node: Array = []
+	for n in node_defenders.size():
+		per_node.append((node_defenders[n] as Array).size())
+	var plan := EnemyDeploymentScript.reinforcement_plan(
+			per_node, reserve_enemies.size(), index)
+	var from_nodes: Dictionary = plan["from_nodes"]
+	var sent := 0
+	for key in from_nodes:
+		var from_index := int(key)
+		if from_index < 0 or from_index >= node_defenders.size():
+			continue
+		sent += _send_defenders(node_defenders[from_index], int(from_nodes[key]), target, false)
+	var reserve_take := int(plan["from_reserve"])
+	if reserve_take > 0:
+		sent += _send_defenders(reserve_enemies, reserve_take, target, true)
+	if sent > 0:
+		print("[敌人] 节点 %d 受攻：邻近节点 + 预备队共 %d 人增援 → %s"
+				% [index + 1, sent, str(target)])
+	return sent
+
+
+## 还能不能打（死了 / 已排队释放 / 引用失效都不算）
+func _usable_enemy(enemy) -> bool:
+	if enemy == null or not is_instance_valid(enemy):
+		return false
+	if (enemy as Node).is_queued_for_deletion():
+		return false
+	return bool(enemy.alive)
+
+
+## 从一队里点名 count 个还能打的，发一条行进口令；派出去的从名册里划掉。
+## from_reserve = true 时写回 reserve_enemies（别被拍板 B 的 flag 支援再派一次）。
+func _send_defenders(pool: Array, count: int, target: Vector2, from_reserve: bool) -> int:
+	var sent := 0
+	var kept: Array = []
+	for enemy_v in pool:
+		var enemy = enemy_v
+		if _usable_enemy(enemy) and sent < count:
+			enemy.set_move_target(target)
+			sent += 1
+		else:
+			kept.append(enemy_v)
+	if from_reserve:
+		reserve_enemies = kept
+	else:
+		pool.clear()
+		pool.append_array(kept)
+	return sent
+
+
+## 拍板 B 的后半句 + 第八十五版的「下一条防线集中」：我方占下节点 N ⇒
+## **后方各节点守军与东侧预备队一起向前一节点（N+1）集结**。
+##
+## ⚠ 为什么不只做「受攻时增援」（第八十五版实测的教训）：节点间距 ~300 m、敌人 2 m/s
+## ⇒ 增援要走 ~150 s 才到得了，走到时前一场战斗早结束了。实测 7 人增援全部错过战斗：
+## 敌存 20 → 1、友存 19 → 19（与不增援几乎一样）。攻方同样要走路 ⇒ **提前集结**才来得及。
+## 口令仍然只走 Enemy.set_move_target()：不新增 AI 状态机，也不给敌人加寻路。
+##
+## 名册的妙用：node_defenders[i] 是「第 i 梯队的编制」，单位跟着口令走但编制不改 ——
+## 所以 N+1 再失守时，这些已经调过一次的人会被正确地再调往 N+2（逐次抵抗）。
 func _on_flag_state_changed(node_name: Variant, state: int) -> void:
 	if state != 1:   # CaptureZone.State.BLUE（不引用 CaptureZone，免得与它的 EventBus 依赖成环）
 		return
-	if main_ref == null or reserve_enemies.is_empty():
+	if main_ref == null:
 		return
 	var nodes := _zone_node_positions(_map_zones)
 	if nodes.is_empty():
@@ -305,15 +432,23 @@ func _on_flag_state_changed(node_name: Variant, state: int) -> void:
 	var index := _capture_zone_index(node_name)
 	if index < 0:
 		return
-	var target: Vector2 = nodes[mini(index + 1, nodes.size() - 1)]
+	var line := mini(index + 1, nodes.size() - 1)      # 下一条防线
+	var target: Vector2 = nodes[line]
 	var moved := 0
-	for enemy_v in reserve_enemies:
-		if is_instance_valid(enemy_v) and not (enemy_v as Node).is_queued_for_deletion():
-			enemy_v.set_move_target(target)
-			moved += 1
+	# ① 后方梯队（严格在防线之后）整体压上来；防线上的人按兵不动
+	for i in node_defenders.size():
+		if i <= line:
+			continue
+		var bucket: Array = node_defenders[i]
+		if bucket.is_empty():
+			continue
+		moved += _send_defenders(bucket, bucket.size(), target, false)
+	# ② 东侧预备队成建制跟上（不再留一半看家 —— 目标是形成局部优势）
+	if not reserve_enemies.is_empty():
+		moved += _send_defenders(reserve_enemies, reserve_enemies.size(), target, true)
 	if moved > 0:
-		print("[敌人] 预备队 %d 人向前支援 → 节点 %d %s" % [moved, mini(index + 1, nodes.size() - 1) + 1,
-				str(target)])
+		print("[敌人] 节点 %d 失守 ⇒ 后方梯队 + 预备队共 %d 人向下一条防线（节点 %d）集中 %s"
+				% [index + 1, moved, line + 1, str(target)])
 
 
 func _capture_zone_index(node_name: Variant) -> int:

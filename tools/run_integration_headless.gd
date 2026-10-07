@@ -143,6 +143,8 @@ func _process(delta: float) -> bool:
 				_check_downed_not_targeted()
 				_check_finish_off_pose()
 				# 候选 O 第三轮：被击倒时的视角（会把玩家打死，必须是最后一项）
+				# 2026-10-07 第八十五版：受攻增援（会临时借调敌人，自己会还原现场）
+				_check_reinforcement()
 				# 2026-10-04 炸药 / 工程兵：会挪玩家与炸掉一个掩体，放最后一段（被击倒之前）
 				# 2026-10-07 第八十三版：拆成「同步段 + 真实时间段」。
 				#   同步段把状态机每条边都走一遍（手动 tick 推进时间）；末尾**起一次真读条**留给
@@ -1578,6 +1580,66 @@ func _check(title: String, actual: Variant, expected: Variant) -> void:
 
 func _check_true(title: String, condition: bool) -> void:
 	_check(title, condition, true)
+
+
+# ────────────── ⑫ 受攻增援（2026-10-07 第八十五版 · docx 19 ㊹ 第二根杠杆）──────────────
+
+## 为什么这里要自己造两个敌人：集成冒烟跑的是 Main.tscn 的默认 2 名敌人，到这一段多半已经被队友
+## 打死了 —— 而增援编成要求「被攻节点之外还有一个 ≥2 人的节点」。所以临时 new 两个（走真实的
+## Enemy.setup / add_child），断言完立刻 queue_free 并还原名册，不污染后面的检查。
+func _check_reinforcement() -> void:
+	var world = _main.world
+	if world == null:
+		_check_true("受攻增援：world 模块在", false)
+		return
+	var zone_count: int = _main.capture_zones.size()
+	# 桶是按**地图给的全部 RAAS 节点**建的（青岭走廊 5 个），而第一版只用前 3 个当白旗点 ——
+	# 所以这里对地图数据，不对 capture_zones（用错口径会红，第八十五版实测过）。
+	var map_nodes := _map_node_positions(GameConfig.MAP_HEIGHT_IMAGE).size()
+	_check("受攻增援：节点桶数 = 地图 RAAS 节点数", world.node_defenders.size(), map_nodes)
+	_check_true("受攻增援：地图节点 ≥ 白旗点（桶比白旗点多）", map_nodes >= zone_count)
+	var buckets := 0
+	for bucket in world.node_defenders:
+		buckets += (bucket as Array).size()
+	_check("受攻增援：节点桶 + 预备队 = 出厂的敌人数",
+			buckets + world.reserve_enemies.size(), world.spawned_enemy_count)
+
+	# 借调：两个临时敌人塞进节点 0 的桶，让节点 2「受攻」时有兵可派
+	var EnemyScript = load("res://entities/enemy/Enemy.gd")
+	var kept_buckets: Array = world.node_defenders.duplicate(true)
+	var kept_reserve: Array = world.reserve_enemies.duplicate()
+	var temps: Array = []
+	for i in 2:
+		var enemy = EnemyScript.new()
+		enemy.name = "ReinforceProbe%d" % i
+		enemy.global_position = (_main.capture_zones[0] as Node2D).global_position
+		enemy.setup(_main.sight, _main.player, _main.camera, _main.grid)
+		_main.add_child(enemy)
+		temps.append(enemy)
+	world.node_defenders[0] = temps
+	world.reserve_enemies = []
+	world._reinforced_zones.clear()
+	# ⚠ 必须留一份副本：_send_defenders 会**就地**把派出去的人从池子里删掉（pool.clear()），
+	# 而这里传进去的池子就是 temps 本身 —— 直接遍历 temps 会漏掉刚被派走的那个人（本版实测踩到）。
+	var probe: Array = temps.duplicate()
+
+	var attacked := mini(2, zone_count - 1)
+	var target: Vector2 = (_main.capture_zones[attacked] as Node2D).global_position
+	var sent: int = world.reinforce_zone(attacked, target)
+	_check_true("受攻增援：有节点受攻 ⇒ 邻近节点派人（派了 %d 人）" % sent, sent > 0)
+	var aimed := 0
+	for enemy in probe:
+		if enemy.get("_patrol_target") == target:
+			aimed += 1
+	_check("受攻增援：被派的人目标都指向交火点", aimed, sent)
+	_check("受攻增援：同一个节点只派一次（幂等）", world.reinforce_zone(attacked, target), 0)
+
+	# 还原现场（后面的检查还要用这些敌人与名册）
+	world.node_defenders = kept_buckets
+	world.reserve_enemies = kept_reserve
+	world._reinforced_zones.clear()
+	for enemy in temps:
+		enemy.queue_free()
 
 
 # ────────────── ⑩ 炸药 / 工程兵（2026-10-04 拍板；2026-10-07 第八十三版补 ㊺㊻㊼）──────────────

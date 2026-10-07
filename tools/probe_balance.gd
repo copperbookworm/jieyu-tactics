@@ -19,7 +19,11 @@ const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
 const MapGenScript := preload("res://systems/terrain/MapGenerator.gd")
 
 const SAMPLE_INTERVAL := 0.5
-const NODE_DWELL := 40.0
+## 每个节点停留多久再推进。默认 40 s 比**真实步行**快得多（节点间距 ~300 m、队友 2.4 m/s
+## ⇒ 实际要 ~125 s），所以「守军走路增援」在这条时间线上永远来不及 —— 要量增援/集中就得
+## 用 --dwell 150 把节奏调到与步行一致（第八十五版实测踩到，见 --with-player 的说明）。
+const DEFAULT_NODE_DWELL := 40.0
+var _node_dwell := DEFAULT_NODE_DWELL
 const STAGE_DISTANCE := 50.0   # 队友送到节点外这个距离：出生点到 N1 有 197 m，纯走路要 ~60 s
 
 var _main = null
@@ -31,6 +35,12 @@ var _legacy := false
 var _even := false
 ## 正面对撞里战斗结束的时刻（一方归零），-1 = 没结束
 var _battle_over := -1.0
+## --with-player：推进时**玩家跟着走**（第八十五版新增）。
+## 为什么必须要它：CaptureZone 只统计**玩家**（队友不算占领兵力）⇒ 玩家留在出生点时
+## 没有任何节点会翻蓝、flag_state_changed 一次都不发 ⇒ 预备队支援 / 下一条防线集中
+## 这些**旗点驱动的 AI 行为整段测不到**（第八十五版实测：探针完全看不见增援）。
+## 代价（写在明处）：玩家不参战，但会被敌人当成目标之一 —— 所以本模式把玩家血量拉满（不参战、不阵亡）。
+var _with_player := false
 ## 摆位要等**第一帧**再做：_initialize() 里 add_child 之后 Main._ready() 还没跑完
 ## （实测：那时 get_nodes_in_group 拿到 0 个单位，摆位静默落空 ⇒ 量出来的是原部署）
 var _redeploy_pending := false
@@ -70,6 +80,11 @@ func _initialize() -> void:
 				_legacy = true
 			"--even":
 				_even = true
+			"--with-player":
+				_with_player = true
+			"--dwell":
+				if i + 1 < args.size():
+					_node_dwell = float(args[i + 1])
 	seed(_seed_value)        # 全局 RNG：让整局可复现（见文件头注释）
 	print("[平衡采样] 随机种子 = %d（--seed N 可换）" % _seed_value)
 	MatchRulesScript.set_mode(ModeTableScript.Mode.PVP_RANKED)
@@ -94,6 +109,9 @@ func _print_header(enemies: int) -> void:
 			str(_alive_allies().size())]
 	print("===== 平衡采样：%s · 脚本=%s · 旧部署=%s · 采样 %.0f s / 每 %.1f s ====="
 			% [str(enemies), mode_text, str(_legacy), _total, SAMPLE_INTERVAL])
+	if _with_player:
+		print("[口径] --with-player：玩家随阶段推进（血量拉满＝不参战、不阵亡）——")
+		print("       旗点只有玩家能翻，不带玩家这一段就完全测不到『预备队支援 / 下一条防线集中』。")
 	print("t(s) | 敌存 | 友存 | 玩家hp | 敌方交战 | 阶段")
 
 
@@ -143,7 +161,7 @@ func _advance_phase() -> void:
 	var zones: Array = _main.capture_zones
 	if zones.is_empty():
 		return
-	var index := mini(int(_elapsed / NODE_DWELL), zones.size() - 1)
+	var index := mini(int(_elapsed / maxf(_node_dwell, 1.0)), zones.size() - 1)
 	if index == _phase:
 		return
 	_phase = index
@@ -161,6 +179,14 @@ func _stage_allies(target: Vector2) -> void:
 		node.order_target = target
 		node.order_active = true
 		staged += 1
+	# --with-player：玩家也跟到节点上（旗点才会真的翻；血量拉满＝不参战也不阵亡，见字段注释）
+	# ⚠ 必须放进**圈内**（CaptureZone 半径 15 m）：放到 STAGE_DISTANCE(50 m) 就等于没来，
+	# 旗点照样不会翻（第八十五版第一次就踩了这个 —— 位移量用了「队友站位」那个参数）。
+	if _with_player and _main.player != null:
+		_main.player.global_position = target + Vector2(-6.0, 0.0)
+		_main.player.hp = 1.0e9
+		_main.player.downed = false
+		_main.player.alive = true
 	print("—— 阶段 %d：%d 名队友受令推进到 %s（t=%.1f s，敌存 %d / 友存 %d）"
 			% [_phase + 1, staged, str(target), _elapsed, _alive_enemies().size(), _alive_allies().size()])
 

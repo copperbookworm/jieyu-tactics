@@ -37,10 +37,21 @@ var _peak_units := 0
 var _tag := ""
 
 
+## 【2026-10-06 第七十九版·三】固定随机种子：敌人 AI 用的是**全局 randf()**（开火散布 / 可见性抖动 /
+## 盲射判定），不固定种子的话同一配置两轮就能落在不同档（实测 40.1 s 与 81.3/82.1 s 首接触）⇒
+## 任何 A/B 都做不出来。这里默认固定，并允许 `--seed N` 覆盖（要测"多局均值"时换种子跑多轮）。
+const DEFAULT_SEED := 20261006
+
+var _seed_value := DEFAULT_SEED
+
+
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	for i in args.size():
 		match args[i]:
+			"--seed":
+				if i + 1 < args.size():
+					_seed_value = int(args[i + 1])
 			"--seconds":
 				if i + 1 < args.size():
 					_total = float(args[i + 1])
@@ -50,6 +61,8 @@ func _initialize() -> void:
 				_push = false
 			"--legacy":
 				_legacy = true
+	seed(_seed_value)        # 全局 RNG：让整局可复现（见文件头注释）
+	print("[平衡采样] 随机种子 = %d（--seed N 可换）" % _seed_value)
 	MatchRulesScript.set_mode(ModeTableScript.Mode.PVP_RANKED)
 	var enemies := int(ModeTableScript.value_of(ModeTableScript.Mode.PVP_RANKED, "enemy_count", 20))
 	var scene: PackedScene = load("res://scenes/gameplay/Main.tscn")

@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="JIEYU1"
-run/main_scene="res://scenes/app/App.tscn"
+run/main_scene="res://scenes/_probe_fixed_scene.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
@@ -44,6 +44,13 @@ pointing/emulate_mouse_from_touch=false
 [physics]
 
 common/max_physics_steps_per_frame=1
+; 【2026-10-06 · 第七十九版·三 · 使用者拍板 Q1】2D 物理步进放独立线程（并行优先）。
+; 理由与口径：帧时被物理步定价（docs/性能预算.md 第二十六/二十七节：p50 恰好一个 vsync、
+; 尾巴全是"吃两个物理周期"），所以这是现成的一行并行开关。
+; 代价（写在明处）：物理状态在主线程的可见性滞后一步 —— 依赖"本帧物理已更新"的代码要复核；
+; 逻辑面已由单元 + 集成两套测试守（本轮两套全绿）；**真机收益待 A/B 验收**（§28.8 配方），
+; 若真机没收益或体感变差，删掉本行即回退。
+2d/run_on_separate_thread=true
 3d/physics_engine="Jolt Physics"
 
 [rendering]

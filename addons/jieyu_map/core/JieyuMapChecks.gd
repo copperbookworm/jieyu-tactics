@@ -19,6 +19,9 @@ const SIGHT_MAX_SAMPLES := 900
 ## 地形 / 掩体检查合用的采样栅格步长（米）：1000 图 → 100×100 采样格。
 ## 为什么两个检查共用一张栅格：各扫一遍 100 万格是这份文件最贵的一段（实测从 1.4 s 降到 40 ms）。
 const TERRAIN_RASTER_STEP_M := 10
+## 掩体空间网格索引（Q3 · 2026-10-06 第七十九版·三）：把"逐点 × 全表掩体"的最近距离查询
+## 降到"只看点附近几格"，结果与全表版**逐位相同**（test/jieyu_occluder_index_test.gd）
+const OccluderIndexScript := preload("res://addons/jieyu_map/core/JieyuOccluderIndex.gd")
 
 
 ## ────────────── 入口 ──────────────
@@ -600,7 +603,8 @@ static func _check_passability(doc: JieyuMapDoc, report: Array) -> void:
 		if not (polygon is Array) or (polygon as Array).size() < 3:
 			continue
 		var side := str(spawn.get("side", "?"))
-		var stats := _spawn_pad_stats(doc, polygon, doc.zones.get("raas_nodes", []), limit)
+		var stats := _spawn_pad_stats(doc, polygon, doc.zones.get("raas_nodes", []), limit,
+				_cover_index(doc))
 		if int(stats["samples"]) > 0 and int(stats["passable"]) == 0:
 			report.append(_item(SEV_ERROR, "spawn.not_passable",
 					"出生区 %s 内部没有任何站得住的采样点（%d 个采样点全在 > %.0f° 的坡面上）"
@@ -626,10 +630,27 @@ static func _check_passability(doc: JieyuMapDoc, report: Array) -> void:
 
 
 
+## 掩体空间网格索引缓存（Q3）：一次 run() 里出生区采样点成百上千，索引必须只建一次 ——
+## 每点重建会让"省下的 O(n·m)"又赔进建表（建表本身也是 O(掩体数)）。
+## ⚠ 索引没有共享缓冲，重入安全；这里缓存只影响"建几次表"，不影响结果。
+static var _cover_index_cache = null
+static var _cover_index_source: Array = []
+
+
+static func _cover_index(doc: JieyuMapDoc):
+	if _cover_index_cache != null and _cover_index_source == doc.occluders:
+		return _cover_index_cache
+	var index = OccluderIndexScript.new()
+	index.build(doc.occluders)
+	_cover_index_cache = index
+	_cover_index_source = doc.occluders
+	return index
+
+
 ## 出生区内部采样 + 落脚地判据（校验器独立复核生成器的压平，不共用结论）。
 ## 返回 {samples, passable, has_pad, pad_center, pad_cover_dist, pad_node_dist}
 static func _spawn_pad_stats(doc: JieyuMapDoc, polygon: Array, nodes: Array,
-		limit: float) -> Dictionary:
+		limit: float, cover_index = null) -> Dictionary:
 	var stats := {"samples": 0, "passable": 0, "has_pad": false, "pad_compliant": false,
 			"pad_center": Vector2.ZERO, "pad_cover_dist": -1.0, "pad_node_dist": -1.0}
 	var radius := JieyuMapSpec.SPAWN_PAD_RADIUS_M
@@ -648,7 +669,9 @@ static func _spawn_pad_stats(doc: JieyuMapDoc, polygon: Array, nodes: Array,
 			stats["passable"] = int(stats["passable"]) + 1
 			if JieyuMapGen.polygon_edge_distance(polygon, point) < radius:
 				continue
-			var cover := JieyuMapGen.nearest_occluder_distance(doc.occluders, point)
+			# Q3：走空间网格索引（结果与全表版逐位相同）；cover_index == null 时退回全表（老调用方不受影响）
+			var cover: float = cover_index.nearest_distance(point) \
+					if cover_index != null else JieyuMapGen.nearest_occluder_distance(doc.occluders, point)
 			if cover < radius + JieyuMapSpec.SPAWN_PAD_CLEAR_M:
 				continue
 			# 判据是「**存在**一块合规落脚地」，不是「最不贴掩体的那块恰好合规」：

@@ -965,6 +965,10 @@ static func _content_rows(band: int) -> void:
 			_rows_image_bytes[o + 2] = rgb[kind * 3 + 2]
 
 
+## 掩体空间网格索引（Q3）：只在编辑器侧的"最近掩体距离"查询上用，结果与全表版逐位相同
+const OccluderIndexScript := preload("res://addons/jieyu_map/core/JieyuOccluderIndex.gd")
+
+
 ## 内容层配色 / id 的字节 LUT（从 CONTENT_COLORS / CONTENT_MATERIAL_IDS 派生，避免漂移）
 static func _content_rgb_lut() -> PackedByteArray:
 	if _content_rgb.size() == CONTENT_COLORS.size() * 3 and _content_rgb.size() > 0:
@@ -1093,6 +1097,11 @@ static func best_spawn_pad_center(doc: JieyuMapDoc, polygon: Array, nodes: Array
 	var radius := JieyuMapSpec.SPAWN_PAD_RADIUS_M
 	var margin := radius + JieyuMapSpec.SPAWN_PAD_CLEAR_M
 	var bounds := _polygon_bounds(polygon)
+	# 【2026-10-06 第七十九版·三 · Q3】候选点网格里每格都要问一次"最近掩体多远"：
+	# 全表版是 O(候选点数 × 掩体数)。这里建一次空间网格索引，结果与全表版**逐位相同**
+	# （test/jieyu_occluder_index_test.gd 逐点对拍）。
+	var cover_index = OccluderIndexScript.new()
+	cover_index.build(doc.occluders)
 	var result := {"ok": false, "center": Vector2.ZERO, "cover_dist": -1.0,
 			"node_dist": -1.0, "tier": -1.0, "side": side}
 	for tier_v in JieyuMapSpec.SPAWN_OFFSET_M + [60.0, 30.0, 0.0]:
@@ -1105,7 +1114,7 @@ static func best_spawn_pad_center(doc: JieyuMapDoc, polygon: Array, nodes: Array
 				var point := Vector2(x, y)
 				if point_in_polygon(polygon, point) \
 						and polygon_edge_distance(polygon, point) >= radius:
-					var cover := nearest_occluder_distance(doc.occluders, point)
+					var cover: float = cover_index.nearest_distance(point)
 					var node_dist := nearest_node_distance(nodes, point)
 					if cover >= margin and node_dist >= tier:
 						var better := best.is_empty() \

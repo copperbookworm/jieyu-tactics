@@ -136,6 +136,75 @@ static func solve_elevation(distance: float, muzzle_velocity: float,
 	return atan(tan_theta)
 
 
+## ────────────── 离线弹道表（Q2 · 2026-10-06 第七十九版·三）──────────────
+## 表由 tools/build_ballistics_table.gd 生成、并**入库**（res://data/config/ballistics_table.json）。
+## 只在初速匹配、距离落在表内时使用；其余情况一律退回数值二分 ⇒ 老调用方与单测行为不变。
+## 表头写了生成时的"最大落点误差"（线性插值的代价），精度由 test/ballistics_table_test.gd 复核。
+const TABLE_PATH := "res://data/config/ballistics_table.json"
+static var _table_rows := PackedFloat64Array()
+static var _table_v0 := 0.0
+static var _table_step := 0.0
+static var _table_max := 0.0
+static var _table_error := -1.0
+static var _table_loaded := false
+
+
+## 查表（未命中返回 -1 ⇒ 调用方退回二分）
+static func _table_elevation(distance: float, muzzle_velocity: float) -> float:
+	if not _table_loaded:
+		_load_table()
+	if _table_step <= 0.0 or _table_rows.is_empty():
+		return -1.0
+	if absf(muzzle_velocity - _table_v0) > 0.001:
+		return -1.0
+	if distance < 0.0 or distance > _table_max:
+		return -1.0
+	var pos := distance / _table_step
+	var i0 := int(floor(pos))
+	if i0 + 1 >= _table_rows.size():
+		return -1.0
+	var a := _table_rows[i0]
+	var b := _table_rows[i0 + 1]
+	if a < 0.0 or b < 0.0:
+		return -1.0     # 该格在 45° 射程之外（生成器写 -1）
+	return lerpf(a, b, pos - float(i0))
+
+
+static func _load_table() -> void:
+	_table_loaded = true        # 失败也只试一次（没有表的包 ⇒ 永久退回现算）
+	var file := FileAccess.open(TABLE_PATH, FileAccess.READ)
+	if file == null:
+		return
+	var text := file.get_as_text()
+	file.close()
+	var parsed: Variant = JSON.parse_string(text)
+	if not (parsed is Dictionary):
+		push_warning("[弹道表] %s 解析失败，退回数值二分" % TABLE_PATH)
+		return
+	var d: Dictionary = parsed
+	_table_v0 = float(d.get("v0", 0.0))
+	_table_step = float(d.get("step_m", 0.0))
+	_table_max = float(d.get("max_m", 0.0))
+	_table_error = float(d.get("measured_max_error_m", -1.0))
+	_table_rows = PackedFloat64Array()
+	for v in d.get("rows", []):
+		_table_rows.append(float(v))
+
+
+## 自检 / 测试用：表的元信息（没装载时 loaded=false）
+static func table_info() -> Dictionary:
+	if not _table_loaded:
+		_load_table()
+	return {
+		"loaded": not _table_rows.is_empty(),
+		"v0": _table_v0,
+		"step_m": _table_step,
+		"max_m": _table_max,
+		"rows": _table_rows.size(),
+		"measured_max_error_m": _table_error,
+	}
+
+
 ## 飞行时间：t = D / (v0·cosθ)
 static func solve_flight_time(distance: float, muzzle_velocity: float,
 		elevation: float) -> float:
@@ -216,7 +285,21 @@ static func trajectory_range(muzzle_velocity: float, elevation: float,
 
 ## 带阻力反解仰角：0~45° 内二分（低伸解，射程在 45° 以下随仰角单调增）。
 ## 正式做法是 7.4.1 的离线弹道表，第一版先用数值迭代——发射时才跑一次，代价可忽略。
+## 对外入口（Q2 · 2026-10-06 第七十九版·三）：**先查离线弹道表**（设计 7.4.1），
+## 表里没有这个初速 / 超出表的距离范围 ⇒ 退回下面的数值二分（行为与改前完全一致）。
+## 表由 tools/build_ballistics_table.gd 并行生成（res://data/config/ballistics_table.json），
+## 精度由 test/ballistics_table_test.gd 钉住。
 static func solve_elevation_dragged(distance: float, muzzle_velocity: float,
+		iterations: int = 12) -> float:
+	var from_table := _table_elevation(distance, muzzle_velocity)
+	if from_table >= 0.0:
+		return from_table
+	return solve_elevation_bisection(distance, muzzle_velocity, iterations)
+
+
+## 数值二分反解（改前的实现原样保留）：0~45° 内二分，低伸解。
+## 离线表的每一格都是用它算出来的 —— 所以"表"与"现算"同源，只是精度按表步长插值。
+static func solve_elevation_bisection(distance: float, muzzle_velocity: float,
 		iterations: int = 12) -> float:
 	if distance <= 0.001 or muzzle_velocity <= 0.0:
 		return -1.0

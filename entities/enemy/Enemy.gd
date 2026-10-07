@@ -18,6 +18,8 @@ const BlobShadowScript := preload("res://entities/effects/BlobShadow.gd")
 ## 12.7.1 上下半身分离的角色图（无 class_name，preload 引用）
 const UnitFigureScript := preload("res://entities/visual/UnitFigure.gd")
 const Sfx := preload("res://systems/audio/Sfx.gd")
+## 双方 AI 共用的射击精度基线（2026-10-07 ㊹ 配平：队友原先零散布，现在是同一条）
+const AiAccuracyScript := preload("res://systems/combat/AiAccuracy.gd")
 
 enum AIState { PATROL, COMBAT, BLIND_FIRE }
 
@@ -519,7 +521,8 @@ func _try_fire(delta: float, aim_at: Vector2, blind: bool = false) -> void:
 	# 还击精度随压制下降：原本零散布直射，被压后必须明显打不准
 	var direction := to_target.normalized()
 	# 基础散布 + 压制散布：没有基础散布时敌人是零散布直射（必中），距离一远比玩家还准
-	var spread_deg := GameConfig.ENEMY_BASE_MOA / 60.0 \
+	# 基础散布走共用模块（与队友同一条基线）；压制散布是敌人独有的一段
+	var spread_deg := AiAccuracyScript.base_spread_deg() \
 			+ SuppressionSystem.return_fire_spread_deg(suppression)
 	if spread_deg > 0.001:
 		direction = direction.rotated(deg_to_rad(randf_range(-spread_deg, spread_deg)))

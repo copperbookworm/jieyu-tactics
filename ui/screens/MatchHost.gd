@@ -74,7 +74,8 @@ func _apply_mode_rules() -> void:
 			ModeTableScript.win_rule(mode_id),
 			ModeTableScript.duration_s(mode_id),
 			ModeTableScript.overtime_s(mode_id),
-			"完成主线任务")
+			"",                                             # 文案由 MatchFlow 按目标数量生成
+			ModeTableScript.objective_count(mode_id))
 
 
 ## 暂停键由 HudBuilder 建、由这里接线 —— Main.gd 因此一行都不用加（它守着 400 行硬线）

@@ -39,7 +39,7 @@ func _build_content(body: VBoxContainer) -> void:
 	row.add_child(left)
 	var menu := UiKit.content_of(left)
 
-	menu.add_child(UiKit.wrapped("第一版垂直切片：占领节点、任务、载具、报点、烟雾、AI 参谋。", UiKit.SMALL_SIZE))
+	menu.add_child(UiKit.wrapped("产品版目标：2 阵营 / 1 张地图 / 3 模式（docx 22.10）。本版已有：占领与任务、载具与炮塔、报点与指令、烟雾、间瞄、炸药、AI 参谋。", UiKit.SMALL_SIZE))
 	menu.add_child(UiKit.spacer(6.0))
 
 	var start := UiKit.button("开始游戏")

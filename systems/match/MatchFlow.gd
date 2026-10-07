@@ -30,6 +30,11 @@ var win_rule := "occupy"                             ## "occupy" 占领数 / "ob
 var base_duration := GameConfig.MATCH_DURATION
 var overtime_duration := GameConfig.OVERTIME_DURATION
 var _objective := ""
+## 战术目标口径（22.6 PVEVP）：要完成几个主线任务算赢 / 已经完成几个。
+## 2026-10-07 第八十四版之前这里**没有计数** —— 完成任意一条 main 就结算，
+## 而任务表里有 2 条 main（T-M1 占领 / T-M2 守住）⇒ 拿下第一个节点（约 1~2 分钟）本局就结束了。
+var _objective_target := 1
+var _objective_done := 0
 
 
 func setup(main_node, attacker_count: int = -1) -> void:
@@ -111,11 +116,15 @@ func _on_clock_zero() -> void:
 
 
 ## 模式规则入口（外壳在 Main 装好之后调用）。objective 模式额外订阅主线任务完成。
-func apply_mode(rule: String, duration_s: float, overtime_s: float, objective: String) -> void:
+## objective_target：objective 口径下要完成几个主线任务（模式表 objective_count，默认 1）
+func apply_mode(rule: String, duration_s: float, overtime_s: float, objective: String,
+		objective_target: int = 1) -> void:
 	win_rule = rule
 	base_duration = maxf(duration_s, 1.0)
 	overtime_duration = maxf(overtime_s, 0.0)
 	_objective = objective
+	_objective_target = maxi(objective_target, 1)
+	_objective_done = 0
 	time_left = base_duration
 	if phase == Phase.OVERTIME:
 		phase = Phase.PLAYING
@@ -125,17 +134,31 @@ func apply_mode(rule: String, duration_s: float, overtime_s: float, objective: S
 	_refresh()
 
 
-## 22.6 PVEVP：主线任务完成 = 战术目标达成
+## 22.6 PVEVP：战术目标 = 完成 _objective_target 个主线任务。
+## 计数的是**完成次数**而不是去重后的任务 id：主线链天然是「占领 → 守住 → 再占领下一个」
+## （QuestSystem._assign_main），所以 3 次完成正好等于走完一条完整推进链。
 func _on_objective_quest(quest_data: Dictionary) -> void:
 	if win_rule != "objective" or phase == Phase.FINISHED:
 		return
 	if not bool(quest_data.get("main", false)):
 		return
-	_finish("player", "战术目标达成：%s" % String(quest_data.get("name", "主线任务")))
+	_objective_done += 1
+	if _objective_done >= _objective_target:
+		_finish("player", "战术目标达成 %d/%d：%s" % [_objective_target, _objective_target,
+				String(quest_data.get("name", "主线任务"))])
+		return
+	_hint("战术目标 %d/%d 达成：%s" % [_objective_done, _objective_target,
+			String(quest_data.get("name", "主线任务"))])
+	_refresh()
 
 
 func objective_text() -> String:
-	return _objective if _objective != "" else "完成主线任务"
+	return _objective if _objective != "" else "完成 %d 个主线任务" % _objective_target
+
+
+## 战术目标进度（HUD 状态行 / 提示用）
+func objective_progress_text() -> String:
+	return "战术目标 %d/%d" % [_objective_done, _objective_target]
 
 
 func clock_text() -> String:
@@ -266,6 +289,9 @@ func _hint(text: String) -> void:
 func _refresh() -> void:
 	if main == null or main.hud == null:
 		return
-	main.hud.set_match_status("%s ｜ 重生预算 %d" % [
-			time_text(time_left, phase == Phase.OVERTIME), budget],
-			phase == Phase.OVERTIME or time_left <= 60.0)
+	# PVEVP（objective 口径）把战术目标进度常驻在状态行上：它是本模式的胜负条件，
+	# 不像占领数那样有旗点可以直接看。
+	var status := "%s ｜ 重生预算 %d" % [time_text(time_left, phase == Phase.OVERTIME), budget]
+	if win_rule == "objective":
+		status += " ｜ %s" % objective_progress_text()
+	main.hud.set_match_status(status, phase == Phase.OVERTIME or time_left <= 60.0)

@@ -27,6 +27,13 @@ var _elapsed := 0.0
 var _total := 120.0
 var _push := true
 var _legacy := false
+## --even：把双方拉成一排、在出生区平地**正面接触**（配平 A/B 专用，见 _even_redeploy 的说明）
+var _even := false
+## 正面对撞里战斗结束的时刻（一方归零），-1 = 没结束
+var _battle_over := -1.0
+## 摆位要等**第一帧**再做：_initialize() 里 add_child 之后 Main._ready() 还没跑完
+## （实测：那时 get_nodes_in_group 拿到 0 个单位，摆位静默落空 ⇒ 量出来的是原部署）
+var _redeploy_pending := false
 var _next_sample := 0.0
 var _rows: Array = []
 var _first_contact := -1.0
@@ -61,6 +68,8 @@ func _initialize() -> void:
 				_push = false
 			"--legacy":
 				_legacy = true
+			"--even":
+				_even = true
 	seed(_seed_value)        # 全局 RNG：让整局可复现（见文件头注释）
 	print("[平衡采样] 随机种子 = %d（--seed N 可换）" % _seed_value)
 	MatchRulesScript.set_mode(ModeTableScript.Mode.PVP_RANKED)
@@ -70,17 +79,35 @@ func _initialize() -> void:
 	_main.enemy_count = enemies
 	root.add_child(_main)
 	current_scene = _main
-	if _legacy:
-		_legacy_redeploy()
-	_tag = "%s · %s敌/%s友" % ["推进" if _push else "站立", str(_alive_enemies().size() + _dead_enemy_names().size()),
-			str(_alive_allies().size())]
-	print("===== 平衡采样：%s · 脚本=%s · 旧部署=%s · 采样 %.0f s / 每 %.1f s ====="
-			% [str(enemies), "推进" if _push else "站立", str(_legacy), _total, SAMPLE_INTERVAL])
-	print("t(s) | 敌存 | 友存 | 玩家hp | 敌方交战 | 阶段")
+	if _even:
+		_push = false          # 正面对撞不做节点推进（推进与「公平交换比」是两件事）
+	# 摆位等第一帧（见 _redeploy_pending 的说明）；不做摆位就现在打抬头
+	_redeploy_pending = _legacy or _even
+	if not _redeploy_pending:
+		_print_header(enemies)
 	_last_us = Time.get_ticks_usec()
 
 
+func _print_header(enemies: int) -> void:
+	var mode_text := "正面对撞" if _even else ("推进" if _push else "站立")
+	_tag = "%s · %s敌/%s友" % [mode_text, str(_alive_enemies().size() + _dead_enemy_names().size()),
+			str(_alive_allies().size())]
+	print("===== 平衡采样：%s · 脚本=%s · 旧部署=%s · 采样 %.0f s / 每 %.1f s ====="
+			% [str(enemies), mode_text, str(_legacy), _total, SAMPLE_INTERVAL])
+	print("t(s) | 敌存 | 友存 | 玩家hp | 敌方交战 | 阶段")
+
+
 func _process(delta: float) -> bool:
+	# 第一帧：等 Main._ready() 把单位都建好之后再摆位（否则摆位落空，测的是原部署）
+	if _redeploy_pending:
+		_redeploy_pending = false
+		if _legacy:
+			_legacy_redeploy()
+		if _even:
+			_even_redeploy()
+		_print_header(int(ModeTableScript.value_of(ModeTableScript.Mode.PVP_RANKED, "enemy_count", 20)))
+		_last_us = Time.get_ticks_usec()
+		return false
 	var now := Time.get_ticks_usec()
 	if _last_us > 0:
 		_frame_ms.append(float(now - _last_us) / 1000.0)
@@ -93,6 +120,11 @@ func _process(delta: float) -> bool:
 	if _first_contact < 0.0 and _enemies_engaged() > 0:
 		_first_contact = _elapsed
 		print("—— 首接触：%.1f s（%d 名敌人进入交战）" % [_first_contact, _enemies_engaged()])
+	if _battle_over < 0.0 and _even \
+			and (_alive_enemies().size() == 0 or _alive_allies().size() == 0):
+		_battle_over = _elapsed
+		print("—— 战斗结束：t=%.1f s（敌存 %d / 友存 %d）"
+				% [_battle_over, _alive_enemies().size(), _alive_allies().size()])
 	if _elapsed >= _next_sample:
 		_next_sample = _elapsed + SAMPLE_INTERVAL
 		_sample()
@@ -141,6 +173,80 @@ func get_nodes_from_friendly() -> Array:
 	return out
 
 
+## 【2026-10-07 第八十四版 · ㊹ 配平 A/B 专用】--even：双方在出生区平地**正面接触**
+##
+## 为什么非要加它：默认的 --push 场景是「19 名队友打 3 名守军」（敌人按 RAAS 节点 3/3/3/3/3 驻守），
+## 局部兵力 ≈ 6:1 ⇒ 单兵数值怎么调，清一个节点都只要一两秒，0.5 s 的采样根本分辨不出来。
+## 实测（配平前后各跑一次 130 s 推进）：都是「敌 20 → 2~3」，差异落在噪声量级。
+## 要回答「队友单兵战力现在到底是不是和敌人一个量级」，只有把局部兵力拉平再打。
+func _even_redeploy() -> void:
+	var center: Vector2 = _main.spawn_anchor
+	if center == Vector2.ZERO and _main.player != null:
+		center = _main.player.global_position
+	# 玩家挪开：本探针量的是 AI 之间的交换比，玩家参战会污染结论
+	if _main.player != null:
+		_main.player.global_position = center + Vector2(0.0, 260.0)
+	var allies := get_nodes_from_friendly()
+	for i in allies.size():
+		var pos: Vector2 = center + Vector2(-25.0, 0.0) + _even_offset(i)
+		(allies[i] as Node2D).global_position = pos
+		# 用组任务把队友钉在原地（order_active = false 时他们会掉头去追 260 m 外的玩家）
+		allies[i].order_target = pos
+		allies[i].order_active = true
+	var enemies: Array = []
+	for node in get_nodes_in_group("enemy"):
+		var n := String(node.name)
+		if n.begins_with("Enemy") and not n.contains("TankCrew") and not n.contains("Vehicle"):
+			enemies.append(node)
+	for i in enemies.size():
+		var pos: Vector2 = center + Vector2(25.0, 0.0) + _even_offset(i)
+		(enemies[i] as Node2D).global_position = pos
+		# 钉住巡逻目标：不让它们在接敌前自己巡逻走开
+		enemies[i].set_move_target(pos)
+	print("[--even] 双方拉到出生区平地正面接触：友 %d vs 敌 %d（面距 50 m，玩家挪开 260 m）"
+			% [allies.size(), enemies.size()])
+	_los_selfcheck(allies, enemies)
+
+
+## 摆完位立刻自检一次「到底看不看得见」：如果通视率为 0，这一轮量的就不是交换比，
+## 而是「两队人隔着山头站着」——先把这件事钉死，别把噪声当结论。
+func _los_selfcheck(allies: Array, enemies: Array) -> void:
+	if allies.is_empty() or enemies.is_empty():
+		return
+	var seeing := 0
+	var seen := 0
+	for a in allies:
+		for e in enemies:
+			if _pair_sight(a, e):
+				seeing += 1
+				break
+	for e in enemies:
+		for a in allies:
+			if _pair_sight(e, a):
+				seen += 1
+				break
+	print("[--even] 通视自检：%d/%d 名队友至少看得见 1 个敌人；%d/%d 名敌人至少看得见 1 个队友"
+			% [seeing, allies.size(), seen, enemies.size()])
+	print("[--even] 首单位距离 %.1f m ｜ 出生锚点 %s ｜ 玩家 %s"
+			% [(allies[0] as Node2D).global_position.distance_to((enemies[0] as Node2D).global_position),
+			str(_main.spawn_anchor), str(_main.player.global_position)])
+
+
+func _pair_sight(a, b) -> bool:
+	if a == null or b == null or a._sight == null or a._grid == null:
+		return false
+	var origin: float = a._grid.sample_bilinear(a.global_position) + GameConfig.SOLDIER_EYE_HEIGHT
+	return a._sight.has_sight(a.global_position, origin, b.global_position,
+			a._sight.eye_height_at(b.global_position))
+
+
+## 阵列偏移：7 列、列距 4 m、行距 4 m —— 40 个单位摊成 24 m × 12 m 的一片，双方面距 50 m
+func _even_offset(index: int) -> Vector2:
+	var col := index % 7
+	var row := index / 7
+	return Vector2(float(row) * 4.0, (float(col) - 3.0) * 4.0)
+
+
 func _sample() -> void:
 	_rows.append({
 		"t": _elapsed,
@@ -155,11 +261,36 @@ func _sample() -> void:
 	print("%5.1f | %4d | %4d | %6.0f | %8d | 节点 %d | 最近队友距节点 %5.1f m"
 			% [row["t"], row["enemy"], row["ally"], row["hp"], row["engaged"], row["phase"],
 			row["ally_near"]])
+	# 正面对撞才打这行：血量合计能区分「真的在互相扣血」与「死的是别的原因」
+	if _even:
+		print("        └ 敌血 %.0f ｜ 友血 %.0f ｜ 有目标的队友 %d ｜ 有目标的敌人 %d"
+				% [_total_hp("enemy"), _total_hp("friendly"),
+				_with_target("friendly"), _with_target("enemy")])
+
+
+## 某一组还活着的单位血量和
+func _total_hp(group_name: String) -> float:
+	var sum := 0.0
+	for node in get_nodes_in_group(group_name):
+		if bool(node.get("alive")):
+			sum += float(node.get("hp"))
+	return sum
+
+
+## 某一组里「已经锁上目标」的单位数（锁上 = 会开火，而不是只在走路）
+func _with_target(group_name: String) -> int:
+	var count := 0
+	for node in get_nodes_in_group(group_name):
+		if bool(node.get("alive")) and node.get("_target") != null:
+			count += 1
+	return count
 
 
 func _report() -> void:
 	print("===== 汇总（%s · 旧部署=%s）=====" % [_tag, str(_legacy)])
 	print("首接触时间：%s" % ("%.1f s" % _first_contact if _first_contact >= 0.0 else "未接触"))
+	if _even:
+		print("战斗结束（一方归零）：%s" % ("%.1f s" % _battle_over if _battle_over >= 0.0 else "未结束"))
 	print("敌存：%d → %d（起始 %d）" % [_rows[0]["enemy"] if _rows else 0,
 			_rows[-1]["enemy"] if _rows else 0, _rows[0]["enemy"] if _rows else 0])
 	print("友存：%d → %d" % [_rows[0]["ally"] if _rows else 0, _rows[-1]["ally"] if _rows else 0])

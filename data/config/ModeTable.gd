@@ -20,6 +20,7 @@ extends RefCounted
 ##   competitive   -> AiAdvisor.competitive（关掉 AI 参谋）
 ##   friendly_fire -> Player.shoot 的目标列表（友军可被误伤）
 ##   win_rule / duration_s / overtime_s -> MatchFlow
+##   objective_count -> MatchFlow：objective 口径下「完成几个主线任务算赢」
 ## 兵种 / 载具走玩家配置（GameSettings 与模式选择界面）。
 ## 每模式人数（enemy_count / ally_count）在 2026-10-03 由使用者拍板后入表（docx 5.8 + 模式表新增列）——
 ## 第四十七版曾以「docx 没有人数口径」为由不放，那条理由现在不成立了。
@@ -89,7 +90,11 @@ static func _build() -> Array:
 			"win_rule": WIN_OBJECTIVE,
 			"duration_s": 1200.0,
 			"overtime_s": 0.0,
-			"desc": "单人 PVE，没有对手玩家：战术目标达成＝胜，未达成＝败，无平局、无加时。本版战术目标＝完成当前主线任务。本模式允许使用 AI 参谋（对局双方可能一方开、一方不开）—— docx 19 ㉝（2026-10-07 拍板）。",
+			## 战术目标 = 完成 3 个主线任务（2026-10-07 第八十四版 · 使用者选择题 A）
+			## 主线链天然是「占领 → 守住 → 再占领下一个」（QuestSystem._assign_main），
+			## 所以 3 次完成 = 走完一条完整的推进链；20 分钟对局里约 6~8 分钟目标时间。
+			"objective_count": 3,
+			"desc": "单人 PVE，没有对手玩家：战术目标达成＝胜，未达成＝败，无平局、无加时。战术目标＝完成 3 个主线任务（占领 → 守住 → 再占领下一个，走完一条完整推进链）。本模式允许使用 AI 参谋（对局双方可能一方开、一方不开）—— docx 19 ㉝（2026-10-07 拍板）。",
 			"flags": "AI 参谋：开放（允许，双方可能不一致）｜友伤：关｜无平局",
 			"source": "docx 5.3 PVEVP 行；22.6 入场五步（时长候选 20~30 分钟，取 20）",
 		},
@@ -197,6 +202,11 @@ static func is_available(mode_id: int) -> bool:
 
 static func locked_reason(mode_id: int) -> String:
 	return String(value_of(mode_id, "locked_reason", ""))
+
+
+## objective 口径下「完成几个主线任务算赢」：没写这一列的模式一律 1（= 完成第一个主线就赢）
+static func objective_count(mode_id: int) -> int:
+	return int(value_of(mode_id, "objective_count", 1))
 
 
 static func competitive(mode_id: int) -> bool:

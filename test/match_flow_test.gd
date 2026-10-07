@@ -14,6 +14,7 @@ func _run() -> void:
 	_test_time_text()
 	_test_timeout_decision()
 	_test_sudden_death()
+	_test_objective_mode()
 	_test_clock_phases()
 	_test_respawn_budget()
 	_test_respawn_resets_player()
@@ -57,6 +58,48 @@ func _test_sudden_death() -> void:
 	_check("突然死亡：我方拿到领先 → 胜", MatchFlowScript.sudden_death_winner(0, 3, 2), "player")
 	_check("突然死亡：敌方拿到领先 → 负", MatchFlowScript.sudden_death_winner(0, 2, 3), "enemy")
 	_check("突然死亡：从落后追平也算变化", MatchFlowScript.sudden_death_winner(-1, 2, 2), "player")
+
+
+## 22.6 PVEVP 战术目标口径（2026-10-07 第八十四版 · 使用者选择题 A：完成 3 个主线任务）
+## 改前的问题：完成**任意一条** main 就结算，而任务表里有 2 条 main（T-M1 占领 / T-M2 守住）
+## ⇒ 拿下第一个节点（约 1~2 分钟）本局就结束了，20 分钟的模式形同虚设。
+func _test_objective_mode() -> void:
+	var flow = MatchFlowScript.new()
+	flow.apply_mode("objective", 1200.0, 0.0, "", 3)
+	_check("战术目标：文案按数量生成", flow.objective_text(), "完成 3 个主线任务")
+	_check("战术目标：开局进度 0/3", flow.objective_progress_text(), "战术目标 0/3")
+
+	flow._on_objective_quest({"main": true, "name": "主线-占领节点"})
+	_check("战术目标：第 1 条完成**不**结算（改前这里就赢了）",
+			flow.phase, MatchFlowScript.Phase.PLAYING)
+	_check("战术目标：进度 1/3", flow.objective_progress_text(), "战术目标 1/3")
+	flow._on_objective_quest({"main": true, "name": "主线-守住节点"})
+	_check("战术目标：第 2 条完成仍不结算", flow.phase, MatchFlowScript.Phase.PLAYING)
+	flow._on_objective_quest({"main": false, "name": "支线-侦察标记"})
+	_check("战术目标：支线任务不计数", flow.objective_progress_text(), "战术目标 2/3")
+	flow._on_objective_quest({"main": true, "name": "主线-占领节点"})
+	_check("战术目标：第 3 条完成 ⇒ 胜", flow.outcome, "player")
+	_check("战术目标：结算后阶段 = 已结束", flow.phase, MatchFlowScript.Phase.FINISHED)
+	flow._on_objective_quest({"main": true, "name": "主线-占领节点"})
+	_check("战术目标：结算后不再计数", flow.objective_progress_text(), "战术目标 3/3")
+	flow.free()
+
+	# 老口径（其它模式 / 没写 objective_count）：1 条即胜，保证不受本次改动影响
+	var single = MatchFlowScript.new()
+	single.apply_mode("objective", 600.0, 0.0, "", 1)
+	single._on_objective_quest({"main": true, "name": "主线"})
+	_check("战术目标：默认 1 条即胜（老口径不变）", single.outcome, "player")
+	single.free()
+
+	# 时间到仍未达成 ⇒ 败（无平局、无加时）
+	var timed = MatchFlowScript.new()
+	timed.apply_mode("objective", 0.5, 0.0, "", 3)
+	timed.time_left = 0.0
+	timed._process(0.01)
+	_check("战术目标：时间到未达成 ⇒ 败", timed.outcome, "enemy")
+	_check_true("战术目标：失败原因带上目标数量",
+			timed.reason.contains("3 个主线任务"))
+	timed.free()
 
 
 func _test_clock_phases() -> void:

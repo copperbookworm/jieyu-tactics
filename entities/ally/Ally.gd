@@ -1,7 +1,9 @@
 extends CharacterBody2D
 
-## 玩家的小队队友（3 名，强力版）—— 使用者 2026-10-02 要求
-## 职责：编队跟随玩家；视野内出现敌人就自动交火（比敌人强一档：血 200 / 一发 45 / 0.35 s 一发）。
+## 玩家的小队队友 —— 使用者 2026-10-02 要求
+## 职责：编队跟随玩家 / 按组任务推进；视野内出现敌人就自动交火。
+## 数值在 2026-10-07 第八十四版按 docx 19 ㊹ 重新配平（详见下面那一段注释）：
+## 单兵战力从敌人的 ≈19 倍压到 ≈1.5 倍，并与敌人共用同一条射击精度基线（AiAccuracy）。
 ## 复用现成的模块：UnitFigure（角色图）、BlobShadow（影子）、BallisticsSystem（命中判定）、Sfx、EffectSpawner。
 ## 刻意不写 class_name：引用方 preload（见 Cover.gd 头部说明）
 
@@ -9,17 +11,27 @@ const UnitFigureScript := preload("res://entities/visual/UnitFigure.gd")
 const BlobShadowScript := preload("res://entities/effects/BlobShadow.gd")
 const Sfx := preload("res://systems/audio/Sfx.gd")
 const EffectSpawnerScript := preload("res://systems/effects/EffectSpawner.gd")
+const AiAccuracyScript := preload("res://systems/combat/AiAccuracy.gd")
 
 var main = null
-var hp := 200.0                 ## 血的 2 倍（敌人 100）
-var max_hp := 200.0
+## ────────── 2026-10-07 第八十四版 · docx 19 ㊹「20 v 20 压队友强度」──────────
+## 配平前（第六十五版口径）队友是「强力一档」，**实测 130 s 推进：敌 20 → 2、友 19 → 19（零阵亡）**。
+## 四条不对称（都在这一屏）：
+##   ① 有效 DPS：45 / 0.35 s = 128.6 vs 敌人 20 / 1.5 s = 13.3 ⇒ **9.6×**
+##   ② 血量：200 vs 100 ⇒ **2×**；③ 速度：3.4 vs 2.0 ⇒ **1.7×**
+##   ④ 交战距离 220 m **且零散布必中** vs 敌人 120 m 探测 + 3 MOA ⇒ 队友有约 100 m 白打窗口
+## 综合战力比 ≈ 19×（单兵）⇒ 那不是「队友强一点」，是队友替玩家把整局打完了。
+## 配平后（使用者 2026-10-07 选择题 A「同一套基线 + 轻微友军优势」）：单兵战力 ≈ 1.5×、总量 ≈ 1.45×。
+## 保留一档小优势的理由：友军是**进攻方**，要吃敌人在占领节点上的防御优势。
+var hp := 120.0                 ## 敌人 100 ⇒ 1.2×（原来 2×）
+var max_hp := 120.0
 var alive := true
 var downed := false
 var downed_time_left := 0.0
-var move_speed := 3.4           ## m/s（敌人 2.0）
-var fire_damage := 45.0         ## 一发 45：敌人 100 血 ⇒ 3 发带走
-var fire_interval := 0.35       ## s，比敌人 1.5 s 快得多
-var engage_range := 220.0       ## m，开火距离
+var move_speed := 2.4           ## m/s（敌人 2.0 ⇒ 1.2×；原来 3.4）
+var fire_damage := 22.0         ## 一发 22：敌人 100 血 ⇒ 5 发带走（原来 45 / 3 发）
+var fire_interval := 1.3        ## s（敌人 1.5 ⇒ 略快；原来 0.35）
+var engage_range := 150.0       ## m，开火距离（敌人探测 120 ⇒ 留 30 m 的接敌窗口；原来 220）
 var follow_distance := 6.0      ## m，跟随时与玩家的间距
 var body_radius := 0.4
 var facing := Vector2.RIGHT
@@ -243,7 +255,11 @@ func _fire() -> void:
 	if main == null or _target == null:
 		return
 	var targets: Array = _cached_enemies()
-	var result: Dictionary = BallisticsSystem.resolve_shot(global_position, facing,
+	# 2026-10-07 ㊹ 配平：队友原先**零散布**（必中），敌人有 3 MOA —— 口径不同是最大的一条不对称。
+	# 现在双方 preload 同一个 AiAccuracy：3 MOA 在 150 m 上约 0.13 m 横向偏差（命中半径 0.25 m），
+	# 近距离仍然打得准、远距离才真的会飘 —— 与敌人一条基线。
+	var direction := AiAccuracyScript.apply_base_spread(facing, randf_range(-1.0, 1.0))
+	var result: Dictionary = BallisticsSystem.resolve_shot(global_position, direction,
 			engage_range, targets, GameConfig.ENEMY_HIT_RADIUS, _sight,
 			GameConfig.SOLDIER_EYE_HEIGHT)
 	_fire_cooldown = fire_interval

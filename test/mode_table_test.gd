@@ -16,6 +16,7 @@ func _run() -> void:
 	_test_competitive_is_ranked_only()
 	_test_friendly_fire_rule()
 	_test_pvevp_win_rule()
+	_test_objective_count()
 	_test_durations_track_game_config()
 	_test_cycling_skips_locked()
 	_test_headcount()
@@ -85,6 +86,17 @@ func _test_fields_complete() -> void:
 
 
 ## 20 章：只有「竞技 / 严格对抗」才关 AI 参谋，PVEVP 开放
+## 22.6 PVEVP 战术目标数量（2026-10-07 第八十四版 · 使用者选择题 A）
+func _test_objective_count() -> void:
+	_check("PVEVP：战术目标 = 完成 3 个主线任务",
+			ModeTableScript.objective_count(ModeTableScript.Mode.PVEVP), 3)
+	_check("竞技：没有战术目标列 ⇒ 回退 1（不受 PVEVP 改动影响）",
+			ModeTableScript.objective_count(ModeTableScript.Mode.PVP_RANKED), 1)
+	_check("休闲：同上回退 1", ModeTableScript.objective_count(ModeTableScript.Mode.PVP_CASUAL), 1)
+	_check_true("PVEVP 的 desc 里写明了目标数量",
+			ModeTableScript.desc_of(ModeTableScript.Mode.PVEVP).contains("3 个主线任务"))
+
+
 func _test_competitive_is_ranked_only() -> void:
 	_check_true("20 章：PVP 竞技 → AI 参谋关闭",
 			ModeTableScript.competitive(ModeTableScript.Mode.PVP_RANKED))

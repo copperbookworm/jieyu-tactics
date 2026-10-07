@@ -3942,3 +3942,12 @@ base_url 也可能变。若把模型名写死在包里，玩家会遇到「选�
     新增 `test/ballistics_table_test.gd`（17 项）与 `test/jieyu_occluder_index_test.gd`（16 项）。
   · 文档：`docs/性能预算.md` 新增 **28.11**（三道题的落地 + 对拍表 + 复现命令），并把 28.8 标注为"已按拍板打开"。
 
+  ── 同日补记（第七十九版·三）· Q1 真机 A/B 的诚实结果 ──
+  · **本轮真机 A/B 没跑成**：出了包（`D:\Godot4.7_Proj\APK\jieyu-threadON.apk`），但**从未装到平板**。
+    判据（可复核）：`adb shell dumpsys package com.example.jieyu1` 的 `lastUpdateTime=2026-10-06 22:06`（前一天那版）、
+    `run-as com.example.jieyu1 ls files/` 里**没有任何 `perf_*.csv`**。
+  · 失败的具体形态（写下来免得重踩）：① 两次导出**同名覆盖** ⇒ 事后分不清哪份是开、哪份是关；
+    ② 临时把 `application/run/main_scene` 指到探测场景的那一步，差点被我在提交里带进主线（已在收尾时还原成 `scenes/app/App.tscn`）。
+  · **决定与状态**：`physics/2d/run_on_separate_thread` 按使用者拍板**保持 `true`**；真机 A/B 登记为**待重做**
+    （重做时必须两版分别命名 + 装完立刻用 `dumpsys … lastUpdateTime` 核对装的是哪一版 + `-WaitForDone` 拿 `.done` 哨兵）。
+

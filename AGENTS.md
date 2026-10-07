@@ -79,6 +79,14 @@
   （华为把包名钉在 60 Hz，只能由应用自己请求高刷）。
 - Android 真机的「呈现刷新率」口径：`adb shell dumpsys display | Select-String mActiveModeId`（2=120Hz）
   与 `adb shell dumpsys SurfaceFlinger --latency <layer>` 首行 `period_ns`（8333333=120Hz / 16666666=60Hz）
+- ⚠ **`export_android.ps1` 会「假死」**（2026-10-07 实证）：APK 已写、日志已到 [ DONE ] export，
+  但常驻 **GradleDaemon 继承了本次导出的 stdout 管道不释放** ⇒ 脚本里 Invoke-Tool 的管道读取永不返回、job 一直 running
+  （有一次因此 24 分钟才收尾）。**处理：确认 APK 已写后 kill 掉 GradleDaemon**，脚本会立刻继续第 3/4 步并 exit 0。
+  另：本项目 `pwsh` 不在 PATH 上（`& pwsh -File …` 会 CommandNotFound）—— 直接 `& <脚本路径>` 调。
+- ⚠ **真机 A/B 出包的三条纪律**（2026-10-07 一次做废的 A/B 换来的）：① **两版包必须分别命名**（同名覆盖后无法区分哪版是哪个变量）；
+  ② **临时改 application/run/main_scene 要卡准导出窗口** —— 若在导出前就还原，那一版包会启动大厅而不是探针场景，两版就**不可比**；
+  ③ 装完立刻用 `adb shell dumpsys package com.example.jieyu1` 的 lastUpdateTime 核对装的是哪一版，
+  并用 `run-as … ls files/` 确认真出了 perf_*.csv（**没数字就是没跑，别按「跑过了」写文档**）。
 - **出包一律走 `tools/android_overrides/export_android.ps1`**（2026-10-06 新增）：四步串起来
   —— ① headless 测试 ② `--export-debug/-release` ③ 导出后打 splash 主题补丁 ④ `aapt2 badging` 复核
   （minSdk / ABI / 体积 / `.so` 是压缩还是存储）。手敲导出会漏掉 ③，并忘记 `JAVA_HOME=jdk-17`。

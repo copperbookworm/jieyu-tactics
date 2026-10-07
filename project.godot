@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="JIEYU1"
-run/main_scene="res://scenes/_probe_fixed_scene.tscn"
+run/main_scene="res://scenes/app/App.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 

@@ -125,15 +125,25 @@ const FOCUS_VIGNETTE_ALPHA := 0.55     # 聚焦时屏幕边缘暗角不透明度
 
 # ────────────── 任务系统（4.10 SMEAC / 4.10.10 奖励 / 4.10.11 模板池）─────────────
 const TASK_REWARD_CAPTURE := 40     # 分，主线「占领节点」全队战力分（4.10.10 确认稿）
-const TASK_CARD_POS_X := 16.0       # px，任务卡片屏幕位置（左上，占领 HUD 下方）
-const TASK_CARD_POS_Y := 60.0
+## 左上信息列（2026-10-07 第八十八版真机验收后改）：占领状态 + 任务卡放进一个 VBoxContainer，
+## 位置由**布局器**算。以前是手写坐标，占领状态 (16,36 高 51，两行) 与任务卡 (16,60 高 96) 纵向叠 25 px ——
+## 真机上任务卡把「区内兵力 我0 ｜ 敌2」那一行整个盖掉了（截图可见）。容器化之后这类重叠**结构上不可能再发生**。
+## 纵向预算：列从 y=36 起，下方按钮行从 y=162 起 ⇒ 可用 126 px。
+##   占领状态（font 12，两行）≈ 32 + 间隔 4 + 任务卡 88 = 124 ✓
+const LEFT_COLUMN_X := 16.0
+const LEFT_COLUMN_Y := 36.0
+const LEFT_COLUMN_GAP := 3.0
+## 占领状态字号：为了把两行压进 ~36 px（默认字号要 51 px，与任务卡一起放不下）
+const CAPTURE_STATUS_FONT_SIZE := 11
+const TASK_CARD_POS_X := 16.0       # px，**独立摆放**时任务卡的位置（放进左列容器后被忽略）
+const TASK_CARD_POS_Y := 72.0
 const TASK_CARD_WIDTH := 300.0
-const TASK_CARD_HEIGHT := 96.0
+const TASK_CARD_HEIGHT := 84.0
 ## 卡片内文字的字号与内边距（2026-10-07 真机验收后定）。
 ## 为什么必须写死：Label 不给尺寸时会按文本自动撑到 320×105，**越出 300×96 的卡片** ——
 ## 真机上第 4 行（组任务）压在兵种/弹种/间瞄按钮行上、第 3 行右侧被卡片边缘切掉。
 ## 现在卡片内层可用高度 = 96 − 8 = 88 px；4 行 × 12px 字号（行高约 18）≈ 72 px，留 16 px 余量。
-const TASK_CARD_FONT_SIZE := 12
+const TASK_CARD_FONT_SIZE := 11
 const TASK_CARD_PAD_X := 8.0
 const TASK_CARD_PAD_Y := 4.0
 const TASK_COMPLETE_FLASH := 2.0    # s，完成后卡片高亮「任务完成 +N」的时长

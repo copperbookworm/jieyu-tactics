@@ -20,8 +20,12 @@ var _label: Label = null
 
 
 func _ready() -> void:
-	size = Vector2(GameConfig.TASK_CARD_WIDTH, GameConfig.TASK_CARD_HEIGHT)
-	position = Vector2(GameConfig.TASK_CARD_POS_X, GameConfig.TASK_CARD_POS_Y)
+	# 放进 Container（左上信息列）时位置由布局器给，自己只管**最小尺寸**；
+	# 独立摆放时才用 TASK_CARD_POS_* —— 见 GameConfig 里「左上信息列」那段说明。
+	custom_minimum_size = Vector2(GameConfig.TASK_CARD_WIDTH, GameConfig.TASK_CARD_HEIGHT)
+	size = custom_minimum_size
+	if not (get_parent() is Container):
+		position = Vector2(GameConfig.TASK_CARD_POS_X, GameConfig.TASK_CARD_POS_Y)
 	mouse_filter = Control.MouseFilter.MOUSE_FILTER_IGNORE
 	_label = Label.new()
 	_label.position = Vector2(GameConfig.TASK_CARD_PAD_X, GameConfig.TASK_CARD_PAD_Y)

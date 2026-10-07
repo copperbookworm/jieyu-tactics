@@ -21,18 +21,18 @@ const CLICK_SIGNALS := ["pressed", "button_down", "button_up", "toggled"]
 
 ## name, x, y, w, h —— 来自 tools/hud_rects.gd 实测（2026-10-02）
 const HUD_RECTS := [
-	["Hint", 16, 12, 441, 23],
+	["Hint", 16, 12, 440, 24],
 	["Joystick", 0, 340, 200, 200],
 	["FireButton", 800, 380, 160, 160],
 	["FocusButton", 680, 420, 120, 120],
 	["Score", 802, 162, 71, 23],
 	["MatchClock", 802, 210, 143, 23],
-	["CaptureStatus", 16, 36, 156, 49],
-	["QuestCard", 16, 60, 300, 96],
+	["CaptureStatus", 16, 36, 300, 37],
+	["QuestCard", 16, 76, 300, 84],
 	["MarkWheel", 840, 188, 120, 120],
 	["CommandWheel", 192, 208, 80, 40],
 	["MarkHint", 360, 484, 414, 23],
-	["CombatFeed", 300, 38, 360, 110],
+	["CombatFeed", 316, 38, 360, 110],
 	["TipPanel", 280, 424, 400, 40],
 	["RoleButton", 16, 162, 80, 40],
 	["Role", 280, 170, 500, 49],

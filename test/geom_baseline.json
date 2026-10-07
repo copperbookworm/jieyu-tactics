@@ -2,15 +2,6 @@
   "key_prefix": "",
   "note": "由几何门禁 --init 生成。人工确认过才能作为基线。新增条目要写清理由。",
   "overlaps": {
-    "CaptureStatus|QuestCard": {
-      "a": "/root/Main/HudBuilder/HUD/CaptureStatus",
-      "b": "/root/Main/HudBuilder/HUD/QuestCard",
-      "hit": "(16,60 152x27)",
-      "parent": "/root/Main/HudBuilder/HUD",
-      "rect_a": "(16,36 152x51)",
-      "rect_b": "(16,60 300x96)",
-      "verdict": "无意（真 bug，真机截图可见）：节点状态行 (16,36 高 49) 与任务卡 (16,60 高 96) 纵向叠 25 px，真机上两行文字互相压。修法：任务卡下移或收窄 —— 但下方 85..162 只剩 77 px，放不下 96 高的卡，需拍板（缩卡 / 换位置）。"
-    },
     "MarkWheel|HP": {
       "a": "/root/Main/HudBuilder/HUD/MarkWheel",
       "b": "/root/Main/HudBuilder/HUD/HP",
@@ -37,15 +28,6 @@
       "rect_a": "(802,210 140x24)",
       "rect_b": "(840,188 120x120)",
       "verdict": "有意：同 MarkWheel|HP —— 战局状态行是 Label；要更干净可在轮盘展开时临时隐藏该行。"
-    },
-    "QuestCard|CombatFeed": {
-      "a": "/root/Main/HudBuilder/HUD/QuestCard",
-      "b": "/root/Main/HudBuilder/HUD/CombatFeed",
-      "hit": "(300,60 16x88)",
-      "parent": "/root/Main/HudBuilder/HUD",
-      "rect_a": "(16,60 300x96)",
-      "rect_b": "(300,38 360x110)",
-      "verdict": "无意：任务卡实际宽 316（不止 300）与播报区左缘相交 16 px ⇒ 两块面板边框/文字可能贴住。修法：卡宽收到 300，或播报区右移 16 px。"
     }
   },
   "viewport": "960x540"

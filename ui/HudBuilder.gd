@@ -39,6 +39,8 @@ var score_label: Label = null
 ## 战局状态（剩余时间 / 加时 / 重生预算，候选 Q）
 var match_label: Label = null
 var capture_hud: Label = null
+## 左上信息列容器（占领状态 + 任务卡）：位置由布局器算，见 _build 里的说明
+var left_column: VBoxContainer = null
 var quest_card: QuestCard = null
 var mark_wheel: MarkWheel = null
 var command_wheel = null
@@ -168,16 +170,29 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 	layer.add_child(match_label)
 	update_score(main.score)
 
+	# 左上信息列（2026-10-07 第八十八版真机验收后改）：占领状态 + 任务卡放进 VBoxContainer。
+	# 为什么必须容器化：两块以前是**手写坐标**的，占领状态 (16,36 高 51) 与任务卡 (16,60 高 96)
+	# 纵向叠了 25 px —— 真机截图里任务卡把「区内兵力 我 0 ｜ 敌 2」整行盖住。
+	# 容器化后位置由布局器算，结构上不可能再重叠（Container 的子节点在几何门禁里本就跳过重叠检查：
+	# 这是「用布局消灭断言」，不是「用断言掩盖布局」）。纵向预算见 GameConfig 的 LEFT_COLUMN_*。
+	left_column = VBoxContainer.new()
+	left_column.name = "LeftColumn"
+	left_column.position = Vector2(GameConfig.LEFT_COLUMN_X, GameConfig.LEFT_COLUMN_Y)
+	left_column.add_theme_constant_override("separation", int(GameConfig.LEFT_COLUMN_GAP))
+	left_column.mouse_filter = Control.MouseFilter.MOUSE_FILTER_IGNORE
+	layer.add_child(left_column)
+
 	capture_hud = Label.new()
 	capture_hud.name = "CaptureStatus"
-	capture_hud.position = Vector2(16.0, 36.0)
-	layer.add_child(capture_hud)
+	# 字号压到 12：两行才装得进 32 px（默认字号是 51 px，与任务卡一起放不下）
+	capture_hud.add_theme_font_size_override("font_size", GameConfig.CAPTURE_STATUS_FONT_SIZE)
+	left_column.add_child(capture_hud)
 	update_capture()
 
 	quest_card = QuestCard.new()
 	quest_card.name = "QuestCard"
 	quest_card.main = main          # 组任务行每帧从这里读 world.squad_orders
-	layer.add_child(quest_card)
+	left_column.add_child(quest_card)
 
 	# 报点键（右下角、开火键上方）＋ 报点结果提示
 	mark_wheel = MarkWheel.new()

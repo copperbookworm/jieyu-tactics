@@ -37,7 +37,9 @@ func setup(main_node) -> void:
 	# 位置：顶部中间那块空地（左有操作说明行、左下是占领 HUD 与任务卡片，右上是小地图）
 	# ⚠ 第四十一版补丁9 收尾：+ HUD_FEED_TOP_GAP_DY —— 说明行在 y=12、高 23（底 35），
 	#   播报原先在 y=34 会被压住 1 px（几何回归实测）。这里要的是稳的间隔，不是「差 1 px 不重叠」。
-	position = Vector2(GameConfig.VIEWPORT_WIDTH * 0.5 - 180.0,
+	# 右移 16 px（2026-10-07 第八十八版）：左上任务卡右缘 16+300 = 316，原来与播报区左缘 300
+	# 相交 16 px（基线登记的「无意」重叠，verdict 给的修法之一就是「播报区右移 16 px」）。
+	position = Vector2(GameConfig.VIEWPORT_WIDTH * 0.5 - 180.0 + 16.0,
 			34.0 + GameConfig.HUD_FEED_TOP_GAP_DY)
 	size = Vector2(360.0, 110.0)
 	add_theme_font_size_override("normal_font_size", 15)

@@ -19,23 +19,26 @@ const MIN_TAP := 32.0
 const SETTLE := 0.6
 const CLICK_SIGNALS := ["pressed", "button_down", "button_up", "toggled"]
 
-## name, x, y, w, h —— 来自 tools/hud_rects.gd 实测（2026-10-02）
+## name, x, y, w, h —— 来自 tools/hud_rects.gd 实测。
+## ⚠ 2026-10-07 第九十版刷新过一次：这张表原先停在 2026-10-02，CommandWheel 还写着 y=208，
+## 而 HudBuilder 在 2026-10-02 的真机修里已经把它挪到 y=232+_dy（实测 254）—— 照着旧表点「指令」
+## 会点在按钮**上方 46 px**，真机上表现成「指令键点不开」。改过 HUD 位置后请重跑 hud_rects.gd 刷新本表。
 const HUD_RECTS := [
 	["Hint", 16, 12, 440, 24],
 	["Joystick", 0, 340, 200, 200],
 	["FireButton", 800, 380, 160, 160],
 	["FocusButton", 680, 420, 120, 120],
-	["Score", 802, 162, 71, 23],
-	["MatchClock", 802, 210, 143, 23],
+	["Score", 802, 162, 61, 24],
+	["MatchClock", 802, 210, 140, 24],
 	["CaptureStatus", 16, 36, 300, 37],
 	["QuestCard", 16, 76, 300, 84],
 	["MarkWheel", 840, 188, 120, 120],
-	["CommandWheel", 192, 208, 80, 40],
+	["CommandWheel", 192, 254, 80, 40],
 	["MarkHint", 360, 484, 414, 23],
 	["CombatFeed", 316, 38, 360, 110],
 	["TipPanel", 280, 424, 400, 40],
 	["RoleButton", 16, 162, 80, 40],
-	["Role", 280, 170, 500, 49],
+	["Role", 280, 170, 500, 51],
 	["PostureButton", 16, 208, 80, 40],
 	["IndirectButton", 16, 254, 80, 40],
 	["SmokeButton", 192, 254, 80, 40],

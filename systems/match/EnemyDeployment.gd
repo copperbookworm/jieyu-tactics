@@ -77,6 +77,63 @@ static func reinforcement_plan(per_node: Array, reserve: int, attacked_index: in
 	return {"from_nodes": from_nodes, "from_reserve": from_reserve, "total": total}
 
 
+## 防御环（2026-10-07 第八十九版 · 真机验收后 · 使用者选择题 A「AI 分批推进」）
+##
+## 为什么必须把「驻守」和「占点」分开：驻军原先全部落在节点中心 8~14 m，
+## 而 CAPTURE_ZONE_RADIUS = 15 m ⇒ 三个白旗点**同时**被判「敌方在圈内」，
+## 首占 15 s/点、进局 ~20 s 就「全部节点失守」结算（真机实测，玩家刚进局就面对失败）。
+##
+## 现在：同一时刻**只有一个节点**的守军进圈去真占点（assault_split），其余留在防御环上 ——
+## 他们照样守着节点、玩家进圈就会被交火，但不会替敌人把点自动占下来。
+##
+## ⚠ 环半径为什么定 32 m：SpawnPicker.NUDGE_RADIUS = 15 m，落地前还会找平地微调，
+##    最坏情况会朝圆心拉近 15 m ⇒ 32 − 15 = 17 m 仍在 15 m 的占领圈外（留 2 m 余量）。
+const DEFENSE_RING_BASE := 32.0
+const DEFENSE_RING_STEP := 3.0
+## 同一时刻进圈「真占点」的人数上限（按进攻节点算）
+const ASSAULT_SIZE := 3
+
+
+## 防御环落点：节点中心外的第 slot 个位置（黄金角散开，只守不占）
+static func defense_slot_offset(slot: int) -> Vector2:
+	var angle := float(slot) * 2.39996323
+	var radius := DEFENSE_RING_BASE + DEFENSE_RING_STEP * float(slot)
+	return Vector2(cos(angle), sin(angle)) * radius
+
+
+## 分批推进的编成（纯算术）：每个节点有几个守军进占领圈。
+## 只有 assault_index 那个节点会派人进圈，其余一律 0（留在防御环）。返回 Array[int]。
+static func assault_split(per_node: Array, assault_index: int,
+		take: int = ASSAULT_SIZE) -> Array[int]:
+	var inside: Array[int] = []
+	for i in per_node.size():
+		inside.append(0)
+	if assault_index >= 0 and assault_index < per_node.size():
+		var garrison := maxi(int(per_node[assault_index]), 0)
+		inside[assault_index] = mini(maxi(take, 0), garrison)
+	return inside
+
+
+## 进攻次序（纯算术）：从 from_point 出发**由近到远**的节点序号。
+## 敌人从自己的东侧出生区推进 ⇒ 离它最近的节点是它第一个要拿的点，拿下才轮到下一个。
+## limit > 0 时只考虑前 limit 个节点 —— 地图的 RAAS 推进链有 5 个节点，但**可占领的白旗点只有前 3 个**；
+## 让敌人去「打」一个占不下来的节点是白费兵力（2026-10-07 真机日志实测：把下一梯队派去了节点 5）。
+static func advance_order(node_positions: Array, from_point: Vector2,
+		limit: int = -1) -> Array[int]:
+	var pairs: Array = []
+	var count := node_positions.size()
+	if limit > 0:
+		count = mini(limit, count)
+	for i in count:
+		var p: Vector2 = node_positions[i]
+		pairs.append({"i": i, "d": from_point.distance_to(p)})
+	pairs.sort_custom(func(a, b): return float(a["d"]) < float(b["d"]))
+	var order: Array[int] = []
+	for item in pairs:
+		order.append(int((item as Dictionary)["i"]))
+	return order
+
+
 ## 第 index 个节点上的第 slot 名敌人的落点偏移（黄金角散开 + 一圈圈往外，避免叠在一起）
 static func node_slot_offset(slot: int) -> Vector2:
 	if slot <= 0:

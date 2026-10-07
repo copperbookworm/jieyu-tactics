@@ -111,6 +111,12 @@
   · 已实证受害：`export_android.ps1`（本轮踩了 3 次）、
     `.dsh/skills/release-engineering-android/scripts/build_aab.ps1` —— 后者在 HEAD 里就是无 BOM 的 UTF-8，
     **在 PS 5.1 下解析 FAIL（10 个错误，首个 L55）＝根本跑不起来**，已修。
+- ⚠ **改 if/elif 链必须整段替换 + 回读（2026-10-07 第九十版踩到）**：给 `CaptureZone._process` 的
+  「只有我方在圈内 → 涨 / 只有敌方在圈内 → 落」加一个条件时，替换串漏掉了前半段 `if`，
+  留下一个**孤立的 `elif`** ⇒ 该脚本解析失败 ⇒ 类解析级联崩：报的是「取不到 map_preview_mode」、
+  世界装配出 **0 敌 0 友**、`scale_wiring_check` 门禁 **0/21** —— 现场和「AI 部署改坏了」一模一样，
+  极难定位。**纪律：if/elif/else 整条链一次换掉，换完把那段读回来确认**；`--import` **修不了语法错误**
+  （那是类缓存问题，不是语法问题）。定位手法：跑批输出里先找 `SCRIPT ERROR: Parse Error`。
 - Android 侧静态检查（2026-10-06 起可用）：对 `android/build/` 跑 `lintStandardDebug`
   （flavor 是 standard/mono/instrumented，任务名必须带 flavor）。当前基线 **0 Error / 28 Warning**；
   报告在 `android/build/build/reports/`。

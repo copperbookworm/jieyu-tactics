@@ -20,6 +20,9 @@ var progress := 0.0  # -1..1
 ## 区内兵力（供 HUD/调试显示「为什么进度不动」——双方同在＝对冲，见 docx 4.2）
 var player_inside := false
 var enemy_inside := false
+## 敌方能否在这个点推进占领进度。默认 true（单节点场景 / 测试不受影响）；
+## 对局里由 WorldSetup 按「分批推进」把非进攻节点设成 false。见 _process 里的说明。
+var enemy_capture_enabled := true
 
 var _player: Node2D = null
 
@@ -47,7 +50,11 @@ func _process(delta: float) -> void:
 
 	if player_inside and not enemy_inside:
 		progress = minf(progress + rate, 1.0)
-	elif enemy_inside and not player_inside:
+	# 分批推进（2026-10-07 第八十九版 · 使用者选择题 A）：敌方只在**被指派**的节点上推进度。
+	# 为什么要在这一层卡：光把敌人部署到圈外没用 —— 他们的战斗 AI 会为了打我方进圈者而自己走回圈里，
+	# 于是好几个点又同时翻红（真机实测：部署改成防御环之后依然 ~50 s 全丢）。
+	# 注意只卡**进度**：敌人照样在圈内交火、照样算「敌方在区内」（HUD 与对冲口径不变）。
+	elif enemy_inside and not player_inside and enemy_capture_enabled:
 		progress = maxf(progress - rate, -1.0)
 	elif not player_inside and not enemy_inside and state == State.NEUTRAL:
 		progress = move_toward(progress, 0.0, rate)

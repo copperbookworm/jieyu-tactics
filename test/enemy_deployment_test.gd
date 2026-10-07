@@ -18,6 +18,8 @@ func _run() -> void:
 	_test_edges()
 	_test_reinforcement()
 	_test_offsets()
+	_test_assault_split()
+	_test_advance_order()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
 		print("！！ 有 %d 项失败，往上翻看期望与实际" % _failed)
@@ -117,6 +119,43 @@ func _test_offsets() -> void:
 			apart = false
 	_check("相邻 slot 不叠在一起（间距 ≥ 3 m）", apart, true)
 	_check("预备队首位落在中心点", DeploymentScript.reserve_slot_offset(0), Vector2.ZERO)
+
+
+## 分批推进（2026-10-07 第八十九版 · 使用者选择题 A）
+## 真机实测的 bug：驻军全落在节点中心 8~14 m（< CAPTURE_ZONE_RADIUS 15 m）⇒ 三个点同时被占、
+## 玩家进局 ~20 s 就「全部节点失守」。assault_split 保证同一时刻只有一个点的人进圈。
+func _test_assault_split() -> void:
+	var per_node := [3, 3, 3, 2, 2]
+	var split := DeploymentScript.assault_split(per_node, 2)
+	_check("分批推进：只有被指定的节点进圈（节点 2 是 3 人）", int(split[2]), 3)
+	_check("分批推进：其余节点进圈人数为 0", [int(split[0]), int(split[1]),
+			int(split[3]), int(split[4])], [0, 0, 0, 0])
+	_check("分批推进：进圈总数 ≤ ASSAULT_SIZE（同时只有一个点在争）",
+			_sum(split) <= DeploymentScript.ASSAULT_SIZE, true)
+	_check("分批推进：守军不足时按实际人数进圈", int(DeploymentScript.assault_split([1, 5], 0)[0]), 1)
+	_check("分批推进：越界索引不派人", _sum(DeploymentScript.assault_split([3, 3], 9)), 0)
+	_check("分批推进：空编成不派人", _sum(DeploymentScript.assault_split([], 0)), 0)
+	var ring := DeploymentScript.defense_slot_offset(0)
+	_check("防御环在占领圈外（≥ 20 m，留足微调余量）", ring.length() >= 20.0, true)
+	_check("防御环不叠人（相邻 slot 间距 ≥ 3 m）",
+			DeploymentScript.defense_slot_offset(1).distance_to(ring) >= 3.0, true)
+
+
+## 进攻次序：从敌方出生区由近到远
+func _test_advance_order() -> void:
+	var nodes := [Vector2(0, 0), Vector2(300, 0), Vector2(600, 0)]
+	var from_east := Vector2(900, 0)
+	_check("进攻次序：东侧出生区 ⇒ 先打最东的节点 2",
+			DeploymentScript.advance_order(nodes, from_east), [2, 1, 0])
+	_check("进攻次序：西侧视角相反",
+			DeploymentScript.advance_order(nodes, Vector2(-100, 0)), [0, 1, 2])
+	_check("进攻次序：空节点表返回空", DeploymentScript.advance_order([], Vector2.ZERO), [])
+	# limit：地图 RAAS 链有 5 个节点，但白旗点只有前 3 个 —— 敌人不该去打占不下来的点
+	var five := [Vector2(0, 0), Vector2(150, 0), Vector2(300, 0), Vector2(450, 0), Vector2(600, 0)]
+	_check("进攻次序：limit=3 时不会派去节点 4/5（真机日志踩过）",
+			DeploymentScript.advance_order(five, Vector2(900, 0), 3), [2, 1, 0])
+	_check("进攻次序：limit 大于节点数时按节点数算",
+			DeploymentScript.advance_order(five, Vector2(900, 0), 99), [4, 3, 2, 1, 0])
 
 
 func _sum(values: Array) -> int:

@@ -54,6 +54,9 @@ var node_defenders: Array = []
 ## （局部 19:3），单兵数值怎么调都是秒清。编成规则是纯函数（EnemyDeployment.reinforcement_plan）。
 const REINFORCE_POLL_S := 0.5
 var _reinforced_zones: Dictionary = {}
+## 敌人**当前**正在进攻（允许进占领圈）的那个节点序号 —— 分批推进的核心状态。
+## -1 = 还没定（退化路径 / 没有旗点）。见 EnemyDeployment.assault_split 与 _advance_enemy_assault。
+var _assault_index := -1
 var _reinforce_timer := 0.0
 
 
@@ -262,16 +265,42 @@ func _enemy_slots(main, enemy_count: int) -> Array:
 	if nodes.is_empty() or reserve_center == Vector2.INF:
 		return _legacy_enemy_slots(main, enemy_count)
 	var plan := EnemyDeploymentScript.plan(nodes.size(), enemy_count)
+	var per_node: Array = plan["per_node"]
+	# 分批推进（2026-10-07 第八十九版 · 使用者选择题 A）：只有**离敌方出生区最近的那个节点**
+	# 的守军站进占领圈，其余站防御环（圈外）—— 否则三个点同时进圈，玩家 ~20 s 就输。
+	var assault_index := _enemy_assault_index(nodes, reserve_center)
+	_assault_index = assault_index          # 供 poll_reinforcements 判断「哪个点可以有圈内增援」
+	var inside := EnemyDeploymentScript.assault_split(per_node, assault_index)
 	var slots: Array = []
 	for node_index in nodes.size():
-		for slot in int(plan["per_node"][node_index]):
-			var ideal: Vector2 = nodes[node_index] \
-					+ EnemyDeploymentScript.node_slot_offset(slot)
+		var inside_count := int(inside[node_index])
+		for slot in int(per_node[node_index]):
+			var ideal: Vector2
+			if slot < inside_count:
+				ideal = nodes[node_index] + EnemyDeploymentScript.node_slot_offset(slot)
+			else:
+				ideal = nodes[node_index] \
+						+ EnemyDeploymentScript.defense_slot_offset(slot - inside_count)
 			slots.append({"position": _nudged(main, ideal), "reserve": false, "node": node_index})
 	for slot in int(plan["reserve"]):
 		var ideal: Vector2 = reserve_center + EnemyDeploymentScript.reserve_slot_offset(slot)
 		slots.append({"position": _nudged(main, ideal), "reserve": true})
 	return slots
+
+
+## 敌人第一个要拿的节点：**离它自己出生区最近**的那个（纯几何，见 EnemyDeployment.advance_order）
+func _enemy_assault_index(nodes: Array, from_point: Vector2) -> int:
+	var order := EnemyDeploymentScript.advance_order(nodes, from_point, _assault_node_limit())
+	if order.is_empty():
+		return -1
+	return int(order[0])
+
+
+## 可被敌人进攻的节点数上限 = **白旗点个数**（RAAS 推进链后段没有旗点，占不下来，别浪费兵力）
+func _assault_node_limit() -> int:
+	if main_ref == null or main_ref.capture_zones == null:
+		return -1
+	return (main_ref.capture_zones as Array).size()
 
 
 ## 老口径（退化路径）：出生锚点 + demo 相对偏移；点位数不够时循环复用 + 圆周散开
@@ -317,7 +346,21 @@ func _process(delta: float) -> void:
 	if _reinforce_timer > 0.0:
 		return
 	_reinforce_timer = REINFORCE_POLL_S
+	_apply_assault_gate()
 	poll_reinforcements()
+
+
+## 分批推进的闸门（2026-10-07 第八十九版）：**只有当前进攻节点**允许敌方推进占领进度。
+## 不卡这一层的话，敌方的战斗 AI 会为了交火自己走进别的圈里，多点同时翻红（真机实测）。
+func _apply_assault_gate() -> void:
+	if main_ref == null or main_ref.capture_zones == null:
+		return
+	var zones: Array = main_ref.capture_zones
+	for i in zones.size():
+		var zone = zones[i]
+		if zone == null or not is_instance_valid(zone):
+			continue
+		zone.set("enemy_capture_enabled", i == _assault_index)
 
 
 ## 扫一遍所有节点：哪个「我方有人在区内、敌方没人在」= 正在被我们打 ⇒ 派一次增援。
@@ -339,7 +382,13 @@ func poll_reinforcements() -> void:
 			continue
 		if _reinforced_zones.has(i):
 			continue
-		reinforce_zone(i, zone.global_position)
+		# 分批推进（2026-10-07 第八十九版）：**只有当前那个进攻节点**的人目标是圈内，
+		# 其余节点的增援落到防御环上（圈外）—— 否则一次交火会同时把好几个点的敌人送进圈里，
+		# 又回到「玩家 20 秒丢光全部节点」（真机实测：首轮部署改完后仍会这样输）。
+		var target: Vector2 = zone.global_position
+		if i != _assault_index:
+			target = zone.global_position + EnemyDeploymentScript.defense_slot_offset(0)
+		reinforce_zone(i, target)
 
 
 ## 「我方有人在区内」：玩家**或者任一队友**。
@@ -422,8 +471,6 @@ func _send_defenders(pool: Array, count: int, target: Vector2, from_reserve: boo
 ## 名册的妙用：node_defenders[i] 是「第 i 梯队的编制」，单位跟着口令走但编制不改 ——
 ## 所以 N+1 再失守时，这些已经调过一次的人会被正确地再调往 N+2（逐次抵抗）。
 func _on_flag_state_changed(node_name: Variant, state: int) -> void:
-	if state != 1:   # CaptureZone.State.BLUE（不引用 CaptureZone，免得与它的 EventBus 依赖成环）
-		return
 	if main_ref == null:
 		return
 	var nodes := _zone_node_positions(_map_zones)
@@ -432,8 +479,20 @@ func _on_flag_state_changed(node_name: Variant, state: int) -> void:
 	var index := _capture_zone_index(node_name)
 	if index < 0:
 		return
+	# 敌方占下节点（CaptureZone.State.RED = 2）⇒ **分批推进**：把下一个节点的守军派进圈里。
+	# 不引用 CaptureZone 枚举，免得与它的 EventBus 依赖成环。
+	if state == 2:
+		_advance_enemy_assault(nodes, index)
+		return
+	if state != 1:   # CaptureZone.State.BLUE
+		return
 	var line := mini(index + 1, nodes.size() - 1)      # 下一条防线
-	var target: Vector2 = nodes[line]
+	# 分批推进（2026-10-07 第八十九版）：下一条防线的集结目标默认落在**防御环**（圈外）——
+	# 他们照样守这个点、玩家进圈就交火，但不会顺手替敌人把点占下来。
+	# 只有当前那个进攻节点才允许站进圈里。否则「我方占下 2 个点」会同时触发 2 个敌方占点。
+	var target: Vector2 = nodes[line] + EnemyDeploymentScript.defense_slot_offset(0)
+	if line == _assault_index:
+		target = nodes[line]
 	var moved := 0
 	# ① 后方梯队（严格在防线之后）整体压上来；防线上的人按兵不动
 	for i in node_defenders.size():
@@ -449,6 +508,52 @@ func _on_flag_state_changed(node_name: Variant, state: int) -> void:
 	if moved > 0:
 		print("[敌人] 节点 %d 失守 ⇒ 后方梯队 + 预备队共 %d 人向下一条防线（节点 %d）集中 %s"
 				% [index + 1, moved, line + 1, str(target)])
+
+
+## 分批推进（2026-10-07 第八十九版 · 使用者选择题 A）：敌人占下一个点之后，
+## 按「离己方出生区由近到远」的次序，把**下一个还没丢**的节点的守军派进占领圈。
+##
+## 为什么一次只放一个点：三个点的守军同时进圈 ⇒ 首占 15 s/点、玩家 ~20 s 就输
+## （真机验收实测「进局 20 s 结算：全部节点失守」）。分批之后同一时刻只有一个点在争夺，
+## 玩家有机会集中火力把那一批人打掉（攻方也得站进圈里才推进度）。
+func _advance_enemy_assault(nodes: Array, captured_index: int) -> void:
+	var from_point := _spawn_area_center(main_ref, _map_zones, "east")
+	if from_point == Vector2.INF:
+		return
+	var order := EnemyDeploymentScript.advance_order(nodes, from_point, _assault_node_limit())
+	var next_index := -1
+	for i in order:
+		if int(i) == captured_index:
+			continue
+		if _zone_is_enemy_held(int(i)):
+			continue
+		next_index = int(i)
+		break
+	if next_index < 0 or next_index >= node_defenders.size():
+		return
+	var bucket: Array = node_defenders[next_index]
+	if bucket.is_empty():
+		return
+	var sizes: Array = []
+	for b in node_defenders:
+		sizes.append((b as Array).size())
+	var inside := EnemyDeploymentScript.assault_split(sizes, next_index)
+	var sent := _send_defenders(bucket, int(inside[next_index]), nodes[next_index], false)
+	if sent > 0:
+		_assault_index = next_index      # 进攻目标前移：从此刻起只有这个点允许圈内增援
+		print("[敌人] 节点 %d 失守 ⇒ 下一梯队 %d 人压向节点 %d 圈内（分批推进：一次只打一个点）"
+				% [captured_index + 1, sent, next_index + 1])
+
+
+## 该节点当前是不是敌方控制（CaptureZone.State.RED = 2）
+func _zone_is_enemy_held(index: int) -> bool:
+	if main_ref == null:
+		return false
+	var zones: Array = main_ref.capture_zones
+	if index < 0 or index >= zones.size():
+		return false
+	var zone = zones[index]
+	return is_instance_valid(zone) and int(zone.get("state")) == 2
 
 
 func _capture_zone_index(node_name: Variant) -> int:

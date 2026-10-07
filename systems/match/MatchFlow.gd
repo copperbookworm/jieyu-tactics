@@ -273,6 +273,10 @@ func _finish(who: String, why: String) -> void:
 	phase = Phase.FINISHED
 	outcome = who
 	reason = why
+	# 先把占领数刷成**结算那一刻**的真值再 _refresh：否则结算屏显示的是上一次 _process 的旧值
+	# （真机实测：全丢时写着「我方 0 : 敌方 2」，因为 _sync_holds 还停在倒数第二帧）。
+	# phase 已置 FINISHED ⇒ _sync_holds 里的突然死亡分支不会重入 _finish。
+	_sync_holds()
 	_refresh()
 	if main == null:
 		return

@@ -38,6 +38,8 @@ const VehicleTableScript := preload("res://systems/vehicles/VehicleTable.gd")
 const VehiclePartsScript := preload("res://systems/vehicles/VehicleParts.gd")
 ## 出生点挑选（2026-10-05）：只用来读 NUDGE_RADIUS 这一条常量（判据断言自己实现，不自证）
 const SpawnPickerScript := preload("res://systems/terrain/SpawnPicker.gd")
+## 分批推进（2026-10-07 第八十九版）：支援落点要按防御环偏移算，别把环半径抄成字面量
+const EnemyDeploymentScript := preload("res://systems/match/EnemyDeployment.gd")
 
 var _main = null
 var _phase := 0
@@ -232,11 +234,23 @@ func _check_structure() -> void:
 		for node in infantry:
 			(world.reserve_enemies as Array).append(node)
 		world._on_flag_state_changed((_main.capture_zones[0] as Node).name, 1)
+		# 分批推进（2026-10-07 第八十九版 · 使用者选择题 A）：支援落点默认在**防御环**（占领圈外），
+		# 只有当前进攻节点才允许站进圈里 —— 否则「我方占下 2 个点」会同时触发 2 个敌方占点。
+		var ring_gap := (deployment_nodes[1] as Vector2) \
+				.distance_to((deployment_nodes[1] as Vector2)
+				+ EnemyDeploymentScript.defense_slot_offset(0))
 		var aimed := 0
+		var off_ring := 0
 		for node in infantry:
-			if (node as Node2D)._patrol_target.distance_to(deployment_nodes[1]) < 1.0:
+			var target: Vector2 = (node as Node2D)._patrol_target
+			var to_node := target.distance_to(deployment_nodes[1])
+			if absf(to_node - ring_gap) < 1.0:
 				aimed += 1
-		_check("拍板 B：预备队向前支援 —— 目标指向下一个节点", aimed, infantry.size())
+			if to_node > GameConfig.CAPTURE_ZONE_RADIUS:
+				off_ring += 1
+		_check("拍板 B：预备队向前支援 —— 目标指向下一条防线的防御环", aimed, infantry.size())
+		_check("分批推进：支援落点全在占领圈外（不在圈里替敌人占点）",
+				off_ring, infantry.size())
 		for node in infantry:
 			node.set_move_target((node as Node2D).global_position)   # 还原：回自己脚下巡逻
 		(world.reserve_enemies as Array).clear()

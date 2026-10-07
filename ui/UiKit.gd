@@ -11,6 +11,9 @@ extends RefCounted
 ##
 ## 刻意不写 class_name：引用方 preload。
 
+## 美术优先：按钮底走 ui_button_nineslice（没文件就退回程序绘制的 StyleBoxFlat）
+const ArtAssetsScript := preload("res://systems/art/ArtAssets.gd")
+
 const UI_FONT_PATH := "res://assets/fonts/JieyuCJK-Subset.otf"
 
 ## 逻辑视口（与 project.godot 的 960x540 + canvas_items 拉伸一致）
@@ -122,6 +125,24 @@ static func control_row(key: String, control: Control) -> HBoxContainer:
 	return h
 
 
+## 九宫格按钮底（美术 ui_button_nineslice：24×24、四角各 4 px 不拉伸）。
+## 有文件就用 StyleBoxTexture，没有就退回 StyleBoxFlat —— 与 ArtAssets 的「文件优先」同一套语义。
+## ⚠ 两条路的**着色语义不同**：Flat 用 bg 当底色，Texture 用 modulate 去**乘**已有贴图，
+## 所以贴图路的 tint 是「相对亮度」而不是绝对颜色（直接用 COLOR_PANEL 会把占位图乘成近黑）。
+static func panel_texture(tint: Color, fallback_bg: Color) -> StyleBox:
+	var tex := ArtAssetsScript.texture("ui_button_nineslice")
+	if tex == null:
+		return panel_style(fallback_bg)
+	var sb := StyleBoxTexture.new()
+	sb.texture = tex
+	sb.texture_margin_left = 4.0
+	sb.texture_margin_right = 4.0
+	sb.texture_margin_top = 4.0
+	sb.texture_margin_bottom = 4.0
+	sb.modulate_color = tint
+	return sb
+
+
 static func button(text: String, size: Vector2 = BUTTON_SIZE) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -129,13 +150,17 @@ static func button(text: String, size: Vector2 = BUTTON_SIZE) -> Button:
 	b.add_theme_font_size_override("font_size", 16)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		var bg := COLOR_PANEL
+		var tint := Color(1.0, 1.0, 1.0)
 		if state == "hover":
 			bg = COLOR_PANEL_HI
+			tint = Color(1.35, 1.35, 1.35)
 		elif state == "pressed":
 			bg = COLOR_ACCENT.darkened(0.35)
+			tint = Color(0.70, 0.70, 0.70)
 		elif state == "disabled":
 			bg = Color(0.090, 0.100, 0.120, 1.0)
-		b.add_theme_stylebox_override(state, panel_style(bg))
+			tint = Color(0.45, 0.45, 0.45)
+		b.add_theme_stylebox_override(state, panel_texture(tint, bg))
 	b.add_theme_color_override("font_color", COLOR_TEXT)
 	b.add_theme_color_override("font_hover_color", Color.WHITE)
 	b.add_theme_color_override("font_disabled_color", COLOR_LOCKED)

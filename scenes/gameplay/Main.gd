@@ -288,9 +288,21 @@ func _switch_weapon() -> void:
 func _on_flag_state_changed(_zone_name, _state) -> void:
 	hud.update_capture()
 	if _all_zones_captured():
-		_on_victory()
+		_retire_match("player", "全部节点被我方占领")
 	elif _all_zones_lost():
-		_on_defeat("防线失守")
+		_retire_match("enemy", "全部节点失守")
+
+
+## 世界层的结束入口（2026-10-07 第八十九版真机验收修）：**先让 MatchFlow 记账再结束**。
+## 历史 bug：这里以前直接 _on_victory()/_on_defeat()，它们只 emit match_finished，
+## 不写 flow.outcome / flow.reason ⇒ 结算屏「结束原因」是空白（真机截图实证）。
+func _retire_match(who: String, why: String) -> void:
+	if match_flow != null and match_flow.has_method("finish_by_world"):
+		match_flow.finish_by_world(who, why)
+	elif who == "player":
+		_on_victory()
+	else:
+		_on_defeat(why)
 
 
 func _all_zones_captured() -> bool:

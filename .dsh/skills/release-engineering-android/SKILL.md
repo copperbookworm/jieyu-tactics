@@ -74,6 +74,10 @@ if ($LASTEXITCODE -ne 0) { throw "单元测试没全绿，停止出包" }
 & $g --headless --main-pack "D:\tmp\jieyu1.pck" --log-file "$p\_rel_probe2.log" --script res://tools/probe_export_pack.gd
 
 # ③ 真正导出（AAB 要先把 export_format 改成 1）
+#    ⚠ 出包前先查 export_presets.cfg 的 exclude_filter（2026-10-07 第八十九版实证）：
+#      默认 export_filter="all_resources" + exclude_filter="" ⇒ 工程里**任何**文件都进包。
+#      shots/ 这类验证截图（2880x1920）被导入成 .ctex，**一张 3.4 MB**，包内 assets/.godot 一度 43.7 MB；
+#      加上 exclude 过滤后同一个工程 **69.8 MB → 30.3 MB**。放证据进仓库前先确认它落在 exclude 里。
 #    优先走包装脚本（它会顺带跑测试、打 splash 主题补丁、并用 badging 复核 minSdk/ABI/体积）：
 #    & "D:\Godot4.7_Proj\jieyu-1\tools\android_overrides\export_android.ps1" -Mode release -Out "D:\Godot4.7_Proj\APK\jieyu-<version>.aab"
 & $g --headless --path $p --export-release "Android" "D:\Godot4.7_Proj\APK\jieyu-<version>.aab" `

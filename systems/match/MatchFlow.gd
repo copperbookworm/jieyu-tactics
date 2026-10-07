@@ -258,6 +258,15 @@ static func nearest_enemy_distance(point: Vector2, enemy_positions: Array) -> fl
 	return nearest
 
 
+## 世界层的结束入口（2026-10-07 第八十九版真机验收修）。
+## 为什么必须走这里：Main 的「全部节点占领 / 全部节点失守」以前**直接**
+## EventBus.match_finished.emit(...) —— 那会绕过 outcome / reason 的赋值，
+## 结算屏于是出现「结束原因」**空白**（真机实测：我方 0 : 敌方 0 + 空原因）。
+## 直接 emit 还会跳过 _refresh()，占领数也就停在上次刷新的旧值上。
+func finish_by_world(who: String, why: String) -> void:
+	_finish(who, why)
+
+
 func _finish(who: String, why: String) -> void:
 	if phase == Phase.FINISHED:
 		return

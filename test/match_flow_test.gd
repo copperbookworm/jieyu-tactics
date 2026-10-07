@@ -12,6 +12,7 @@ var _failed := 0
 
 func _run() -> void:
 	_test_time_text()
+	_test_finish_by_world()
 	_test_timeout_decision()
 	_test_sudden_death()
 	_test_objective_mode()
@@ -45,6 +46,24 @@ func _test_time_text() -> void:
 	_check("时间文案：归零", MatchFlowScript.time_text(0.0), "00:00")
 	_check("时间文案：不足 1 s 也显示 00:01（向上取整）",
 			MatchFlowScript.time_text(0.4), "00:01")
+
+
+## 世界层的结束入口（2026-10-07 第八十九版 · 真机验收修）
+## 真机实测的 bug：Main 的「全部节点失守」以前**直接** EventBus.match_finished.emit()，
+## 绕过 outcome / reason 的赋值 ⇒ 结算屏「结束原因」是**空白**、占领数也停在上次刷新的旧值。
+## 这条断言把「世界层结束必须记账」钉住，防止有人再图省事直接 emit。
+func _test_finish_by_world() -> void:
+	var flow = MatchFlowScript.new()
+	flow.apply_mode("occupy", 900.0, 180.0, "", 1)
+	_check("世界层结束前：outcome 为空", flow.outcome, "")
+	_check("世界层结束前：reason 为空", flow.reason, "")
+	flow.finish_by_world("enemy", "全部节点失守")
+	_check("世界层结束：outcome 记账", flow.outcome, "enemy")
+	_check("世界层结束：reason 记账（结算屏不再空白）", flow.reason, "全部节点失守")
+	_check("世界层结束：phase 落到 FINISHED", flow.phase, MatchFlowScript.Phase.FINISHED)
+	flow.finish_by_world("player", "全部节点被我方占领")
+	_check("世界层结束：重复调用不改结局（幂等）", flow.outcome, "enemy")
+	_check("世界层结束：重复调用不改原因", flow.reason, "全部节点失守")
 
 
 func _test_timeout_decision() -> void:

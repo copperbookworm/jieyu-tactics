@@ -82,6 +82,12 @@
   `tools/geom_checks.gd` 加了第 ⑤ 条断言「子控件不越出父容器」（非 Container 的父才算，Container 的排布是布局器意图）。
   修法两条并用：① 给内层控件**写死 size**；② 顺手开 `clip_contents` / `clip_text` 兜底。
 
+- **结算屏「结束原因」空白 = 结束路径绕过了记账（2026-10-07 真机验收抓到）**：本作的结束有**两个入口** ——
+  `MatchFlow._finish()`（记账 outcome/reason 再回调 Main）与 `Main._on_victory/_on_defeat`（只 emit `match_finished`）。
+  世界层的「全部节点占领 / 全部节点失守」走的是后者 ⇒ 结算屏 结束原因 空白、占领数还停在上次刷新的旧值。
+  **规矩：任何结束都必须先经 `MatchFlow.finish_by_world(who, why)` 记账**；
+  `test/match_flow_test.gd` 已加断言钉住（含幂等：重复调用不改结局）。
+
 ## 3. 《解域》设计定标（源头：`[JIEYU]/squad-2d/解域游戏.docx`）
 
 - **[f030] 定位**：2D 俯视战术射击手游，受 Squad 启发，五节点 RAAS + 白旗点五结构，

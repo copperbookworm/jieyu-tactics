@@ -21,6 +21,7 @@ extends Node
 ## HUD 程序生成贴图（准心箭头 / 聚焦暗角）：2026-09-29 从 Main.gd 拆出，Main 因此回到 1000 行以内
 const HudTextureFactory := preload("res://ui/HudTextureFactory.gd")
 ## 候选 O 第一轮：战斗播报（4.14）+ 操作提示（4.15）两个 HUD 面板
+const ArtAssetsScript := preload("res://systems/art/ArtAssets.gd")
 const CombatFeedPanelScript := preload("res://ui/CombatFeedPanel.gd")
 const TipPanelScript := preload("res://ui/TipPanel.gd")
 ## 候选 O 第二轮：快捷指令轮盘（4.13）
@@ -129,7 +130,11 @@ func setup(main_node, terrain_texture: Texture2D) -> void:
 
 	crosshair = Sprite2D.new()
 	crosshair.name = "Crosshair"
-	crosshair.texture = HudTextureFactory.crosshair_arrow()
+	# 美术优先（2026-10-07 第九十五版）：ui_crosshair 有文件就用文件，没有就程序生成三角箭头。
+	# ⚠ 换图必须守约定：**箭尖＝纹理中心＝屏心、箭身朝 -x**（纹理 32×32，箭身长 14、底边半高 7）——
+	# 因为 Sprite2D 以中心为旋转轴，箭尖不在中心的话「枪口指向」会整体偏一段。
+	var cross_tex := ArtAssetsScript.texture("ui_crosshair")
+	crosshair.texture = cross_tex if cross_tex != null else HudTextureFactory.crosshair_arrow()
 	crosshair.position = Vector2(GameConfig.VIEWPORT_WIDTH, GameConfig.VIEWPORT_HEIGHT) * 0.5
 	layer.add_child(crosshair)
 

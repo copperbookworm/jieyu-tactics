@@ -23,6 +23,7 @@ func _run() -> void:
 	_test_texture_loads()
 	_test_mark_ids()
 	_test_unresolved_returns_null()
+	_test_crosshair_convention()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
 		print("！！ 有 %d 项失败，往上翻看期望与实际" % _failed)
@@ -83,6 +84,32 @@ func _test_mark_ids() -> void:
 		if not ArtAssetsScript.PATHS.has(String(id)):
 			missing.append(String(id))
 	_check("每个标记图标 id 都在取用表里", missing, [])
+
+
+## 准星的**旋转约定**（2026-10-07 第九十五版）。
+## 为什么值得写成断言：Sprite2D 以纹理中心为旋转轴，而本作的准星是「箭尖＝屏心」的箭头 ——
+## 箭尖若不在纹理中心，枪口指向会整体偏一段（2026-09-28 真机踩过「箭身画反」）。
+## 美术照着自己的直觉画一张四向十字，形状好看但**不满足这个约定** —— 这条断言会在入库时直接拦下来。
+func _test_crosshair_convention() -> void:
+	var tex := ArtAssetsScript.texture("ui_crosshair")
+	if tex == null:
+		_check("准星图已入库", false, true)
+		return
+	var img := tex.get_image()
+	_check("准星画布边长 = CROSSHAIR_ARROW_SIZE", img.get_width(),
+			GameConfig.CROSSHAIR_ARROW_SIZE)
+	_check("准星画布是正方形", img.get_height(), img.get_width())
+	var center := GameConfig.CROSSHAIR_ARROW_SIZE / 2
+	var min_x := 99999
+	var max_x := -1
+	for x in img.get_width():
+		for y in img.get_height():
+			if img.get_pixel(x, y).a > 0.0:
+				min_x = mini(min_x, x)
+				max_x = maxi(max_x, x)
+	_check("箭尖在纹理中心（不透明像素的最右列 = 中心）", max_x, center)
+	_check("箭身朝 -x 且长度 = CROSSHAIR_ARROW_LENGTH", center - min_x,
+			GameConfig.CROSSHAIR_ARROW_LENGTH)
 
 
 func _test_unresolved_returns_null() -> void:

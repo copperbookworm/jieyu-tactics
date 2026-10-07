@@ -20,6 +20,8 @@ extends Node2D
 ##
 ## 刻意不写 class_name：引用方 preload（见 Cover.gd 头部说明）
 
+const ArtAssetsScript := preload("res://systems/art/ArtAssets.gd")
+
 const LEG_SWING := 0.55       # 腿前后摆动的幅度（相对身体半径）
 const LEG_SPREAD := 0.42      # 两条腿的横向间距（相对身体半径）
 const LEG_WIDTH := 0.30       # 腿的粗细（相对身体半径）
@@ -159,13 +161,21 @@ func _draw() -> void:
 	var along := r * body_length_scale()
 	# ① 下半身：沿移动方向的身体 + 两条前后摆的腿
 	draw_set_transform(Vector2.ZERO, lower_angle(), Vector2.ONE)
-	draw_colored_polygon(_ellipse_points(along, r, 24), body_color)
-	var swing := leg_offsets(leg_phase)
-	for i in 2:
-		var side := 1.0 if i == 0 else -1.0
-		var hip := Vector2(-along * 0.20, side * r * LEG_SPREAD)
-		var foot := Vector2(swing[i] * LEG_SWING * r, side * r * (LEG_SPREAD + 0.10))
-		draw_line(hip, foot, body_color.darkened(0.30), r * LEG_WIDTH, true)
+	# 美术优先（2026-10-07 第九十七版）：共用 char_rifleman_base 作为身体底、按阵营染色 ——
+	# docx 12.7.1「24 兵种共用动作、只用配色区分」；4 张兵种图仍没用上（单位模型没有兵种字段，
+	# 见 docs/美术资产规格.md 第七节第 3 条）。正式美术到位后同名替换即可。
+	var base_tex := ArtAssetsScript.texture("char_rifleman_base")
+	if base_tex != null:
+		var span := Vector2(r * 2.4, r * 2.4)   # 64 px 纹理撑到约 1 m 世界直径（PPU 32 ≈ 32 px）
+		draw_texture_rect(base_tex, Rect2(-span * 0.5, span), false, body_color)
+	else:
+		draw_colored_polygon(_ellipse_points(along, r, 24), body_color)
+		var swing := leg_offsets(leg_phase)
+		for i in 2:
+			var side := 1.0 if i == 0 else -1.0
+			var hip := Vector2(-along * 0.20, side * r * LEG_SPREAD)
+			var foot := Vector2(swing[i] * LEG_SWING * r, side * r * (LEG_SPREAD + 0.10))
+			draw_line(hip, foot, body_color.darkened(0.30), r * LEG_WIDTH, true)
 	# ② 上半身：肩 + 枪管 + 双手（沿准星方向）
 	draw_set_transform(Vector2.ZERO, aim_angle(), Vector2.ONE)
 	var sr := r * SHOULDER_SCALE

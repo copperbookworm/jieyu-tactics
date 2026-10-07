@@ -10,6 +10,8 @@ extends Control
 @export var radius: float = 90.0        # px，摇杆行程半径
 @export var dead_zone: float = 0.15     # 归一化死区，小于它输出 0
 
+const ArtAssetsScript := preload("res://systems/art/ArtAssets.gd")
+
 var move_vector: Vector2 = Vector2.ZERO  # 归一化 -1..1，供玩家每帧读取
 
 var _base_position: Vector2 = Vector2.ZERO  # 底座中心（控件本地坐标）
@@ -67,6 +69,20 @@ func _update_knob(touch_pos: Vector2) -> void:
 
 
 func _draw() -> void:
-	draw_circle(_base_position, radius, Color(1.0, 1.0, 1.0, 0.12))
-	draw_arc(_base_position, radius, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.45), 2.0)
-	draw_circle(_base_position + _knob_offset, radius * 0.45, Color(1.0, 1.0, 1.0, 0.55))
+	# 美术优先（2026-10-07 第九十四版）：ui_joystick_base(180) / ui_joystick_knob(81) 与程序绘制同几何
+	# （81 / 180 = 0.45 = 下面 knob 的比例），所以换成贴图**画面上不会位移或变形**；
+	# 文件不在就退回原来的圆 + 圈程序绘制。正式美术到位时同名替换即可，这里一行都不用改。
+	var base_tex := ArtAssetsScript.texture("ui_joystick_base")
+	var knob_tex := ArtAssetsScript.texture("ui_joystick_knob")
+	if base_tex != null:
+		draw_texture_rect(base_tex, Rect2(_base_position - Vector2(radius, radius),
+				Vector2(radius, radius) * 2.0), false)
+	else:
+		draw_circle(_base_position, radius, Color(1.0, 1.0, 1.0, 0.12))
+		draw_arc(_base_position, radius, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.45), 2.0)
+	var knob_r := radius * 0.45
+	if knob_tex != null:
+		draw_texture_rect(knob_tex, Rect2(_base_position + _knob_offset - Vector2(knob_r, knob_r),
+				Vector2(knob_r, knob_r) * 2.0), false)
+	else:
+		draw_circle(_base_position + _knob_offset, knob_r, Color(1.0, 1.0, 1.0, 0.55))

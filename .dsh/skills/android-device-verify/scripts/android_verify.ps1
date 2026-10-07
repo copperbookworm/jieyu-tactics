@@ -11,7 +11,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Apk,
     [string]$OutDir = "",
-    [string]$Package = "com.example.jieyu1",
+    [string]$Package = "io.github.copperbookworm.jieyu",
     [string]$Adb = "C:\Users\feiyun\AppData\Local\Android\Sdk\platform-tools\adb.exe",
     [int]$WaitSeconds = 10
 )

@@ -3,14 +3,14 @@
 # 流程：gfxinfo reset（清统计）→ 留给你做操作 → 抓取 → 解析帧时间分布 / jank 占比 / 建议线判定
 #
 # 用法：
-#   pwsh -File perf_gfxinfo.ps1 -OutDir <输出目录> [-Package com.example.jieyu1] [-DoSeconds 30]
+#   pwsh -File perf_gfxinfo.ps1 -OutDir <输出目录> [-Package io.github.copperbookworm.jieyu] [-DoSeconds 30]
 #
 # 退出码：0 = 采到并解析成功；2 = 无设备/用法问题；3 = 抓取到但解析不出帧统计
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$OutDir,
-    [string]$Package = "com.example.jieyu1",
+    [string]$Package = "io.github.copperbookworm.jieyu",
     [string]$Adb = "C:\Users\feiyun\AppData\Local\Android\Sdk\platform-tools\adb.exe",
     [int]$DoSeconds = 30
 )

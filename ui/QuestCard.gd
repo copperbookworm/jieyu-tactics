@@ -24,7 +24,14 @@ func _ready() -> void:
 	position = Vector2(GameConfig.TASK_CARD_POS_X, GameConfig.TASK_CARD_POS_Y)
 	mouse_filter = Control.MouseFilter.MOUSE_FILTER_IGNORE
 	_label = Label.new()
-	_label.position = Vector2(8.0, 4.0)
+	_label.position = Vector2(GameConfig.TASK_CARD_PAD_X, GameConfig.TASK_CARD_PAD_Y)
+	# ⚠ 尺寸必须给死 + 裁切：不给的话 Label 按文本自动撑到 320×105，越出 300×96 的卡片
+	#（2026-10-07 真机验收抓到：第 4 行压在下方按钮行上、第 3 行右侧被切）。
+	# 硬约束由几何门禁第 ⑤ 条「子控件不越出父容器」守着。
+	_label.size = Vector2(GameConfig.TASK_CARD_WIDTH - GameConfig.TASK_CARD_PAD_X * 2.0,
+			GameConfig.TASK_CARD_HEIGHT - GameConfig.TASK_CARD_PAD_Y * 2.0)
+	_label.clip_text = true
+	_label.add_theme_font_size_override("font_size", GameConfig.TASK_CARD_FONT_SIZE)
 	add_child(_label)
 	visible = false
 
@@ -85,9 +92,12 @@ func _refresh_label() -> void:
 		else:
 			line += "  %d/%d" % [int(float(quest["progress"])),
 					int(quest["goal_count"])]
+		# 时限与奖励压缩写法（2026-10-07 真机验收）：改成「105s +10」，
+		# 让最长的支线行（侦察并标记敌方阵地 0/2 105s +10）在 284 px 内放得下 ——
+		# 卡片只有 300 px 宽，中文全角字符一多就会被裁掉。
 		if float(quest["time_limit"]) > 0.0:
-			line += "  剩 %d s" % int(float(quest["time_left"]))
-		line += "  +%d" % int(quest["reward"])
+			line += " %ds" % int(float(quest["time_left"]))
+		line += " +%d" % int(quest["reward"])
 		lines.append(line)
 	# 组任务（docx 4.10.8）：主线到了小队长手里，他按模板派给每个组；
 	# 玩家看自己那一组的任务就够了（其余组的任务由各自的组长执行，不塞进卡片）

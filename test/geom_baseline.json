@@ -1,31 +1,23 @@
 {
-  "note": "由 geom_assertions.gd --init 生成。人工确认过才能作为基线。新增条目要写清理由。",
+  "key_prefix": "",
+  "note": "由几何门禁 --init 生成。人工确认过才能作为基线。新增条目要写清理由。",
   "overlaps": {
     "CaptureStatus|QuestCard": {
       "a": "/root/Main/HudBuilder/HUD/CaptureStatus",
       "b": "/root/Main/HudBuilder/HUD/QuestCard",
-      "hit": "(16,60 156x25)",
+      "hit": "(16,60 152x27)",
       "parent": "/root/Main/HudBuilder/HUD",
-      "rect_a": "(16,36 156x49)",
+      "rect_a": "(16,36 152x51)",
       "rect_b": "(16,60 300x96)",
       "verdict": "无意（真 bug，真机截图可见）：节点状态行 (16,36 高 49) 与任务卡 (16,60 高 96) 纵向叠 25 px，真机上两行文字互相压。修法：任务卡下移或收窄 —— 但下方 85..162 只剩 77 px，放不下 96 高的卡，需拍板（缩卡 / 换位置）。"
-    },
-    "FocusButton|MarkHint": {
-      "a": "/root/Main/HudBuilder/HUD/FocusButton",
-      "b": "/root/Main/HudBuilder/HUD/MarkHint",
-      "hit": "(680,484 94x23)",
-      "parent": "/root/Main/HudBuilder/HUD",
-      "rect_a": "(680,420 120x120)",
-      "rect_b": "(360,484 414x23)",
-      "verdict": "有意：聚焦触摸热区刻意做 120×120（点按目标够大），提示行是 Label 不接收输入 ⇒ 功能上不冲突。"
     },
     "MarkWheel|HP": {
       "a": "/root/Main/HudBuilder/HUD/MarkWheel",
       "b": "/root/Main/HudBuilder/HUD/HP",
-      "hit": "(840,188 100x21)",
+      "hit": "(840,188 25x22)",
       "parent": "/root/Main/HudBuilder/HUD",
       "rect_a": "(840,188 120x120)",
-      "rect_b": "(802,186 138x23)",
+      "rect_b": "(802,186 63x24)",
       "verdict": "有意：报点轮盘展开时按层级临时盖住右上信息条，选择或取消后立即收起；HP 是 Label，不抢触摸。"
     },
     "MarkWheel|MapButton": {
@@ -40,9 +32,9 @@
     "MatchClock|MarkWheel": {
       "a": "/root/Main/HudBuilder/HUD/MatchClock",
       "b": "/root/Main/HudBuilder/HUD/MarkWheel",
-      "hit": "(840,210 105x23)",
+      "hit": "(840,210 102x24)",
       "parent": "/root/Main/HudBuilder/HUD",
-      "rect_a": "(802,210 143x23)",
+      "rect_a": "(802,210 140x24)",
       "rect_b": "(840,188 120x120)",
       "verdict": "有意：同 MarkWheel|HP —— 战局状态行是 Label；要更干净可在轮盘展开时临时隐藏该行。"
     },
@@ -56,6 +48,5 @@
       "verdict": "无意：任务卡实际宽 316（不止 300）与播报区左缘相交 16 px ⇒ 两块面板边框/文字可能贴住。修法：卡宽收到 300，或播报区右移 16 px。"
     }
   },
-  "scene": "res://scenes/gameplay/Main.tscn",
   "viewport": "960x540"
 }

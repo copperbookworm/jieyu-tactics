@@ -129,6 +129,13 @@ const TASK_CARD_POS_X := 16.0       # px，任务卡片屏幕位置（左上，�
 const TASK_CARD_POS_Y := 60.0
 const TASK_CARD_WIDTH := 300.0
 const TASK_CARD_HEIGHT := 96.0
+## 卡片内文字的字号与内边距（2026-10-07 真机验收后定）。
+## 为什么必须写死：Label 不给尺寸时会按文本自动撑到 320×105，**越出 300×96 的卡片** ——
+## 真机上第 4 行（组任务）压在兵种/弹种/间瞄按钮行上、第 3 行右侧被卡片边缘切掉。
+## 现在卡片内层可用高度 = 96 − 8 = 88 px；4 行 × 12px 字号（行高约 18）≈ 72 px，留 16 px 余量。
+const TASK_CARD_FONT_SIZE := 12
+const TASK_CARD_PAD_X := 8.0
+const TASK_CARD_PAD_Y := 4.0
 const TASK_COMPLETE_FLASH := 2.0    # s，完成后卡片高亮「任务完成 +N」的时长
 
 # ────────────── HUD 层间距（第四十一版补丁9 收尾 · 几何回归）──────────────

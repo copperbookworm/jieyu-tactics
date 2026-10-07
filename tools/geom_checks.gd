@@ -11,12 +11,19 @@ extends RefCounted
 ##   ② 同级不重叠      同一父节点下的可见 Control 两两不相交；Container 的子节点跳过（重叠是布局器的意图）
 ##   ③ 点按目标够大    带点击语义的控件最短边 >= MIN_TAP_SIZE
 ##   ④ CanvasLayer    层号在 [0,100]
+##   ⑤ 子控件不越界    非 Container 的父控件，其可见子 Control 必须落在父的 rect 内（容差 OVERFLOW_TOLERANCE）
+##
+## ⑤ 为什么必须有（2026-10-07 真机验收抓到）：①②③ 只比「同级」—— QuestCard 的 4 行文字压在
+## 下方按钮行上时，父子关系完全合规、三条断言全绿，而真机截图里肉眼可见地压字。
+## 那条 bug 的根因就是「内层 Label 320×105 装进了 300×96 的卡片、且没人裁剪」。
 ##
 ## key_prefix：多状态门禁用。把「状态名」并进重叠对的键，免得两个屏幕上同名的控件互相顶掉基线条目。
 ## 刻意不写 class_name：引用方 preload。
 
 const OFFSCREEN_TOLERANCE := 1.0
 const MIN_TAP_SIZE := 32.0
+## 子控件越出父容器的容差（px）：亚像素舍入不算越界
+const OVERFLOW_TOLERANCE := 1.0
 ## 带点击语义的信号名 —— 有其一就按「可点控件」检查最小尺寸
 const CLICK_SIGNALS := ["pressed", "button_down", "button_up", "toggled"]
 
@@ -65,6 +72,7 @@ func run_all(root_node: Node, baseline_path: String, notes: Dictionary,
 	check_overlaps_against_baseline(baseline_path, notes, init_mode, strict)
 	check_tap_targets(controls)
 	check_canvas_layers(root_node)
+	check_child_overflow(root_node)
 
 
 func collect_controls(node: Node) -> Array:
@@ -96,6 +104,31 @@ func check_no_offscreen(controls: Array) -> void:
 			print("[FAIL] 出屏：%s" % path_of(ctrl))
 			print("       rect = %s（视口 %.0fx%.0f）" % [str(r), view_w, view_h])
 	check("%s不出屏（%d 个可见 Control）" % [key_prefix, controls.size()], bad, 0)
+
+
+## ⑤ 子控件不越出父容器（非 Container 的父子关系才算；Container 的排布是布局器的意图）
+func check_child_overflow(root_node: Node) -> void:
+	var bad := 0
+	for c in collect_controls(root_node):
+		var child := c as Control
+		var parent := child.get_parent()
+		if not (parent is Control) or parent is Container:
+			continue
+		var pctrl := parent as Control
+		if ignored(child) or ignored(pctrl):
+			continue
+		var rc := child.get_global_rect()
+		var rp := pctrl.get_global_rect()
+		var over_x := maxf(rp.position.x - rc.position.x,
+				(rc.position.x + rc.size.x) - (rp.position.x + rp.size.x))
+		var over_y := maxf(rp.position.y - rc.position.y,
+				(rc.position.y + rc.size.y) - (rp.position.y + rp.size.y))
+		if over_x > OVERFLOW_TOLERANCE or over_y > OVERFLOW_TOLERANCE:
+			bad += 1
+			print("[FAIL] 子控件越出父容器：%s" % path_of(child))
+			print("       child=%s" % rect_str(rc))
+			print("       parent=%s  越界 %.1f x %.1f px" % [rect_str(rp), over_x, over_y])
+	check("%s子控件不越出父容器" % key_prefix, bad, 0)
 
 
 func collect_overlaps(controls: Array) -> void:

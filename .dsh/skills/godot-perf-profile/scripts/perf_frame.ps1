@@ -24,7 +24,7 @@
 
 [CmdletBinding()]
 param(
-	[string]$Package = 'com.example.jieyu1',
+	[string]$Package = 'io.github.copperbookworm.jieyu',
 	[string]$Serial,
 	# ⚠ 默认**不写当前目录**：如果当前目录在 Godot 工程内，Godot 的导入器会把落下来的 .csv
 	# 当成**翻译表**导入，生成 *.csv.import 与 *.delta.translation / *.fps.translation …

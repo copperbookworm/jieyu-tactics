@@ -16,7 +16,7 @@ metadata:
 
 | 项 | 现状 | 能不能上架 | 该怎么办 |
 |---|---|---|---|
-| 包名 | `com.example.jieyu1` | ❌ **Play 明确不接受 `com.example.*`** | 改成你拥有的域名的反写，例如 `com.<你的域名>.jieyu`；改完等于**换了一个 App**（旧包不能升级） |
+| 包名 | `io.github.copperbookworm.jieyu` | ❌ **Play 明确不接受 `com.example.*`** | 改成你拥有的域名的反写，例如 `com.<你的域名>.jieyu`；改完等于**换了一个 App**（旧包不能升级） |
 | 导出格式 | `gradle_build/export_format=0` | ❌ 是 **APK**，Play 要 **AAB** | 改 `1`（AAB）；或只在自用/侧载时才用 APK |
 | 签名 | `package/signed=true`，走的是 **debug keystore** | ❌ 不能作正式发布 | 建 release keystore（见第 1 步） |
 | versionCode / versionName | `1` / `"jieyu"` | ⚠ 形式不对 | versionName 用语义化版本（`0.1.0`）；**每次上架 versionCode 必须严格递增** |

@@ -75,6 +75,13 @@
   ——比对着文件猜快得多（`tools/diag_export_preset.gd` 就是为这件事留下的工具）。
   **结论**：这类文件里**一个注释都不要写**，说明写进 `docs/`。（另：`project.godot` 被 Godot 保存时会丢掉 `;` 注释。）
 
+- **Control 的子控件越出父容器不会被裁剪（2026-10-07 真机验收抓到）**：Godot 默认 `clip_contents = false`，
+  内层 Label 会按文本自动撑大（不给 `size` 时尤其如此），于是「父面板 300×96、里面的 Label 320×105」
+  这种组合在引擎眼里完全合法 —— 只有真机上才看得见文字压到下方的按钮行上。
+  **几何门禁原来只有「同级不重叠」，比的是兄弟节点，父子越界一条都抓不到** ⇒ 第八十八版给
+  `tools/geom_checks.gd` 加了第 ⑤ 条断言「子控件不越出父容器」（非 Container 的父才算，Container 的排布是布局器意图）。
+  修法两条并用：① 给内层控件**写死 size**；② 顺手开 `clip_contents` / `clip_text` 兜底。
+
 ## 3. 《解域》设计定标（源头：`[JIEYU]/squad-2d/解域游戏.docx`）
 
 - **[f030] 定位**：2D 俯视战术射击手游，受 Squad 启发，五节点 RAAS + 白旗点五结构，
@@ -158,6 +165,14 @@
 - 数行口径：必须用 **LF 字节数**统计（pwsh `Get-Content` 在中文 UTF-8 上会少数约 6%）。
 - Godot 操作走 godot-ai MCP（47 工具，`mcp__godot-ai__*`），**仅编辑器打开时可用**；
   端口 8000 / 9500 一次只能被一个编辑器占用。
+- **真机验收的实测换算式（PCE-W30，2026-10-07）**：应用锁 landscape，`screencap` 给的是 **2880x1920**，
+  而 `wm size` 报的是竖屏 Override 1920x2880；`input tap` 吃的是**横屏那套坐标**。
+  960x540 在 2880x1920 上等比缩放 ⇒ **缩放 3×、上下各留 150 px 黑边**：
+  **设备 x = 逻辑 x × 3，设备 y = 150 + 逻辑 y × 3**（大厅「开始游戏」→ 点 514,777；
+  模式页「开始对局」→ 点 2535,1616；两个都实测点得中）。
+- **真机启动 App 用这条**：`adb shell am start -n <包名>/com.godot.game.GodotAppLauncher`。
+  实测：`monkey -p ... -c android.intent.category.LAUNCHER 1` 报 args 错误；
+  `.../com.godot.game.GodotApp` 会 `SecurityException: not exported`。
 
 ## 6. 未决 / 待拍板（跨条目汇总）
 

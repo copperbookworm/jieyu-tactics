@@ -39,19 +39,28 @@ $adb = "C:\Users\feiyun\AppData\Local\Android\Sdk\platform-tools\adb.exe"
 & $adb install -r "D:\Godot4.7_Proj\APK\解域MVP.apk"
 ```
 
-- 包名 **`com.example.jieyu1`**（实测；`export_presets.cfg` 里是 `com.example.$genname`）。
+- 包名 **`io.github.copperbookworm.jieyu`**（实测；`export_presets.cfg` 里是 `com.example.$genname`）。
 - 架构：APK **只有 arm64-v8a**。x86 模拟器装不上，别在 x86 模拟器上浪费时间。
-- 换包失败先卸载：`& $adb uninstall com.example.jieyu1`（会清 `user://` 存档/日志）。
+- 换包失败先卸载：`& $adb uninstall io.github.copperbookworm.jieyu`（会清 `user://` 存档/日志）。
 
 **重新出包**（改了代码要重装时）——**一律走包装脚本**，不要手敲 Godot 导出：
 
 ```powershell
+# 真机复测装 release 包（跟发布件同一条链）；只调 UI 想快就 -Mode debug
 & "D:\Godot4.7_Proj\jieyu-1\tools\android_overrides\export_android.ps1" `
-    -Mode debug -Out "D:\Godot4.7_Proj\APK\解域MVP.apk"
+    -Mode release -Out "D:\Godot4.7_Proj\APK\jieyu-0.1.0.apk"
 ```
 
-它按顺序做四件事并复核：① headless 测试（红就停）② Godot 导出 ③ **导出后打 splash 主题补丁**
-④ `aapt2 badging` 打印 minSdk/ABI/体积。
+它按顺序做五件事并复核（2026-10-07 第八十七版扩的）：① headless 测试（红就停）
+② 导出窗口内本地覆盖（`-Format aab` 时改 `gradle_build/export_format`；release/AAB 一律把 `package/signed` 关掉）
+③ Godot 导出 ④ **我们自己的签名**（AAB → `jarsigner`，APK → `apksigner`）+ 导出后打 splash 主题补丁
+⑤ `aapt2 badging` 打印 minSdk/ABI/体积/包名/签名 DN。
+
+> ⚠ **Godot 自带的 release 签名链在本机接不通**（详见 `release-engineering-android` 技能与
+> `docs/发布收口.md` 第七节）：preset 里 `keystore/release` 三样都读得到，verbose 下给 gradle 的命令行却只有
+> `-Pperform_signing=true`、没有任何 keystore 属性，报「代码签名: 找不到发布密钥库」。所以改成上面第 ④ 步。
+> ⚠ **GradleDaemon 会拖住导出进程的 stdout 管道**（脚本用 .NET Process + 看门狗自动收掉空闲 daemon）；
+> 手敲或另写脚本时若发现「包已写好、命令不返回」，就是这个原因。
 > ⚠ 手敲导出会漏掉第 ③ 步：Godot 每次导出都会重写 `res/values/themes.xml`，把 API 31 才有的
 > `android:windowSplashScreenBackground` 放回无限定的 `values/`，于是 lint 重新报 Error、低版本设备
 > 有厂商属性 id 冲突风险。另外手敲时**必须带** `$env:JAVA_HOME="C:\Program Files\Java\jdk-17"`。
@@ -68,7 +77,9 @@ $adb = "C:\Users\feiyun\AppData\Local\Android\Sdk\platform-tools\adb.exe"
 
 ```powershell
 & $adb logcat -c                                              # 清缓冲
-& $adb shell monkey -p com.example.jieyu1 -c android.intent.category.LAUNCHER 1
+# ⚠ 实测（2026-10-07）：monkey 这条路在本机会报 args 错误；`.../com.godot.game.GodotApp` 也不是导出入口
+#（会 SecurityException: not exported）。**可用的启动方式是这样**：
+& $adb shell am start -n io.github.copperbookworm.jieyu/com.godot.game.GodotAppLauncher
 Start-Sleep -Seconds 8                                        # 等启动稳定
 & $adb logcat -d -v time > "<工作区可写路径>\logcat_<yyyyMMdd-HHmm>.txt"
 ```
@@ -92,7 +103,7 @@ Select-String -Path .\logcat_*.txt -Pattern "SCRIPT ERROR","FATAL EXCEPTION","Pa
 **确认进程真的起来了**：
 
 ```powershell
-& $adb shell pidof com.example.jieyu1      # 空 = 没起来或已崩
+& $adb shell pidof io.github.copperbookworm.jieyu      # 空 = 没起来或已崩
 ```
 
 ---
@@ -123,6 +134,11 @@ Select-String -Path .\logcat_*.txt -Pattern "SCRIPT ERROR","FATAL EXCEPTION","Pa
 ```
 
 - 坐标是**设备实际分辨率**下的像素，不是 960x540 逻辑坐标；先用 `& $adb shell wm size` 取真实分辨率再换算。
+- ⚠ **本机（PCE-W30）实测的换算式子（2026-10-07）**：`wm size` 会报「Override size: 1920x2880」（竖屏），
+  但应用在清单里锁了 landscape、`screencap` 出来的是 **2880x1920**，而 `input tap` 吃的就是**横屏这一套坐标**。
+  游戏是 960x540（16:9）在 2880x1920（3:2）上按 `canvas_items` 等比缩放 ⇒ 缩放 **3×**、上下各留 **150 px 黑边**：
+  **设备 x = 逻辑 x × 3，设备 y = 150 + 逻辑 y × 3**。例：大厅「开始游戏」逻辑约 (171,209) → 点 `514 777`；
+  模式页「开始对局」逻辑约 (845,539) → 点 `2535 1616`（两个都实测点得中）。
 - 本项目 12.7 / 4.13 的交互在**右半屏**（瞄准）与**轮盘向右展开**；测轮盘时滑动终点要往右。
 - 每做一步输入后**紧跟一张截图**，否则无法证明这一步起了作用。
 

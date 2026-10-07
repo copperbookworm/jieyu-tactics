@@ -171,12 +171,22 @@ func _advance_phase() -> void:
 func _stage_allies(target: Vector2) -> void:
 	var staged := 0
 	var total := get_nodes_from_friendly().size()
+	# ① 先让世界按**分批推进**写好各人的 order_target（第九十三版）：
+	#    前梯队的目标 = 节点，后梯队的目标 = 节点外侧的集结线。
+	#    ⚠ 直接在探针里写 node.order_target = target 会绕过分批 ⇒ 量到的还是「19 人一起冲」的旧口径。
+	if _main != null and _main.world != null and _main.world.has_method("order_allies_to"):
+		_main.world.order_allies_to(target)
+	else:
+		for node in get_nodes_from_friendly():
+			node.order_target = target
+	# ② 再**按各人自己的目标**落位（不是统一送到圈边）：
+	#    不瞬移的话 19 名队友从出生点走到 N1 要 ~60 s，曲线全是赶路；
+	#    但统一送到节点外一圈会把「后梯队留在集结线」这条规则直接架空。
 	for node in get_nodes_from_friendly():
-		# 送到节点外一圈：不瞬移的话 19 名队友从出生点走到 N1 要 ~60 s，曲线全是赶路
+		var own: Vector2 = node.order_target
 		var angle := TAU * float(staged) / maxf(float(total), 1.0)
-		(node as Node2D).global_position = target \
+		(node as Node2D).global_position = own \
 				+ Vector2(cos(angle), sin(angle)) * STAGE_DISTANCE
-		node.order_target = target
 		node.order_active = true
 		staged += 1
 	# --with-player：玩家也跟到节点上（旗点才会真的翻；血量拉满＝不参战也不阵亡，见字段注释）

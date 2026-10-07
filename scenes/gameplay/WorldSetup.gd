@@ -183,8 +183,29 @@ func _build_camera(main) -> void:
 ## 队友数：模式定义了就用模式的（PVP 20 v 20 要 19 名 / PVEVP 4P 要 3 名），
 ## 没有模式（单独跑 Main.tscn 的测试、兵棋模式）就退回 GameConfig.ALLY_SQUAD_SIZE = 3
 ## —— 这条回落保证「单跑 Main.tscn」的集成冒烟与几何门禁一行都不用改。
+## 分批推进（2026-10-07 第九十三版 · 使用者选择题 A「队友推进分批」）
+##
+## 每个**梯队** = WAVE_GROUPS 个组；只有当前梯队去冲节点，后面的梯队停在节点外侧的**集结线**上，
+## 节点被我方拿下（BLUE）后梯队前移一位。
+##
+## 为什么必须分批：--push 300 s 实测**交换比 19:1**（19 名队友集火 2~3 名守军，友方几乎零阵亡），
+## 而 --even 正面对撞只有 3.5:1 —— 差额全来自**局部兵力比**（19:3）。分批后局部降到约 4:3，
+## 交火才会互有伤亡（也更接近 Squad / Arma 的推进节奏）。
+const WAVE_GROUPS := 1
+## 集结线：比节点往**我方**方向退这么多米（用玩家当前位置当「我方」锚点）
+const STAGING_BACK_M := 80.0
+
+var _wave_index := 0
+
+
+## 当前梯队是不是可以进圈（供测试与 HUD 读）
+func current_wave() -> int:
+	return _wave_index
+
+
 ## 把组任务发给每个队友：组 0/1/2… 各自去自己那个节点（docx 4.10.8 的执行层）。
 ## 只有「组任务」存在、且该组有坐标时才置 order_active —— 否则队友保持跟随玩家（旧行为）。
+## ⚠ 第九十三版起：**后梯队的目标是集结线，不是节点本身**（分批推进）。
 func _apply_squad_orders(main) -> void:
 	var positions: Array = []
 	for zone in main.capture_zones:
@@ -199,10 +220,44 @@ func _apply_squad_orders(main) -> void:
 		var g := int(ally.group_index)
 		if not targets.has(g):
 			continue
-		ally.order_target = targets[g]
+		var wave := int(g / WAVE_GROUPS)
+		ally.order_target = targets[g] if wave <= _wave_index 				else _staging_point(main, targets[g])
 		ally.order_active = true
 		var entry: Dictionary = ord.get(g, {})
 		ally.order_text = String(entry.get("text", ""))
+
+
+## 集结线落点：节点往我方（玩家）方向退 STAGING_BACK_M 米。玩家拿不到就用屏幕左方兜底。
+func _staging_point(main, node_pos: Vector2) -> Vector2:
+	var anchor: Vector2 = node_pos + Vector2.LEFT * STAGING_BACK_M
+	if main != null and main.player != null:
+		anchor = (main.player as Node2D).global_position
+	var dir := anchor - node_pos
+	if dir.length() < 1.0:
+		dir = Vector2.LEFT
+	return node_pos + dir.normalized() * STAGING_BACK_M
+
+
+## 把一个「全员推进到 target」的请求按**梯队**落地。
+## 探针（probe_balance）与组任务派发共用这一份规则 —— 别在探针里再抄一遍分批逻辑，
+## 否则「测出来的配平」与「真跑起来的配平」是两回事（第八十九版踩过同类问题）。
+func order_allies_to(target: Vector2) -> void:
+	for node in get_tree().get_nodes_in_group("friendly"):
+		var ally = node
+		if ally == null or not ("group_index" in ally):
+			continue
+		var wave := int(int(ally.group_index) / WAVE_GROUPS)
+		ally.order_target = target if wave <= _wave_index \
+				else _staging_point(main_ref, target)
+		ally.order_active = true
+
+
+## 我方拿下一个节点 ⇒ 下一个梯队压上（幂等：只是在 _apply_squad_orders 前把游标 +1）
+func _promote_wave(main) -> void:
+	if main == null:
+		return
+	_wave_index += 1
+	_apply_squad_orders(main)
 
 
 func _ally_target() -> int:
@@ -486,6 +541,9 @@ func _on_flag_state_changed(node_name: Variant, state: int) -> void:
 		return
 	if state != 1:   # CaptureZone.State.BLUE
 		return
+	# 我方拿下一个节点 ⇒ 队友的**下一个梯队压上**（分批推进，第九十三版 · 使用者选择题 A）。
+	# 与下面的「敌方退守下一条防线」是同一次事件的两面：我们前压、他们后撤。
+	_promote_wave(main_ref)
 	var line := mini(index + 1, nodes.size() - 1)      # 下一条防线
 	# 分批推进（2026-10-07 第八十九版）：下一条防线的集结目标默认落在**防御环**（圈外）——
 	# 他们照样守这个点、玩家进圈就交火，但不会顺手替敌人把点占下来。

@@ -103,7 +103,7 @@ func _refresh_config() -> void:
 	_config_box.add_child(UiKit.row("操作提示",
 			"开" if s.tips_enabled else "关"))
 	_config_box.add_child(UiKit.row("AI 参谋",
-			"竞技模式会关闭" if ModeTableScript.competitive(mode_id) else "开放"))
+			"关闭（竞技模式不提供入口）" if ModeTableScript.competitive(mode_id) else "开放"))
 	_config_box.add_child(UiKit.spacer(0.0, true))
 	_config_box.add_child(UiKit.wrapped(
 			"第一版没有服务器：对局由 AI 填充，选完模式直接开局。", UiKit.SMALL_SIZE))

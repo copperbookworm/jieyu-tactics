@@ -201,6 +201,27 @@ func _build_button() -> void:
 	add_child(_button)
 
 
+## 竞技模式下连入口一起隐藏（docx 19 ㊲ · 2026-10-07 拍板）：不给「点了才知道关着」的挫败。
+## 为什么用 _process 轮询而不是信号：competitive 是 AiAdvisor 上的普通变量，由 App / MatchHost
+## 在开局前直接赋值（没有信号），面板又挂在 autoload 上跨场景常驻。
+## 代价说明：每帧只做一次 bool 比较，**只有值变了才写 visible**（不触发重排，不进性能口径）。
+var _entry_hidden := false
+
+
+func _process(_delta: float) -> void:
+	refresh_entry()
+
+
+func refresh_entry() -> void:
+	if _button == null or advisor == null:
+		return
+	var hide_now: bool = bool(advisor.competitive)
+	if hide_now == _entry_hidden:
+		return
+	_entry_hidden = hide_now
+	_button.visible = not hide_now
+
+
 func _on_button_pressed() -> void:
 	if is_open():
 		close_panel()

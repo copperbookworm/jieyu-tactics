@@ -56,7 +56,7 @@ func place_at(type: int, position: Vector2) -> void:
 				RoleTable.mark_duration(main.player_role)])
 
 
-## 从玩家到落点：距离在拖拽上限内 + 地形通视（与准心同一口径）
+## 从玩家到落点：距离在拖拽上限内 + 完整通视（地形 + 掩体 + 烟，与准心同一口径；2026-10-07 拍板 docx 19 ⑮）
 func is_reachable(position: Vector2) -> bool:
 	if main.sight == null or main.player == null:
 		return false
@@ -66,8 +66,11 @@ func is_reachable(position: Vector2) -> bool:
 	# main 是鸭子类型（Variant）：这里必须显式标 float，:= 推断不出来
 	var origin_height: float = main.sight.eye_height_at(main.player.global_position)
 	var target_height: float = main.sight.eye_height_at(position)
-	return not main.sight.terrain_first_blocker(main.player.global_position, origin_height,
-			position, target_height, GameConfig.CROSSHAIR_SIGHT_MARGIN_PER_METER)["blocked"]
+	# 2026-10-07 拍板（docx 19 ⑮）：与准心报点同口径 —— 地形 + 掩体 + 烟三层都算。
+	# 原实现只查地形层（terrain_first_blocker），隔着掩体或烟在地图上能点进去，
+	# 违反 4.11.2「报点需通视前提」的红线。
+	return main.sight.has_sight(main.player.global_position, origin_height,
+			position, target_height, GameConfig.CROSSHAIR_SIGHT_MARGIN_PER_METER)
 
 
 ## 落标记 + 通知任务系统（支线「侦察标记」靠它推进）

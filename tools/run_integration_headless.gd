@@ -69,6 +69,22 @@ func _process(delta: float) -> bool:
 					print("   后面每一项都会红。把该开关关掉（或删掉那一行）再跑。")
 					quit(1)
 					return true
+				# 2026-10-07 拍板（docx 19 ⑯）：调试值也一起纳入跑批前置检查。
+				# 为什么只硬查这两个伤害倍率：它们是「脚本化验收让不让敌人真打」的旋钮，被调成 0 时
+				# 整片断言会「看起来全绿」（敌人打不动玩家、也打不动载具）—— 最容易被当成绿提交的假绿源。
+				# ENEMY_FINISH_OFF_ENABLED 故意不硬查：本套冒烟自己就跑在「补刀关」的测试态上
+				# （见「补刀关（测试态）」那组断言），把它当错误会让每一轮都红 ⇒ 改为下面打印出来。
+				if not is_equal_approx(GameConfig.ENEMY_DAMAGE_SCALE, 1.0):
+					print("！！ 集成冒烟中止：GameConfig.ENEMY_DAMAGE_SCALE = %s（正式值 1.0）" % str(GameConfig.ENEMY_DAMAGE_SCALE))
+					quit(1)
+					return true
+				if not is_equal_approx(GameConfig.ENEMY_VEHICLE_DAMAGE_SCALE, 1.0):
+					print("！！ 集成冒烟中止：GameConfig.ENEMY_VEHICLE_DAMAGE_SCALE = %s（正式值 1.0）" % str(GameConfig.ENEMY_VEHICLE_DAMAGE_SCALE))
+					quit(1)
+					return true
+				print("[跑批·口径] ENEMY_DAMAGE_SCALE=%.2f ENEMY_VEHICLE_DAMAGE_SCALE=%.2f ENEMY_FINISH_OFF_ENABLED=%s（本套冒烟就跑在这个测试态上）" % [
+					GameConfig.ENEMY_DAMAGE_SCALE, GameConfig.ENEMY_VEHICLE_DAMAGE_SCALE,
+					"true" if GameConfig.ENEMY_FINISH_OFF_ENABLED else "false"])
 				_neutralize_enemy_fire()   # 见函数注释：脚本化验收里不让敌人真把玩家打死
 				_check_structure()
 				_check_interactions()

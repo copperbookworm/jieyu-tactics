@@ -103,9 +103,9 @@ func _restore_defaults() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 	Engine.max_fps = 0
 	Engine.physics_ticks_per_second = 60
-	# 2026-10-06：project.godot 的 common/max_physics_steps_per_frame 已按拍板改为 **1**（cap1 采用），
-	# 这里必须跟着改，否则 `_restore_defaults` 会把引擎留在 2 —— 探针的"基线"就不再代表实际发布的配置。
-	Engine.max_physics_steps_per_frame = 1
+	# 2026-10-07：project.godot 的 common/max_physics_steps_per_frame 按拍板回退为 **2**（cap1 → cap2），
+	# 这里必须跟着改，否则 `_restore_defaults` 会把引擎留在 1 —— 探针的"基线"就不再代表实际发布的配置。
+	Engine.max_physics_steps_per_frame = 2
 	Engine.physics_jitter_fix = 0.5
 	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	print("[探针] 已还原默认口径（vsync=1 max_fps=0 phys=60 canvas_items）")
@@ -134,9 +134,9 @@ func _advance(i: int) -> void:
 		w2.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	var phys := int(v["phys"])
 	Engine.physics_ticks_per_second = phys
-	# 默认 = project.godot 的现值（2026-10-06 起是 1）：这样没有 "cap" 键的变体（01~09）才是**实际发布的配置**。
-	# 变体 10/14 显式给 cap=1，与它一致；要对照旧口径就给 cap=2。
-	var steps_cap := 1
+	# 默认 = project.godot 的现值（2026-10-07 起是 2）：这样没有 "cap" 键的变体（01~09）才是**实际发布的配置**。
+	# 要对照 cap1 口径就给 cap=1；变体 10/14 原来显式给 cap=1，现在与默认一致。
+	var steps_cap := 2
 	if v.has("cap"):
 		steps_cap = int(v["cap"])
 	Engine.max_physics_steps_per_frame = steps_cap

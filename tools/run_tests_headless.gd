@@ -187,13 +187,16 @@ func _run_sharded(names: Array[String], jobs: int) -> int:
 	return 1 if bad.size() > 0 else 0
 
 
-## 三条几何门禁的命令（与串行分支同一张表）
+## 门禁命令（与串行分支同一张表）：3 条几何门禁 + 1 条美术规格门禁
+## 美术门禁（2026-10-07 第八十六版）量的是「规格文件自洽 + 素材到货盘点」，
+## 与几何门禁红的原因完全不同，所以单开一条（见 tools/check_art_manifest.gd 头部）。
 func _gate_commands() -> Array:
 	var out: Array = []
 	var table := [
 		["res://tools/geom_assertions.gd", "geom_gate.log"],
 		["res://tools/screen_geom_check.gd", "screen_geom_gate.log"],
 		["res://tools/scale_wiring_check.gd", "scale_wiring_gate.log"],
+		["res://tools/check_art_manifest.gd", "art_manifest_gate.log"],
 	]
 	for row in table:
 		out.append({

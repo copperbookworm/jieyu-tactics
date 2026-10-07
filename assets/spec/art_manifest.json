@@ -1,0 +1,1341 @@
+{
+  "schema": 1,
+  "note": "《解域》美术资产的**工程规格**（唯一权威）。上游设计目标是 squad-2d 的两张 CSV；本文件 2026-10-07 由 agent 从两张 CSV + 工程实际几何导出后固定，之后**手工维护**。尺寸口径：UI 以工程 HUD 实际 rect 为准（docx 11.2「权威值是工程」）。 动画里 frames=0 表示设计表写「无帧」（Tween / 程序驱动，不产 PNG 序列）。",
+  "design_source": {
+    "assets_csv": "D:/Godot4.7_Proj/squad-2d/解域游戏美术资产表.csv",
+    "anim_csv": "D:/Godot4.7_Proj/squad-2d/解域游戏动画帧规格.csv",
+    "assets_rows": 54,
+    "anim_rows": 25
+  },
+  "rules": {
+    "naming": "全小写 + 下划线；不得含中文；帧序号补零两位",
+    "dirs": {
+      "chars": "res://assets/chars/",
+      "icons": "res://assets/icons/",
+      "vehicles": "res://assets/vehicles/",
+      "maps": "res://assets/maps/",
+      "ui": "res://assets/ui/",
+      "fx": "res://assets/fx/",
+      "units": "res://assets/units/"
+    },
+    "ppu": "32 / 16 / 8 px per meter（缩放三档）；逻辑分辨率 960×540",
+    "filter": "Nearest（default_texture_filter=0）—— 不要做抗锯齿/插值",
+    "import": ".import 文件要一起进版本库"
+  },
+  "batch1": [
+    "char_rifleman_base",
+    "char_marksman_base",
+    "char_scout_base",
+    "char_engineer_base",
+    "ui_crosshair",
+    "ui_mark_enemy",
+    "ui_mark_vehicle",
+    "ui_mark_position",
+    "ui_mark_supply",
+    "ui_mark_smoke",
+    "ui_mark_rally",
+    "ui_button_nineslice",
+    "ui_joystick_base",
+    "ui_joystick_knob"
+  ],
+  "assets": [
+    {
+      "id": "char_rifleman_base",
+      "design_row": 1,
+      "design_name": "角色-步枪兵",
+      "category": "角色",
+      "design_spec": "64×64px(近战档)",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/chars/char_rifleman_base.png",
+      "format": "PNG",
+      "note": "第一版 4 兵种之一（步枪兵）"
+    },
+    {
+      "id": "char_autorifleman_base",
+      "design_row": 2,
+      "design_name": "角色-自动步枪兵",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 2,
+      "path": "res://assets/chars/char_autorifleman_base.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "char_medic_base",
+      "design_row": 3,
+      "design_name": "角色-医疗兵",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/chars/char_medic_base.png",
+      "format": "PNG",
+      "note": "第一版没有医疗兵兵种"
+    },
+    {
+      "id": "char_sniper_base",
+      "design_row": 4,
+      "design_name": "角色-狙击手",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/chars/char_sniper_base.png",
+      "format": "PNG",
+      "note": "观察员同模板"
+    },
+    {
+      "id": "char_marksman_base",
+      "design_row": 5,
+      "design_name": "角色-精确射手",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/chars/char_marksman_base.png",
+      "format": "PNG",
+      "note": "第一版 4 兵种之一（精确射手）"
+    },
+    {
+      "id": "char_mg_base",
+      "design_row": 6,
+      "design_name": "角色-机枪手",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/chars/char_mg_base.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "char_grenadier_base",
+      "design_row": 7,
+      "design_name": "角色-榴弹兵",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/chars/char_grenadier_base.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "char_at_light_base",
+      "design_row": 8,
+      "design_name": "角色-轻型反坦克兵",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/chars/char_at_light_base.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "char_at_heavy_base",
+      "design_row": 9,
+      "design_name": "角色-重型反坦克手",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/chars/char_at_heavy_base.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "char_scout_base",
+      "design_row": 10,
+      "design_name": "角色-侦察兵",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/chars/char_scout_base.png",
+      "format": "PNG",
+      "note": "第一版 4 兵种之一（侦察兵）"
+    },
+    {
+      "id": "char_squadleader_base",
+      "design_row": 11,
+      "design_name": "角色-小队长",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/chars/char_squadleader_base.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "char_engineer_base",
+      "design_row": 12,
+      "design_name": "角色-战斗工程师",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/chars/char_engineer_base.png",
+      "format": "PNG",
+      "note": "第一版 4 兵种之一（工程兵）"
+    },
+    {
+      "id": "char_unarmed_base",
+      "design_row": 13,
+      "design_name": "角色-无武装者",
+      "category": "角色",
+      "design_spec": "64×64px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/chars/char_unarmed_base.png",
+      "format": "PNG",
+      "note": "举手姿态"
+    },
+    {
+      "id": "icon_faction",
+      "design_row": 14,
+      "design_name": "角色-阵营色图标",
+      "category": "图标",
+      "design_spec": "32×32px",
+      "design_status": "待制作",
+      "faction": "4阵营",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "design",
+      "batch": 2,
+      "path": "res://assets/icons/icon_faction.png",
+      "format": "PNG",
+      "note": "4 阵营色图标"
+    },
+    {
+      "id": "veh_mbt_hull",
+      "design_row": 15,
+      "design_name": "载具-主战坦克-车体俯视",
+      "category": "载具",
+      "design_spec": "按8.2几何(约320×112px)",
+      "design_status": "待制作",
+      "faction": "泛亚",
+      "size": [
+        320,
+        112
+      ],
+      "size_source": "design",
+      "batch": 2,
+      "path": "res://assets/vehicles/veh_mbt_hull.png",
+      "format": "PNG",
+      "note": "设计表规格里就写了约 320×112px"
+    },
+    {
+      "id": "veh_mbt_turret",
+      "design_row": 16,
+      "design_name": "载具-主战坦克-炮塔",
+      "category": "载具",
+      "design_spec": "按8.2炮塔",
+      "design_status": "待制作",
+      "faction": "泛亚",
+      "size": null,
+      "size_source": "unresolved(按 8.2 炮塔 → 需从 vehicles_data 长宽比导出)",
+      "batch": 2,
+      "path": "res://assets/vehicles/veh_mbt_turret.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "veh_ifv_hull",
+      "design_row": 17,
+      "design_name": "载具-步兵战车-车体俯视",
+      "category": "载具",
+      "design_spec": "按8.2几何",
+      "design_status": "待制作",
+      "faction": "蓝方",
+      "size": null,
+      "size_source": "unresolved(按 8.2 几何)",
+      "batch": 2,
+      "path": "res://assets/vehicles/veh_ifv_hull.png",
+      "format": "PNG",
+      "note": "虚构代号IFV-A"
+    },
+    {
+      "id": "veh_ifv_turret",
+      "design_row": 18,
+      "design_name": "载具-步兵战车-炮塔",
+      "category": "载具",
+      "design_spec": "按8.2炮塔",
+      "design_status": "待制作",
+      "faction": "蓝方",
+      "size": null,
+      "size_source": "unresolved(按 8.2 炮塔)",
+      "batch": 2,
+      "path": "res://assets/vehicles/veh_ifv_turret.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "veh_apc",
+      "design_row": 19,
+      "design_name": "载具-装甲输送车",
+      "category": "载具",
+      "design_spec": "按8.2几何",
+      "design_status": "待制作",
+      "faction": "红方",
+      "size": null,
+      "size_source": "unresolved(按 8.2 几何)",
+      "batch": 3,
+      "path": "res://assets/vehicles/veh_apc.png",
+      "format": "PNG",
+      "note": "后续版本阵营"
+    },
+    {
+      "id": "veh_wheeled_assault",
+      "design_row": 20,
+      "design_name": "载具-轮式突击炮",
+      "category": "载具",
+      "design_spec": "按8.2几何",
+      "design_status": "待制作",
+      "faction": "独立",
+      "size": null,
+      "size_source": "unresolved(按 8.2 几何)",
+      "batch": 3,
+      "path": "res://assets/vehicles/veh_wheeled_assault.png",
+      "format": "PNG",
+      "note": "后续版本阵营"
+    },
+    {
+      "id": "veh_spg",
+      "design_row": 21,
+      "design_name": "载具-自行火炮",
+      "category": "载具",
+      "design_spec": "按8.2几何",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(按 8.2 几何)",
+      "batch": 3,
+      "path": "res://assets/vehicles/veh_spg.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "veh_heli",
+      "design_row": 22,
+      "design_name": "载具-武装直升机",
+      "category": "载具",
+      "design_spec": "按8.2几何",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(按 8.2 几何)",
+      "batch": 3,
+      "path": "res://assets/vehicles/veh_heli.png",
+      "format": "PNG",
+      "note": "工程还没有可起飞的直升机"
+    },
+    {
+      "id": "veh_track",
+      "design_row": 23,
+      "design_name": "载具-履带/悬挂贴图",
+      "category": "载具",
+      "design_spec": "按8.2几何",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(按 8.2 几何)",
+      "batch": 2,
+      "path": "res://assets/vehicles/veh_track.png",
+      "format": "PNG",
+      "note": "履带/悬挂，毁伤 M-kill 部位"
+    },
+    {
+      "id": "map_heightmap",
+      "design_row": 24,
+      "design_name": "地图-灰度高度图",
+      "category": "地图",
+      "design_spec": "1000×1000px",
+      "design_status": "已制作（程序生成起手稿）",
+      "faction": "通用",
+      "size": [
+        1000,
+        1000
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/maps/map_heightmap.png",
+      "format": "PNG",
+      "note": "已由地图工具链产出（程序生成起手稿，美术待重绘）"
+    },
+    {
+      "id": "map_tile_terrain",
+      "design_row": 25,
+      "design_name": "地图-地形Tile",
+      "category": "地图",
+      "design_spec": "32×32px(1m)",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/maps/map_tile_terrain.png",
+      "format": "PNG",
+      "note": "矢量风(赛璐璐/扁平化)"
+    },
+    {
+      "id": "map_contour",
+      "design_row": 26,
+      "design_name": "地图-等高线着色层",
+      "category": "地图",
+      "design_spec": "1000×1000px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        1000,
+        1000
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/maps/map_contour.png",
+      "format": "PNG",
+      "note": "每10m一条"
+    },
+    {
+      "id": "map_building",
+      "design_row": 27,
+      "design_name": "地图-掩体建筑贴图",
+      "category": "地图",
+      "design_spec": "按需",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(按需)",
+      "batch": 2,
+      "path": "res://assets/maps/map_building.png",
+      "format": "PNG",
+      "note": "掩体建筑贴图"
+    },
+    {
+      "id": "ui_crosshair",
+      "design_row": 28,
+      "design_name": "UI-准心十字",
+      "category": "UI",
+      "design_spec": "12×12px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "engineering(GameConfig.CROSSHAIR_ARROW_SIZE=32｜箭头 14×14)",
+      "batch": 1,
+      "path": "res://assets/ui/ui_crosshair.png",
+      "format": "PNG",
+      "note": "设计表写 12×12，与工程不一致 ⇒ 以工程为准"
+    },
+    {
+      "id": "ui_mark_enemy",
+      "design_row": 29,
+      "design_name": "UI-报点标记-敌人",
+      "category": "UI",
+      "design_spec": "32×32px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/ui/ui_mark_enemy.png",
+      "format": "PNG",
+      "note": "6类标记"
+    },
+    {
+      "id": "ui_mark_vehicle",
+      "design_row": 30,
+      "design_name": "UI-报点标记-载具",
+      "category": "UI",
+      "design_spec": "32×32px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/ui/ui_mark_vehicle.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "ui_mark_position",
+      "design_row": 31,
+      "design_name": "UI-报点标记-阵地",
+      "category": "UI",
+      "design_spec": "32×32px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/ui/ui_mark_position.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "ui_mark_supply",
+      "design_row": 32,
+      "design_name": "UI-报点标记-补给",
+      "category": "UI",
+      "design_spec": "32×32px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/ui/ui_mark_supply.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "ui_mark_smoke",
+      "design_row": 33,
+      "design_name": "UI-报点标记-烟雾",
+      "category": "UI",
+      "design_spec": "32×32px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/ui/ui_mark_smoke.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "ui_mark_rally",
+      "design_row": 34,
+      "design_name": "UI-报点标记-集结点",
+      "category": "UI",
+      "design_spec": "32×32px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        32,
+        32
+      ],
+      "size_source": "design",
+      "batch": 1,
+      "path": "res://assets/ui/ui_mark_rally.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "ui_map_icon",
+      "design_row": 35,
+      "design_name": "UI-战术地图图标",
+      "category": "UI",
+      "design_spec": "按需",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(按需)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_map_icon.png",
+      "format": "PNG",
+      "note": "节点/白旗点/任务区域"
+    },
+    {
+      "id": "ui_quest_card",
+      "design_row": 36,
+      "design_name": "UI-任务卡片",
+      "category": "UI",
+      "design_spec": "按需",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        300,
+        96
+      ],
+      "size_source": "engineering(geom_baseline: QuestCard 16,60 300x96)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_quest_card.png",
+      "format": "PNG",
+      "note": "设计表写「按需」"
+    },
+    {
+      "id": "fx_smoke",
+      "design_row": 37,
+      "design_name": "特效-烟雾",
+      "category": "特效",
+      "design_spec": "半径10m",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(序列帧；尺寸见动画表 fx_smoke 128×128)",
+      "batch": 2,
+      "path": "res://assets/fx/fx_smoke.png",
+      "format": "PNG",
+      "note": "临时Occluder"
+    },
+    {
+      "id": "fx_muzzle",
+      "design_row": 38,
+      "design_name": "特效-枪口火光",
+      "category": "特效",
+      "design_spec": "按需",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(序列帧；见动画表 fx_muzzle_flash 32×32)",
+      "batch": 2,
+      "path": "res://assets/fx/fx_muzzle.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "fx_tracer",
+      "design_row": 39,
+      "design_name": "特效-弹道曳光",
+      "category": "特效",
+      "design_spec": "按需",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(序列帧；见动画表 fx_tracer 8×32)",
+      "batch": 2,
+      "path": "res://assets/fx/fx_tracer.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "fx_impact",
+      "design_row": 40,
+      "design_name": "特效-爆炸命中",
+      "category": "特效",
+      "design_spec": "按需",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(序列帧；见动画表 fx_impact 32×32)",
+      "batch": 2,
+      "path": "res://assets/fx/fx_impact.png",
+      "format": "PNG",
+      "note": ""
+    },
+    {
+      "id": "fx_blob_shadow",
+      "design_row": 41,
+      "design_name": "阴影-BlobShadow",
+      "category": "阴影",
+      "design_spec": "椭圆",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": null,
+      "size_source": "unresolved(椭圆)",
+      "batch": 2,
+      "path": "res://assets/fx/fx_blob_shadow.png",
+      "format": "PNG",
+      "note": "高度反馈(缩放+透明度)"
+    },
+    {
+      "id": "ui_vignette",
+      "design_row": 42,
+      "design_name": "UI-聚焦模式暗角",
+      "category": "UI",
+      "design_spec": "1920×1080 全屏渐晕（半径约 40% 屏高）",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        960,
+        540
+      ],
+      "size_source": "engineering(GameConfig.VIEWPORT 960×540)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_vignette.png",
+      "format": "PNG",
+      "note": "设计表写 1920×1080（旧 1080p 基准）"
+    },
+    {
+      "id": "ui_status_panel",
+      "design_row": 43,
+      "design_name": "UI-弹药生命面板",
+      "category": "UI",
+      "design_spec": "324×164px（右下 x1500–1824 y820–984）",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        324,
+        164
+      ],
+      "size_source": "unresolved(工程把血量/弹药拆成两个 Label：HP 63×24 / Ammo 147×24)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_status_panel.png",
+      "format": "PNG",
+      "note": "弹药数字 / 血量条 / 耐力条 / 姿态图标（11.2 ④）"
+    },
+    {
+      "id": "ui_squad_list",
+      "design_row": 44,
+      "design_name": "UI-小队列表",
+      "category": "UI",
+      "design_spec": "304×500px（左侧 x96–400 y200–700）",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        304,
+        500
+      ],
+      "size_source": "unresolved(设计表 304×500，旧基准)",
+      "batch": 3,
+      "path": "res://assets/ui/ui_squad_list.png",
+      "format": "PNG",
+      "note": "第一版没有队友 HUD（4.13），本轮不出"
+    },
+    {
+      "id": "ui_squad_portrait",
+      "design_row": 45,
+      "design_name": "UI-小队头像框",
+      "category": "UI",
+      "design_spec": "64×64px ×5",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "unresolved(设计表 64×64 ×5)",
+      "batch": 3,
+      "path": "res://assets/ui/ui_squad_portrait.png",
+      "format": "PNG",
+      "note": "同上"
+    },
+    {
+      "id": "ui_command_wheel",
+      "design_row": 46,
+      "design_name": "UI-快捷指令轮盘",
+      "category": "UI",
+      "design_spec": "400×400px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        400,
+        400
+      ],
+      "size_source": "unresolved(工程收起态 CommandWheel 80×40；展开轮盘未定)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_command_wheel.png",
+      "format": "PNG",
+      "note": "5 指令：跟我来 / 需要支援 / 发现敌人 / 掩护我 / 撤退（4.13）"
+    },
+    {
+      "id": "ui_feed_panel",
+      "design_row": 47,
+      "design_name": "UI-播报区底板",
+      "category": "UI",
+      "design_spec": "520×104px（顶部中央 x700–1220 y96–200）",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        360,
+        110
+      ],
+      "size_source": "engineering(geom_baseline: CombatFeed 300,38 360x110)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_feed_panel.png",
+      "format": "PNG",
+      "note": "滚动播报底板（4.14）"
+    },
+    {
+      "id": "ui_tip_panel",
+      "design_row": 48,
+      "design_name": "UI-操作提示条",
+      "category": "UI",
+      "design_spec": "600×80px（中部偏上）",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        400,
+        40
+      ],
+      "size_source": "engineering(geom_baseline: TipPanel 280,424 400x40)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_tip_panel.png",
+      "format": "PNG",
+      "note": "一次性新手提示（4.15）"
+    },
+    {
+      "id": "ui_button_nineslice",
+      "design_row": 49,
+      "design_name": "UI-功能按钮组",
+      "category": "UI",
+      "design_spec": "6 × 88×88px（右下，最小点击区 88px）",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        24,
+        24
+      ],
+      "size_source": "engineering(九宫格：四边各 4 px，NinePatch 拉伸覆盖 80×40 / 80×44 / 120×120 各种按钮)",
+      "batch": 1,
+      "path": "res://assets/ui/ui_button_nineslice.png",
+      "format": "PNG",
+      "note": "设计表写 6×88×88（旧基准）"
+    },
+    {
+      "id": "ui_joystick_base",
+      "design_row": 50,
+      "design_name": "UI-移动摇杆",
+      "category": "UI",
+      "design_spec": "底盘 240×240px + 摇杆头 96×96px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        180,
+        180
+      ],
+      "size_source": "engineering(VirtualJoystick.radius=90 ⇒ 直径 180)",
+      "batch": 1,
+      "path": "res://assets/ui/ui_joystick_base.png",
+      "format": "PNG",
+      "note": "左下（中心约 300,800，半径 120px）（11.2 ⑫）"
+    },
+    {
+      "id": "ui_joystick_knob",
+      "design_row": 50,
+      "design_name": "UI-移动摇杆",
+      "category": "UI",
+      "design_spec": "底盘 240×240px + 摇杆头 96×96px",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        81,
+        81
+      ],
+      "size_source": "engineering(半径 = 90×0.45 = 40.5 ⇒ 直径 81)",
+      "batch": 1,
+      "path": "res://assets/ui/ui_joystick_knob.png",
+      "format": "PNG",
+      "note": "设计表写摇杆头 96×96（旧基准）"
+    },
+    {
+      "id": "ui_vehicle_panel",
+      "design_row": 51,
+      "design_name": "UI-载具HUD面板",
+      "category": "UI",
+      "design_spec": "324×164px（右下，进入载具时替换步兵 HUD）",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        324,
+        164
+      ],
+      "size_source": "unresolved(设计表 324×164，旧基准)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_vehicle_panel.png",
+      "format": "PNG",
+      "note": "座位 / 武器索引与弹药 / 装甲部位 / 车速（11.2 ⑬）"
+    },
+    {
+      "id": "ui_downed_overlay",
+      "design_row": 52,
+      "design_name": "UI-被击倒界面",
+      "category": "UI",
+      "design_spec": "1920×1080 + 倒计时组件",
+      "design_status": "待制作",
+      "faction": "通用",
+      "size": [
+        960,
+        540
+      ],
+      "size_source": "engineering(GameConfig.VIEWPORT 960×540)",
+      "batch": 2,
+      "path": "res://assets/ui/ui_downed_overlay.png",
+      "format": "PNG",
+      "note": "设计表写 1920×1080（旧基准）"
+    },
+    {
+      "id": "unit_drone_quad",
+      "design_row": 53,
+      "design_name": "单位-侦察无人机（四旋翼）",
+      "category": "单位",
+      "design_spec": "64×64px（近战档）",
+      "design_status": "待谈定",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/units/unit_drone_quad.png",
+      "format": "PNG",
+      "note": "待谈定（22.8 厂商合作）"
+    },
+    {
+      "id": "unit_quadruped",
+      "design_row": 54,
+      "design_name": "单位-四足机器人",
+      "category": "单位",
+      "design_spec": "64×64px（近战档）",
+      "design_status": "待谈定",
+      "faction": "通用",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "design",
+      "batch": 3,
+      "path": "res://assets/units/unit_quadruped.png",
+      "format": "PNG",
+      "note": "待谈定（22.8 厂商合作）"
+    }
+  ],
+  "animations": [
+    {
+      "id": "char_lower_idle",
+      "category": "人物",
+      "layer": "Lower",
+      "frames": 4,
+      "fps": "8 fps",
+      "loop": "循环",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_lower_idle_%02d.png",
+      "note": "站立微呼吸",
+      "frames_design": "4"
+    },
+    {
+      "id": "char_lower_walk",
+      "category": "人物",
+      "layer": "Lower",
+      "frames": 8,
+      "fps": "12 fps",
+      "loop": "循环",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_lower_walk_%02d.png",
+      "note": "双腿交替",
+      "frames_design": "8"
+    },
+    {
+      "id": "char_lower_run",
+      "category": "人物",
+      "layer": "Lower",
+      "frames": 8,
+      "fps": "16 fps",
+      "loop": "循环",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_lower_run_%02d.png",
+      "note": "双腿快速交替",
+      "frames_design": "8"
+    },
+    {
+      "id": "char_lower_crouch",
+      "category": "人物",
+      "layer": "Lower",
+      "frames": 6,
+      "fps": "10 fps",
+      "loop": "循环",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_lower_crouch_%02d.png",
+      "note": "蹲姿移动",
+      "frames_design": "6"
+    },
+    {
+      "id": "char_lower_prone",
+      "category": "人物",
+      "layer": "Lower",
+      "frames": 2,
+      "fps": "4 fps",
+      "loop": "循环",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_lower_prone_%02d.png",
+      "note": "卧姿呼吸",
+      "frames_design": "2"
+    },
+    {
+      "id": "char_lower_crawl",
+      "category": "人物",
+      "layer": "Lower",
+      "frames": 6,
+      "fps": "10 fps",
+      "loop": "循环",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_lower_crawl_%02d.png",
+      "note": "卧姿爬行",
+      "frames_design": "6"
+    },
+    {
+      "id": "char_upper_arm_aim",
+      "category": "人物",
+      "layer": "Upper-手臂",
+      "frames": 1,
+      "fps": "静态",
+      "loop": "—",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_upper_arm_aim_%02d.png",
+      "note": "持枪手臂（腰射）",
+      "frames_design": "1"
+    },
+    {
+      "id": "char_upper_arm_focus",
+      "category": "人物",
+      "layer": "Upper-手臂",
+      "frames": 2,
+      "fps": "8 fps",
+      "loop": "循环",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_upper_arm_focus_%02d.png",
+      "note": "聚焦持枪（准心收窄）",
+      "frames_design": "2"
+    },
+    {
+      "id": "char_hand_skeleton",
+      "category": "人物",
+      "layer": "Upper-骨骼",
+      "frames": 0,
+      "fps": "—",
+      "loop": "—",
+      "size": null,
+      "path_template": "res://assets/chars/char_hand_skeleton_%02d.png",
+      "note": "换弹/切武器/扶起/扔雷",
+      "frames_design": "无帧（1套骨架+4类关节动画）"
+    },
+    {
+      "id": "char_weapon_attach",
+      "category": "人物",
+      "layer": "Upper-附件",
+      "frames": 11,
+      "fps": "—",
+      "loop": "—",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_weapon_attach_%02d.png",
+      "note": "武器9类+弹匣1+手雷1",
+      "frames_design": "11 张贴图"
+    },
+    {
+      "id": "char_full_downed",
+      "category": "人物",
+      "layer": "Full",
+      "frames": 4,
+      "fps": "8 fps",
+      "loop": "单次",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_full_downed_%02d.png",
+      "note": "倒地→静止",
+      "frames_design": "4"
+    },
+    {
+      "id": "char_full_dead",
+      "category": "人物",
+      "layer": "Full",
+      "frames": 3,
+      "fps": "8 fps",
+      "loop": "单次",
+      "size": [
+        64,
+        64
+      ],
+      "path_template": "res://assets/chars/char_full_dead_%02d.png",
+      "note": "阵亡",
+      "frames_design": "3"
+    },
+    {
+      "id": "veh_track_roll",
+      "category": "载具",
+      "layer": "Track",
+      "frames": 4,
+      "fps": "速度驱动",
+      "loop": "循环",
+      "size": null,
+      "path_template": "res://assets/vehicles/veh_track_roll_%02d.png",
+      "note": "履带滚动",
+      "frames_design": "4"
+    },
+    {
+      "id": "veh_rotor_heli",
+      "category": "载具",
+      "layer": "旋翼",
+      "frames": 4,
+      "fps": "24 fps",
+      "loop": "循环",
+      "size": null,
+      "path_template": "res://assets/vehicles/veh_rotor_heli_%02d.png",
+      "note": "直升机旋翼",
+      "frames_design": "4"
+    },
+    {
+      "id": "veh_m_kill",
+      "category": "载具",
+      "layer": "Track",
+      "frames": 1,
+      "fps": "静态",
+      "loop": "—",
+      "size": null,
+      "path_template": "res://assets/vehicles/veh_m_kill_%02d.png",
+      "note": "履带变黑+冒烟",
+      "frames_design": "1"
+    },
+    {
+      "id": "veh_f_kill",
+      "category": "载具",
+      "layer": "Turret",
+      "frames": 1,
+      "fps": "静态",
+      "loop": "—",
+      "size": null,
+      "path_template": "res://assets/vehicles/veh_f_kill_%02d.png",
+      "note": "炮管下垂变黑",
+      "frames_design": "1"
+    },
+    {
+      "id": "veh_k_kill_boom",
+      "category": "载具",
+      "layer": "Full",
+      "frames": 8,
+      "fps": "24 fps",
+      "loop": "单次",
+      "size": [
+        128,
+        128
+      ],
+      "path_template": "res://assets/vehicles/veh_k_kill_boom_%02d.png",
+      "note": "殉爆爆炸",
+      "frames_design": "8"
+    },
+    {
+      "id": "veh_k_kill_wreck",
+      "category": "载具",
+      "layer": "Full",
+      "frames": 1,
+      "fps": "静态",
+      "loop": "—",
+      "size": null,
+      "path_template": "res://assets/vehicles/veh_k_kill_wreck_%02d.png",
+      "note": "烧毁残骸",
+      "frames_design": "1"
+    },
+    {
+      "id": "veh_recoil",
+      "category": "载具",
+      "layer": "炮管/Turret",
+      "frames": 0,
+      "fps": "Tween 100-200ms",
+      "loop": "单次",
+      "size": null,
+      "path_template": "res://assets/vehicles/veh_recoil_%02d.png",
+      "note": "火炮后坐回弹",
+      "frames_design": "无帧"
+    },
+    {
+      "id": "fx_muzzle_flash",
+      "category": "特效",
+      "layer": "—",
+      "frames": 3,
+      "fps": "24 fps",
+      "loop": "单次",
+      "size": [
+        32,
+        32
+      ],
+      "path_template": "res://assets/fx/fx_muzzle_flash_%02d.png",
+      "note": "枪口火光",
+      "frames_design": "3"
+    },
+    {
+      "id": "fx_tracer",
+      "category": "特效",
+      "layer": "—",
+      "frames": 1,
+      "fps": "程序驱动",
+      "loop": "—",
+      "size": [
+        8,
+        32
+      ],
+      "path_template": "res://assets/fx/fx_tracer_%02d.png",
+      "note": "曳光弹飞行",
+      "frames_design": "1"
+    },
+    {
+      "id": "fx_impact",
+      "category": "特效",
+      "layer": "—",
+      "frames": 4,
+      "fps": "16 fps",
+      "loop": "单次",
+      "size": [
+        32,
+        32
+      ],
+      "path_template": "res://assets/fx/fx_impact_%02d.png",
+      "note": "命中",
+      "frames_design": "4"
+    },
+    {
+      "id": "fx_explosion",
+      "category": "特效",
+      "layer": "—",
+      "frames": 8,
+      "fps": "24 fps",
+      "loop": "单次",
+      "size": [
+        128,
+        128
+      ],
+      "path_template": "res://assets/fx/fx_explosion_%02d.png",
+      "note": "爆炸",
+      "frames_design": "8"
+    },
+    {
+      "id": "fx_smoke",
+      "category": "特效",
+      "layer": "—",
+      "frames": 12,
+      "fps": "12 fps",
+      "loop": "循环",
+      "size": [
+        128,
+        128
+      ],
+      "path_template": "res://assets/fx/fx_smoke_%02d.png",
+      "note": "烟雾扩散",
+      "frames_design": "12"
+    },
+    {
+      "id": "fx_hit_flash",
+      "category": "特效",
+      "layer": "—",
+      "frames": 0,
+      "fps": "—",
+      "loop": "单次",
+      "size": null,
+      "path_template": "res://assets/fx/fx_hit_flash_%02d.png",
+      "note": "受击闪白",
+      "frames_design": "无帧"
+    }
+  ]
+}

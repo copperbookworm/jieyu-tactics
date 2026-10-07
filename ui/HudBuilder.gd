@@ -530,10 +530,28 @@ func update_capture() -> void:
 			players_inside, enemies_inside]
 
 
+## 爆破键文案随状态走（2026-10-07 第八十三版）：安放读条中 / 抛物飞行中 / 已落地待起爆。
+## 值没变就不写（与 hp_label 同一条省法：Label 重写会触发重排与重绘）。
+func _update_explosive_button() -> void:
+	if explosive_button == null or main.explosive_ctl == null:
+		return
+	# main.explosive_ctl 是鸭子类型（Variant）：整条链推不出类型，显式标 String
+	var label: String = "爆破"
+	if bool(main.explosive_ctl.is_casting()):
+		label = "安放中"
+	elif bool(main.explosive_ctl.is_flying()):
+		label = "飞行中"
+	elif bool(main.explosive_ctl.is_armed()):
+		label = "起爆"
+	if explosive_button.text != label:
+		explosive_button.text = label
+
+
 ## 兵种 / 武器 / 姿态 / 载具状态标签（载具里显示车体与装甲，步兵显示连发与散布）
 func update_role() -> void:
 	if role_label == null or main == null or main.player == null:
 		return
+	_update_explosive_button()
 	var vehicle = main.vehicles.vehicle if main.vehicles != null else null
 	# 瞄高键只在武器位显示（8.4.4）：步兵 / 驾驶位 / 报废车都不出现
 	# vehicle 是鸭子类型（Variant）：这条链推不出类型，必须显式标 bool
@@ -558,15 +576,23 @@ func update_role() -> void:
 			vehicle.hp, vehicle.max_hp, vehicle.armor_summary("front")]
 		return
 	# 炸药余量（2026-10-04）：工程兵才 >0；读的是控制器实时算出的剩余，不另存一份
+	# 2026-10-07 第八十三版：再带一段**状态**（安放中 xx% / 飞行中 / 待起爆），读条看得到进度
 	var charges := 0
+	var charge_state := ""
 	if main.explosive_ctl != null:
 		charges = main.explosive_ctl.remaining()
-	role_label.text = "%s ｜ %s ｜ 标记 %.0f s\n%s%s ｜ 连发 %d 发 ｜ 散布 ×%.2f ｜ 间瞄 %d 发 ｜ 爆破 %d 发" % [
+		if bool(main.explosive_ctl.is_casting()):
+			charge_state = "（安放中 %d%%）" % int(float(main.explosive_ctl.cast_progress()) * 100.0)
+		elif bool(main.explosive_ctl.is_flying()):
+			charge_state = "（飞行中）"
+		elif bool(main.explosive_ctl.is_armed()):
+			charge_state = "（待起爆）"
+	role_label.text = "%s ｜ %s ｜ 标记 %.0f s\n%s%s ｜ 连发 %d 发 ｜ 散布 ×%.2f ｜ 间瞄 %d 发 ｜ 爆破 %d 发%s" % [
 		RoleTable.role_name(main.player_role), main.player.weapon_name(),
 		RoleTable.mark_duration(main.player_role), main.player.posture_name(),
 		"（依托）" if main.player.is_supported() else "",
 		main.player.burst_shots(), main.player.effective_spread_moa() / GameConfig.WEAPON_MOA,
-		0 if main.indirect == null else main.indirect.ammo, charges]
+		0 if main.indirect == null else main.indirect.ammo, charges, charge_state]
 
 
 ## 聚焦开关：准心收窄 + 散布收紧 + 屏幕边缘暗角；画面不放大，全局视野不损失。

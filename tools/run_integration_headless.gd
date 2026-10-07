@@ -24,6 +24,13 @@ extends SceneTree
 const SETTLE_SECONDS := 1.0      # 先跑 1 s 让相机/玩家/节点进入稳定状态
 const LATE_SECONDS := 2.5        # 再跑一会儿：覆盖「报点提示 1.6 s 自动消失」
 const VICTORY_FRAMES := 10       # 让 CaptureZone._process 自己翻蓝并广播
+## 2026-10-07 第八十三版（docx ㊼）：真时间读条的等待上限 —— 安放读条是 1.5 s，给到 4 s 富余
+const CAST_REALTIME_TIMEOUT_S := 4.0
+## 炸药纯逻辑（只读常量与静态函数，无 autoload 依赖，可以编译期引用）
+const ExplosiveSystemScript := preload("res://systems/explosives/ExplosiveSystem.gd")
+## 本局模式规则（㊺ 自伤口径就是读它的 friendly_fire）——同样无 autoload 依赖
+const MatchRulesScript := preload("res://systems/match/MatchRules.gd")
+const ModeTableScript := preload("res://data/config/ModeTable.gd")
 ## 地图世界图层的数据源（2026-10-01 ④）：只读组 + Main 公开字段，无 EventBus 依赖，可以编译期引用
 const MapLayerSourceScript := preload("res://ui/MapLayerSource.gd")
 ## 载具表（只读、无 autoload 依赖）：用真实装甲口径验「两发导弹打爆主战坦克」
@@ -137,7 +144,16 @@ func _process(delta: float) -> bool:
 				_check_finish_off_pose()
 				# 候选 O 第三轮：被击倒时的视角（会把玩家打死，必须是最后一项）
 				# 2026-10-04 炸药 / 工程兵：会挪玩家与炸掉一个掩体，放最后一段（被击倒之前）
+				# 2026-10-07 第八十三版：拆成「同步段 + 真实时间段」。
+				#   同步段把状态机每条边都走一遍（手动 tick 推进时间）；末尾**起一次真读条**留给
+				#   下一阶段，由 ExplosiveController._process 自己走完 —— 以此证明「读条真的接在
+				#   每帧上」，而不是只有测试手动 tick 才动。
 				_check_explosive()
+				_phase = 4
+				_elapsed = 0.0
+		4:
+			if _main.explosive_ctl.is_ready() or _elapsed >= CAST_REALTIME_TIMEOUT_S:
+				_check_explosive_realtime()
 				_check_downed()
 				print("—— 集成冒烟：通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 				if _failed > 0:
@@ -1564,23 +1580,32 @@ func _check_true(title: String, condition: bool) -> void:
 	_check(title, condition, true)
 
 
-# ────────────── ⑩ 炸药 / 工程兵（2026-10-04 使用者拍板）──────────────
+# ────────────── ⑩ 炸药 / 工程兵（2026-10-04 拍板；2026-10-07 第八十三版补 ㊺㊻㊼）──────────────
 
-## 端到端：工程兵按「爆破」在准心落点放一枚 → 再按一次遥控起爆 → 掩体吃结构值。
+## 同步段：把炸药状态机的每条边走一遍（时间用 tick 手动推进），末尾**起一次真读条**交给下一阶段。
 ## 为什么放最后一段：它会挪玩家、还会当场炸掉一个掩体，不能污染上面那些结算结论。
 func _check_explosive() -> void:
 	_check_true("爆破键在 HUD 上（(700,340)：3×3 集群与摇杆触摸圈之外）",
 			_main.hud.explosive_button != null)
+	# 前置清场：_check_vehicle_smoke 直接给 ifv.operator 挂了玩家且没清 ——
+	# 而「载具里不能放炸药」是 ㊻ 之后的一道硬门禁，不清场这一整段都会红。
+	if _main.vehicles.vehicle != null and _main.vehicles.vehicle.is_occupied():
+		_main.vehicles.toggle()
+	_check_true("炸药前置：玩家在车下（步兵炸药只在车下可用）",
+			not _main.explosive_ctl.in_vehicle())
 	# 切到工程兵（携带 2 发）
 	_main.player_role = RoleTable.Role.ENGINEER
 	_main.player.apply_role(_main.player_role)
 	_check("工程兵：携带 2 发炸药", _main.explosive_ctl.total(), 2)
 	_check("开局满装：剩余 = 携带", _main.explosive_ctl.remaining(), 2)
-	# 先钉「超距拒绝」：准心放到 500 m 外，按了必须不消耗、也不放
+
+	# ① 射程：500 m 拒绝（既不起读条，也不消耗）
 	_main.camera_controller.crosshair_world = _main.player.global_position + Vector2(500.0, 0.0)
 	_main.explosive_ctl.toggle()
-	_check_true("超距（500 m）拒绝放置：没有待爆药", not _main.explosive_ctl.is_armed())
+	_check_true("超距（500 m）拒绝：既没读条也没待爆药",
+			not _main.explosive_ctl.is_casting() and not _main.explosive_ctl.is_armed())
 	_check("超距拒绝不消耗发数", _main.explosive_ctl.remaining(), 2)
+
 	# 找一个还完好的掩体，把玩家挪到它旁边、准心对准它
 	var cover = null
 	for node in get_nodes_in_group("occluder"):
@@ -1590,17 +1615,134 @@ func _check_explosive() -> void:
 	if cover == null:
 		_check_true("场上有可用的掩体可炸", false)
 		return
-	_main.player.global_position = (cover as Node2D).global_position + Vector2(5.0, 0.0)
-	_main.camera_controller.crosshair_world = (cover as Node2D).global_position
+	var cover_pos: Vector2 = (cover as Node2D).global_position
+	var stand: Vector2 = cover_pos + Vector2(5.0, 0.0)
+	_main.player.global_position = stand
+	_main.camera_controller.crosshair_world = cover_pos
+
+	# ② 贴放读条（㊼）：按一下**不会**立刻放好
+	_main.explosive_ctl.toggle()
+	_check_true("≤15 m 走贴放：进入安放读条", _main.explosive_ctl.is_casting())
+	_check_true("读条中还没有待爆药", not _main.explosive_ctl.is_armed())
+	_check("读条中不消耗发数", _main.explosive_ctl.remaining(), 2)
+	_check_true("读条进度从 0 起（HUD 有进度可读）", _main.explosive_ctl.cast_progress() < 0.01)
+	_main.hud.update_role()
+	_check_true("爆破键文案随读条变「安放中」", _main.hud.explosive_button.text == "安放中")
+	_check_true("角色状态行带上读条进度（安放中）", _main.hud.role_label.text.contains("安放中"))
+
+	# ③ 移动打断
+	_main.player.global_position = stand + Vector2(4.0, 0.0)
+	_main.explosive_ctl.tick(0.1)
+	_check_true("读条中移动 ⇒ 打断（㊼「安放中被打断怎么办」）",
+			not _main.explosive_ctl.is_casting() and not _main.explosive_ctl.is_armed())
+	_check("移动打断不消耗发数", _main.explosive_ctl.remaining(), 2)
+
+	# ④ 开火打断：走**真信号**（HUD 开火键同时接 PlayerFireController 与炸药模块）
+	_main.player.global_position = stand
+	_main.camera_controller.crosshair_world = cover_pos
+	_main.explosive_ctl.toggle()
+	_check_true("重新开始安放", _main.explosive_ctl.is_casting())
+	_main.hud.fire_button.fired.emit()
+	_check_true("读条中开火 ⇒ 打断（fired 真接到了炸药模块）",
+			not _main.explosive_ctl.is_casting())
+	_check("开火打断不消耗发数", _main.explosive_ctl.remaining(), 2)
+
+	# ⑤ 受击打断
+	_main.player.global_position = stand
+	_main.explosive_ctl.toggle()
+	_check_true("再次开始安放", _main.explosive_ctl.is_casting())
+	var hp_keep := float(_main.player.hp)
+	_main.player.hp = hp_keep - 5.0
+	_main.explosive_ctl.tick(0.05)
+	_check_true("读条中挨打 ⇒ 打断", not _main.explosive_ctl.is_casting())
+	_check("受击打断不消耗发数", _main.explosive_ctl.remaining(), 2)
+	_main.player.hp = hp_keep
+
+	# ⑥ 走完读条才真落地 → 遥控起爆 → 掩体吃结构值
+	_main.player.global_position = stand
+	_main.camera_controller.crosshair_world = cover_pos
+	_main.explosive_ctl.toggle()
+	_main.explosive_ctl.tick(ExplosiveSystemScript.PLACE_CAST_S + 0.01)
+	_check_true("读条走完才真放好", _main.explosive_ctl.is_armed())
+	_check_true("贴放落地后不在飞行态", not _main.explosive_ctl.is_flying())
+	_check("安放消耗 1 发（2 → 1）", _main.explosive_ctl.remaining(), 1)
 	var hp_before := float(cover.get("hp"))
-	_main.explosive_ctl.toggle()          # 在准心落点放
-	_check_true("工程兵：在准心落点放下一枚", _main.explosive_ctl.is_armed())
-	_check("放置消耗 1 发（2 → 1）", _main.explosive_ctl.remaining(), 1)
 	_main.explosive_ctl.toggle()          # 遥控起爆
 	_check_true("遥控起爆：掩体吃到结构值（或直接摧毁）",
 			bool(cover.get("destroyed")) or float(cover.get("hp")) < hp_before)
 	_check_true("起爆后没有残留待爆药", not _main.explosive_ctl.is_armed())
 	_check("起爆本身不再消耗发数（剩余仍是 1）", _main.explosive_ctl.remaining(), 1)
+
+	# ⑦ 投掷（㊻）：>15 m 自动改抛物线；飞行中不能起爆，落地后可以
+	_main.player.global_position = stand
+	var throw_to: Vector2 = stand + Vector2(25.0, 0.0)
+	_main.camera_controller.crosshair_world = throw_to
+	_main.explosive_ctl.toggle()
+	_check_true("25 m 走投掷：有待爆药但还在飞",
+			_main.explosive_ctl.is_armed() and _main.explosive_ctl.is_flying())
+	_check_true("飞行中不是「可起爆」态", not _main.explosive_ctl.is_ready())
+	_check("投掷消耗 1 发（1 → 0）", _main.explosive_ctl.remaining(), 0)
+	_main.hud.update_role()
+	_check_true("爆破键文案飞行中变「飞行中」", _main.hud.explosive_button.text == "飞行中")
+	_main.explosive_ctl.toggle()          # 飞行中按一下必须被拒
+	_check_true("飞行中按起爆被拒（药还在飞）", _main.explosive_ctl.is_flying())
+	var flight: float = ExplosiveSystemScript.throw_flight_time(25.0)
+	_main.explosive_ctl.tick(flight * 0.5)
+	_check_true("半程仍在飞", _main.explosive_ctl.is_flying())
+	var mid: Vector2 = _main.explosive_ctl.placed.global_position
+	_check_true("半程位置在地面连线中点附近（抛物线只抬表现、不改落点）",
+			mid.distance_to(stand.lerp(throw_to, 0.5)) < 0.5)
+	_main.explosive_ctl.tick(flight)
+	_check_true("飞完自己落地", not _main.explosive_ctl.is_flying())
+	_check_true("落地后可起爆", _main.explosive_ctl.is_ready())
+	_main.hud.update_role()
+	_check_true("爆破键文案落地后变「起爆」", _main.hud.explosive_button.text == "起爆")
+	_main.explosive_ctl.toggle()          # 落地后遥控起爆
+	_check_true("落地起爆：没有残留待爆药", not _main.explosive_ctl.is_armed())
+
+	# ⑧ 自伤口径（㊺ · 使用者选择题 A：跟本局模式走）
+	# 测试侧把发数给回 —— 上面两条流已经用光工程兵的 2 发；这一段验的是「打谁」而不是配给量，
+	# 所以直接复位 used，不为了省发数砍掉断言。
+	_main.explosive_ctl.used = 0
+	MatchRulesScript.reset()
+	_check_true("炸药自伤前置：默认模式（休闲）关友伤", not MatchRulesScript.friendly_fire())
+	var hp_idle := float(_main.player.hp)
+	_main.player.global_position = stand
+	_main.camera_controller.crosshair_world = stand + Vector2(6.0, 0.0)
+	_main.explosive_ctl.toggle()
+	_main.explosive_ctl.tick(ExplosiveSystemScript.PLACE_CAST_S + 0.01)
+	_main.explosive_ctl.toggle()
+	_check("㊺ 休闲（关友伤）：炸药不伤玩家自己", float(_main.player.hp), hp_idle)
+	# 竞技开友伤 ⇒ 同一个位置、同一发药，自己掉血（「贴脸＝自杀」那条配套）
+	MatchRulesScript.set_mode(ModeTableScript.Mode.PVP_RANKED)
+	_check_true("炸药自伤前置：竞技开友伤", MatchRulesScript.friendly_fire())
+	_main.player.global_position = stand
+	_main.camera_controller.crosshair_world = stand + Vector2(6.0, 0.0)
+	_main.explosive_ctl.toggle()
+	_main.explosive_ctl.tick(ExplosiveSystemScript.PLACE_CAST_S + 0.01)
+	_main.explosive_ctl.toggle()
+	_check_true("㊺ 竞技（开友伤）：玩家自己也在半径内掉血", float(_main.player.hp) < hp_idle)
+	MatchRulesScript.reset()
+	_main.player.hp = hp_idle
+
+	# ⑨ 真时间读条：起一次**不手动 tick** 的安放，交给下一阶段由 _process 走完
+	_main.explosive_ctl.used = 0
+	_main.player.global_position = stand
+	_main.camera_controller.crosshair_world = cover_pos
+	_main.explosive_ctl.toggle()
+	_check_true("真时间读条：已开始（下一阶段由 _process 推进）",
+			_main.explosive_ctl.is_casting())
+
+
+## 真实时间段（第八十三版）：证明安放读条是**每帧在走**的 —— 进来时上一阶段已经起了
+## 一次「不手动 tick」的贴放读条，这里只等，不推时间。
+func _check_explosive_realtime() -> void:
+	_check_true("真时间读条：_process 自己把读条走完（没手动 tick）",
+			_main.explosive_ctl.is_armed() and not _main.explosive_ctl.is_casting())
+	_check_true("真时间读条：走完即落地态、可以起爆", _main.explosive_ctl.is_ready())
+	_check("真时间读条：真落地才扣发（2 → 1）", _main.explosive_ctl.remaining(), 1)
+	_main.explosive_ctl.toggle()
+	_check_true("真时间读条：起爆后没有残留待爆药", not _main.explosive_ctl.is_armed())
 	# 收尾：切回步枪兵 —— 别让后面的检查读到工程兵（换武器 / 携带量都不同）
 	_main.player_role = RoleTable.Role.RIFLEMAN
 	_main.player.apply_role(_main.player_role)

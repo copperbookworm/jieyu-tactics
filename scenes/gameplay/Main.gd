@@ -182,6 +182,8 @@ func _check_data_tables() -> void:
 func _wire_signals() -> void:
 	# HUD 控件
 	hud.fire_button.fired.connect(fire_ctl.fire)
+	# 2026-10-07（docx ㊼）：开火也算「安放中被打断」的一种 —— 同一条 fired 信号多接一处
+	hud.fire_button.fired.connect(explosive_ctl.notify_fired)
 	hud.focus_button.focus_changed.connect(hud.apply_focus)
 	hud.mark_wheel.mark_requested.connect(mark_ctl.place_at_crosshair)
 	hud.command_wheel.command_requested.connect(mark_ctl.send_command)   # 4.13 快捷指令

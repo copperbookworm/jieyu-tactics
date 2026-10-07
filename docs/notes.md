@@ -66,6 +66,15 @@
   会产出 0 字节空 loose object。修复：`git hash-object -w <文件>` 强制重写 → `git fsck --full` 验证。
   本机（Windows）不适用，保留作历史。
 
+- **Godot 的 ConfigFile 里 `#` 不是注释（2026-10-07 实测，咬了一整轮发布）**：`export_presets.cfg` /
+  `project.godot` 这类 `ConfigFile` 文件只有 **`;`** 是注释行。以 `#` 开头的一行会被当成 `key=value` 去解析，
+  **并且把紧跟其后的那一条键一起吃掉**。现象极具误导性：`keystore/release_user` 与 `keystore/release_password`
+  都读到了，只有 `keystore/release` 变成 `<缺>` ⇒ 导出报「代码签名: 找不到发布密钥库，无法导出」，
+  而路径、文件、口令、权限全都是对的（换了 `res://` 路径、换了盘符写法都一样失败）。
+  **定位手法**：写一个 `extends SceneTree` 的脚本，用 `ConfigFile.load()` 把可疑的键逐个 `get_value()` 打印出来
+  ——比对着文件猜快得多（`tools/diag_export_preset.gd` 就是为这件事留下的工具）。
+  **结论**：这类文件里**一个注释都不要写**，说明写进 `docs/`。（另：`project.godot` 被 Godot 保存时会丢掉 `;` 注释。）
+
 ## 3. 《解域》设计定标（源头：`[JIEYU]/squad-2d/解域游戏.docx`）
 
 - **[f030] 定位**：2D 俯视战术射击手游，受 Squad 启发，五节点 RAAS + 白旗点五结构，

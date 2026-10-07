@@ -1,6 +1,47 @@
 《解域》jieyu-1 开发进度
 ========================
-最后更新：2026-10-07（**第八十六版 · 美术产线规格（第 1 步）**：把「美术该画什么、多大、叫什么」从两张人读 CSV 变成**可执行规格** —— 新增 assets/spec/art_manifest.json（**55 条资产 ＋ 25 条动画**，覆盖设计表全部 54 行）＋ 门禁 tools/check_art_manifest.gd（跑批第 4 条门禁）。尺寸口径按使用者拍板「**以工程 HUD 实际 rect 为准**」⇒ 与设计表有 4 处不一致（准心 12→32、按钮 6×88×88→24×24 九宫格、摇杆 240/96→180/81、全屏层 1920×1080→960×540）。**第一批 14 张**已定死并列进 docs/美术资产规格.md，可直接开工） ｜ git HEAD（本轮开工时）：389d260（第八十五版 · 受攻增援）
+最后更新：2026-10-07（**第八十七版 · 发布收口**：把第 31 章从「口径」做成「可执行」—— 包名 `com.example.jieyu1` → **`io.github.copperbookworm.jieyu`**、versionName → **0.1.0**、建 release keystore（不入库）、三张启动器图标接入预设；新增 **release_check.ps1（13 项发布前置断言）**；export_android.ps1 扩成五步并支持 **-Format aab**。**真出一条命令、无人值守跑出来的签名 AAB**：38.3 MB / SHA256 `45A7FECB…` / `jarsigner -verify` 退出码 0 / 证书 `CN=JIEYU Release`。过程中定位并记录四条环境/引擎坑（含「Godot 自带 release 签名链在本机接不通」与「`#` 不是 Godot ConfigFile 的注释」）） ｜ git HEAD（本轮开工时）：c50203c（第八十六版 · 美术产线规格）
+本次更新：本轮做**第八十七版 · 发布收口**（使用者：「需不需要我拍板就带我做选择题」）：
+	· **开工前的两个选择题（都取推荐档）**：① 正式包名 ＝ **io.github.copperbookworm.jieyu**（用 GitHub 用户名反写，不必自己有域名，Play 接受）；
+	  ② release keystore ＝ **我在本机生成、口令随机写进 D:\\keys\\（不入库），本轮真出签名 AAB**。
+	· **落地的发布身份**（export_presets.cfg）：包名 ↑、App 名「解域」、versionCode 1 / versionName **0.1.0**、
+	  minSdk 24 / targetSdk 36 / 仅 arm64-v8a；`keystore/release` 指向 `D:/keys/jieyu-release.keystore`（alias `jieyu`，RSA 4096，10000 天，PKCS12），
+	  **`keystore/release_password` 故意留空** —— 口令只在导出窗口内由脚本注入，导出后整文件还原。
+	· **启动器图标**（程序生成的占位，深色底 + 准心箭头 #7bd88f）：`assets/icons/app_icon_192 / _512 / _fg_432 / _bg_432.png`，
+	  三张已接进预设的 launcher_icons；同时登记进 `assets/spec/art_manifest.json`（59 条，batch1 18 条）——
+	  美术规格门禁的「入库盘点」因此第一次报出 **已入库 4 / 59**（此前一直是 0，正好验证了盘点器是活的）。
+	· **新增 tools/android_overrides/release_check.ps1（13 项发布前置断言）**：包名不是 com.example.*、versionName 语义化、
+	  versionCode ≥ 1、minSdk 显式 24、工作区 export_format 保持 0（APK 态）、**release_password 必须为空**、
+	  keystore 与口令文件在、三张图标尺寸正确、**申请权限 = 隐私声明里的集合**、.gitignore 挡住签名材料。**当前 13/13 全过**。
+	· **export_android.ps1 扩成五步**：跑测试 → 导出窗口内本地覆盖（格式 / 关掉 Godot 自带签名）→ 导出 → splash 补丁 → 复核；
+	  新增 `-Format apk|aab`（不做第二份 230 行的重复预设，窗口内临时改 `gradle_build/export_format`、finally 还原，崩溃残留下次自愈）。
+	· **真产物（本轮实跑）**：`D:\\Godot4.7_Proj\\APK\\jieyu-0.1.0.aab`，**38.3 MB**，SHA256 `45A7FECB32D2B0AE7335EED8030199EB30F2C997F6E6E92CD56F172C500B3793`，
+	  `jarsigner -verify` **退出码 0**，证书 `CN=JIEYU Release, OU=Game, O=copperbookworm, C=CN`。**全程无需人工干预**。
+	· **新增 docs/发布收口.md**：发布身份表 / 两条出包命令 / 权限与**隐私声明草稿**（可直接贴托管页，主体与邮箱留占位）/
+	  数据安全表单逐项填法 / 商店素材清单（图标 ✅，特色图、截图、文案仍缺）/ 版本号纪律 / 还没做的五项。
+	· **本轮最值钱的四条实测（都写进文档与注释了）**：
+	  ① **Godot 4.7.1 自带的 release 签名链在本机接不通**：preset 里 keystore/release 三样**都读得到**（用 ConfigFile 在导出窗口内逐键打印验证），
+	     但 `--verbose` 显示 Godot 交给 Gradle 的命令行是 `-Pperform_signing=true` 且**一个 keystore 属性都没有** ⇒ 报「代码签名: 找不到发布密钥库」。
+	     换 `res://` / 相对路径 / 反斜杠 / APK 全都一样失败。**结论：改成「Godot 出未签名包 + 我们自己签」** ——
+	     AAB 用 `jarsigner`（v1，Play upload key 的标准做法）、APK 用 `apksigner`（v1+v2+v3）。
+	  ② **`#` 不是 Godot ConfigFile 的注释（只有 `;` 是）**：我在 export_presets.cfg 里给 keystore 三行加了 `#` 说明，
+	     结果 Godot 把紧跟其后的 `keystore/release` **整条吃掉**（`release_user` / `release_password` 却读得到）——
+	     现象极具误导性，对着文件猜了两轮没结论；写了个 `extends SceneTree` 的脚本用 `ConfigFile.load()` 逐键打印才一眼看清。
+	     该脚本已留成常驻工具 **tools/diag_export_preset.gd**。
+	  ③ **导出「假死」的真正治法不是 `org.gradle.daemon=false`**：关掉 daemon 后 java 进程就是**构建 JVM**，
+	     看门狗一 kill 就当场打断构建（gradle 报「Android 项目构建失败」，白出一枚坏 AAB —— 本轮实测踩到并作废）；
+	     正确做法是保留 daemon，看门狗在**产物写好并稳定 90 s 后**只收命令行含 `GradleDaemon` 的**空闲**进程。
+	  ④ **PS 5.1 的 `Start-Process` 在本机抛异常**（环境同时有 `NO_PROXY` 与 `no_proxy`，大小写不敏感字典冲突）⇒ 改用 .NET `Process` 起进程。
+	     另：`jarsigner` 的输出是**本地化**的，不能用英文关键字 `jar verified` 判断（中文 JVM 上假红过一次），改用**退出码 + 证书 CN**。
+	· **复跑验收（本轮真跑）**：单元 57 脚本 ＋ **4 门禁** ＝ **61 个 / 未全绿 0**（断言 **2166 项**，--jobs=1 逐条求和）、
+	  集成冒烟 **316 / 0**，**两个退出码都是 0**、集成 SCRIPT ERROR **0 条**；AAB 38.3 MB 且签名验证通过。
+	· **规模（LF 字节口径）**：① 含 android/ 与 .dsh/、不含 addons / gdtoolkit / .godot ⇒ **203 个 .gd / 37901 行**；
+	  ② 工程主体（再扣 android / .dsh / docs）⇒ **196 个 .gd / 36884 行**。
+	· **docx 改了这些**（备份 squad-2d/解域游戏.docx.bak122）：**31.7 仍未做** ＋1 段（31.1 包名与 31.3 签名版本两条已落地 + AAB 实测数字）；
+	  第十九章 ＋1 段（第八十七版发布收口总述）；20.2 ＋1 段（⑭ 已落地清单）；20.5 ＋1 段（⑤ 假死与新登记五项未做）。
+	· **结构复核（python-docx）**：段落 1575 → **1579**（＋4）、表格 **14 未变**、Heading 1 **32** / Heading 2 **125**；文件可重开。
+	· **6 张设计 CSV 仍未动**（本轮无设计表结构变更）。
+上一轮抬头（原文保留）最后更新：2026-10-07（**第八十六版 · 美术产线规格（第 1 步）**：把「美术该画什么、多大、叫什么」从两张人读 CSV 变成**可执行规格** —— 新增 assets/spec/art_manifest.json（**55 条资产 ＋ 25 条动画**，覆盖设计表全部 54 行）＋ 门禁 tools/check_art_manifest.gd（跑批第 4 条门禁）。尺寸口径按使用者拍板「**以工程 HUD 实际 rect 为准**」⇒ 与设计表有 4 处不一致（准心 12→32、按钮 6×88×88→24×24 九宫格、摇杆 240/96→180/81、全屏层 1920×1080→960×540）。**第一批 14 张**已定死并列进 docs/美术资产规格.md，可直接开工） ｜ git HEAD（本轮开工时）：389d260（第八十五版 · 受攻增援）
 本次更新：本轮做**第八十六版 · 美术产线规格与入库校验**（使用者原话：「先结清 A 档 3 条……同时起美术产线：定死命名/尺寸/帧数再产出，入库按 asset-pipeline 技能校验。你出资产、我负责规格校验与接线」）：
 	· **先按技能规矩读现状**（asset-pipeline 技能 + 它自带的 check_assets.py）：设计表 **54 行 / 7 列 / UTF-8 带 BOM**；
 	  动画表 **25 行 / 10 列**；状态分布 **51 待制作 / 2 待谈定 / 1 已制作（程序生成起手稿）**；

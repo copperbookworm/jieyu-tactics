@@ -22,3 +22,13 @@ gdtoolkit/
 # 性能产物（CSV 等）**不要放在工程内**：Godot 会把 .csv 当翻译表导入，
 # 生成 *.csv.import / *.translation。放到 D:\Godot4.7_Proj\_perf\。
 /_perf/
+
+# 签名材料：release keystore 与口令**永不入库**
+# （release-engineering-android 技能铁律 3；keystore 丢了 = 这个 App 永远无法再更新）
+*.keystore
+*.jks
+*.p12
+*-PASSWORD.txt
+
+# 出包包装脚本在导出前后做「本地覆盖」时留下的备份（正常情况会自动删掉）
+/_release_cfg_backup/

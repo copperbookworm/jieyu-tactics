@@ -69,4 +69,13 @@ if ($gradleText -notmatch "jieyu_splash_fix\.gradle") {
 	Write-Host "[android] build.gradle 已含该 apply from，跳过"
 }
 
+# 6) GradleDaemon 与导出「假死」（2026-10-07 第八十七版实测，别重复踩）：
+#    常驻 GradleDaemon 会继承本次导出进程的 stdout 管道且不释放 ⇒ 用管道读 Godot 输出的脚本
+#    永远等不到 EOF，表现为「包已写好、脚本却一直 running」（AGENTS.md 记过，有一次拖了 24 分钟）。
+#    正确做法**不是**在 gradle.properties 关掉 daemon —— 实测那样做的话，java 进程就是**构建 JVM**，
+#    看门狗一 kill 就当场把构建打断（gradle 报「Android 项目构建失败」，白出一枚坏 AAB）。
+#    正确做法是保留 daemon，由 export_android.ps1 的看门狗在**产物写好并稳定 90 s 后**
+#    只收命令行含 GradleDaemon 的**空闲**进程。这里不需要改任何文件。
+Write-Host "[android] GradleDaemon 的假死由 export_android.ps1 的看门狗处理（本步无需改文件）"
+
 Write-Host '[android] 导出前设 JAVA_HOME 到 JDK 17；推荐直接用 tools\android_overrides\export_android.ps1'

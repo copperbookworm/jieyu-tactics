@@ -36,7 +36,11 @@
     "ui_mark_rally",
     "ui_button_nineslice",
     "ui_joystick_base",
-    "ui_joystick_knob"
+    "ui_joystick_knob",
+    "app_icon_192",
+    "app_icon_512",
+    "app_icon_fg_432",
+    "app_icon_bg_432"
   ],
   "assets": [
     {
@@ -983,6 +987,78 @@
       "path": "res://assets/units/unit_quadruped.png",
       "format": "PNG",
       "note": "待谈定（22.8 厂商合作）"
+    },
+    {
+      "id": "app_icon_192",
+      "design_row": 0,
+      "design_name": "应用图标（发布必需）",
+      "category": "图标",
+      "design_spec": "不在设计表里（Play 商店与 Android 启动器要求）",
+      "design_status": "已制作（程序生成起手稿）",
+      "faction": "通用",
+      "size": [
+        192,
+        192
+      ],
+      "size_source": "engineering(Android launcher_icons/main_192x192)",
+      "batch": 1,
+      "path": "res://assets/icons/app_icon_192.png",
+      "format": "PNG",
+      "note": "发布必需：Play 商店图标 / Android 启动器图标。当前是程序生成的**占位**（深色底 + 准心箭头 #7bd88f），正式图标属于美术产出。"
+    },
+    {
+      "id": "app_icon_512",
+      "design_row": 0,
+      "design_name": "应用图标（发布必需）",
+      "category": "图标",
+      "design_spec": "不在设计表里（Play 商店与 Android 启动器要求）",
+      "design_status": "已制作（程序生成起手稿）",
+      "faction": "通用",
+      "size": [
+        512,
+        512
+      ],
+      "size_source": "engineering(Play 商店要求 512×512)",
+      "batch": 1,
+      "path": "res://assets/icons/app_icon_512.png",
+      "format": "PNG",
+      "note": "发布必需：Play 商店图标 / Android 启动器图标。当前是程序生成的**占位**（深色底 + 准心箭头 #7bd88f），正式图标属于美术产出。"
+    },
+    {
+      "id": "app_icon_fg_432",
+      "design_row": 0,
+      "design_name": "应用图标（发布必需）",
+      "category": "图标",
+      "design_spec": "不在设计表里（Play 商店与 Android 启动器要求）",
+      "design_status": "已制作（程序生成起手稿）",
+      "faction": "通用",
+      "size": [
+        432,
+        432
+      ],
+      "size_source": "engineering(自适应图标前景 432×432，内容留在中间安全区)",
+      "batch": 1,
+      "path": "res://assets/icons/app_icon_fg_432.png",
+      "format": "PNG",
+      "note": "发布必需：Play 商店图标 / Android 启动器图标。当前是程序生成的**占位**（深色底 + 准心箭头 #7bd88f），正式图标属于美术产出。"
+    },
+    {
+      "id": "app_icon_bg_432",
+      "design_row": 0,
+      "design_name": "应用图标（发布必需）",
+      "category": "图标",
+      "design_spec": "不在设计表里（Play 商店与 Android 启动器要求）",
+      "design_status": "已制作（程序生成起手稿）",
+      "faction": "通用",
+      "size": [
+        432,
+        432
+      ],
+      "size_source": "engineering(自适应图标背景 432×432)",
+      "batch": 1,
+      "path": "res://assets/icons/app_icon_bg_432.png",
+      "format": "PNG",
+      "note": "发布必需：Play 商店图标 / Android 启动器图标。当前是程序生成的**占位**（深色底 + 准心箭头 #7bd88f），正式图标属于美术产出。"
     }
   ],
   "animations": [

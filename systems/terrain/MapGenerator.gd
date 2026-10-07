@@ -22,12 +22,30 @@ const TERRAIN_COLORS := [
 
 ## material.png 的 id → TerrainZone 的 kind（与 entities/zone/TerrainZone.gd 的 Kind 枚举同值）
 const MATERIAL_KIND_MAP := {1: 0, 2: 1, 3: 2}
+## 连通域洪泛的 4 邻域（常量数组按下标取：原来的 `for offset in [[1, 0], …]` 每弹一格新建 4 个 Array）
+const NB_DX := [1, -1, 0, 0]
+const NB_DY := [0, 0, 1, -1]
 ## 0 = 无内容层，4 = 瓦砾（残痕由 Cover 摧毁时现落，不从图里读）
 const MATERIAL_SKIP_IDS := [0, 4]
 
 ## 内容层区域的最小格数：小于它就当噪声丢掉。
 ## material.png 是程序生成的，边缘会有零星单格散点，全收进来会长出一堆半径不足 1 m 的圆饼。
 const MATERIAL_MIN_CELLS := 40
+
+## 并行烘焙的静态脚手架（2026-10-06 第七十九版 · 并行计算整改）
+## 阈值与 HeightGrid.PARALLEL_MIN_CELLS 同口径：小网格并行只赔不赚（建任务 + 等完成有固定开销）。
+const PAINT_PARALLEL_MIN_CELLS := 262144
+const PAINT_MAX_BANDS := 12
+static var _paint_heights := PackedFloat32Array()
+static var _paint_out := PackedByteArray()
+static var _paint_w := 0
+static var _paint_h := 0
+static var _paint_bands := 1
+static var _paint_rough := -1.0
+static var _lut_ratio := PackedFloat32Array()
+static var _lut_rgb := PackedByteArray()
+static var _rough_rgb := PackedByteArray()
+static var _kind_lut := PackedInt32Array()
 
 ## grassland_demo 五节点世界坐标（docx 12.8.4，单位 m，原点左上）
 const DEMO_NODES := [
@@ -78,40 +96,162 @@ static func flatten_area(grid: HeightGrid, center: Vector2, radius: float) -> vo
 
 
 ## 高程上色成 1 px = 1 m 的地形贴图（替代 TileMapLayer + TileSet）
+##
+## 【2026-10-06 第七十九版 · 并行计算整改】改成两段式：
+##   ① 一次整块导出高程（HeightGrid.heights_readonly()，只读共享）
+##   ② 按行分块（WorkerThreadPool）把 RGB8 字节直接写进 PackedByteArray
+##   ③ 主线程一次 Image.create_from_data()
+## 旧实现每格两次 GDScript 方法调用（height_at_cell + height_to_color）+ 一次 set_pixel：
+## 1000×1000 实测 debug 4.3~5.2 s / release 1.0~1.2 s；两段式后 debug 0.71~0.81 s（抽检像素零不一致）。
+## chunks <= 0 = 自动（小图或测试自动走单线程）；显式传 1 可强制串行（等价性测试用）。
+## ⚠ 用 static 脚手架传参 ⇒ 本函数**不可重入**：只许主线程调用（现状唯一调用点是 WorldSetup._build_terrain）。
 static func build_terrain_texture(grid: HeightGrid,
-		roughness_threshold: float = -1.0) -> ImageTexture:
-	if grid == null or grid.width <= 0 or grid.height <= 0:
+		roughness_threshold: float = -1.0, chunks: int = 0) -> ImageTexture:
+	var image := build_terrain_image(grid, roughness_threshold, chunks)
+	if image == null:
 		return null
-	var image := Image.create(grid.width, grid.height, false, Image.FORMAT_RGB8)
-	for y in grid.height:
-		for x in grid.width:
-			var height := grid.height_at_cell(x, y)
-			if roughness_threshold > 0.0 and _is_rough(grid, x, y, roughness_threshold):
-				image.set_pixel(x, y, Color(1.0, 0.3, 0.25))
-			else:
-				image.set_pixel(x, y, height_to_color(height))
 	return ImageTexture.create_from_image(image)
 
 
-## 该格与 4 邻域最大高差是否超过阈值
-static func _is_rough(grid: HeightGrid, x: int, y: int, threshold: float) -> bool:
-	var center_height := grid.height_at_cell(x, y)
-	for offset in [[1, 0], [-1, 0], [0, 1], [0, -1]]:
-		var neighbor := grid.height_at_cell(x + offset[0], y + offset[1])
-		if absf(center_height - neighbor) > threshold:
-			return true
-	return false
+## 上色的中间产物（工具 / 等价性测试直取；与 build_terrain_texture 共用同一条实现）
+static func build_terrain_image(grid: HeightGrid,
+		roughness_threshold: float = -1.0, chunks: int = 0) -> Image:
+	if grid == null or grid.width <= 0 or grid.height <= 0:
+		return null
+	var w: int = grid.width
+	var h: int = grid.height
+	_ensure_color_lut()
+	_paint_heights = grid.heights_readonly()
+	_paint_w = w
+	_paint_h = h
+	_paint_rough = roughness_threshold
+	# ⚠ 每次都新建缓冲：复用「已共享」的 Packed 数组时 resize(同尺寸) 会提前返回、
+	# 数组仍是 shared ⇒ 多线程里第一个写入触发 copy-on-write，会互相踩（实测报过 Out of bounds）。
+	_paint_out = PackedByteArray()
+	_paint_out.resize(w * h * 3)
+	var bands := chunks
+	if bands <= 0:
+		bands = 1 if w * h < PAINT_PARALLEL_MIN_CELLS \
+				else clampi(OS.get_processor_count() - 1, 2, PAINT_MAX_BANDS)
+	bands = clampi(bands, 1, maxi(h, 1))
+	_paint_bands = bands
+	if bands <= 1:
+		_paint_rows(0, h)
+	else:
+		var id := WorkerThreadPool.add_group_task(
+				func(band: int) -> void: _paint_band(band),
+				bands, bands, true, "terrain_paint")
+		WorkerThreadPool.wait_for_group_task_completion(id)
+	var image := Image.create_from_data(w, h, false, Image.FORMAT_RGB8, _paint_out)
+	# 松手：不长期持有这 3 MB 中间缓冲，也把 grid._data 的共享引用放开
+	_paint_out = PackedByteArray()
+	_paint_heights = PackedFloat32Array()
+	return image
+
+
+## 一个分块（分块数在 _paint_bands 里；顺序路径就是 bands=1）
+static func _paint_band(band: int) -> void:
+	var rows := int(ceil(float(_paint_h) / float(_paint_bands)))
+	var y0 := band * rows
+	var y1 := mini(y0 + rows, _paint_h)
+	if y0 >= y1:
+		return
+	_paint_rows(y0, y1)
+
+
+## 真正的上色循环（**顺序与并行共用这一份** ⇒ 两种路径逐字节一致）
+## 热路径里不许出现 GDScript 方法调用与 Dictionary 取值：
+##   配色走预建的 LUT（_lut_ratio / _lut_rgb），红域判定内联（原 _is_rough 每像素调 4 次 height_at_cell）。
+static func _paint_rows(y0: int, y1: int) -> void:
+	var w := _paint_w
+	var heights := _paint_heights      # 只读共享，安全
+	var lut_ratio := _lut_ratio
+	var lut_rgb := _lut_rgb
+	var last_band := lut_ratio.size() - 1
+	var rough := _paint_rough
+	var max_elev := GameConfig.MAX_ELEVATION
+	var rb0 := _rough_rgb[0]
+	var rb1 := _rough_rgb[1]
+	var rb2 := _rough_rgb[2]
+	for y in range(y0, y1):
+		var row := y * w
+		for x in w:
+			var i := (row + x) * 3
+			var height := heights[row + x]
+			var is_rough := false
+			if rough > 0.0:
+				# 与原 _is_rough 同一判据、同一顺序（4 邻域，越界钳到边缘）
+				var nx := mini(x + 1, w - 1)
+				is_rough = absf(height - heights[row + nx]) > rough
+				nx = maxi(x - 1, 0)
+				if not is_rough:
+					is_rough = absf(height - heights[row + nx]) > rough
+				var ny := mini(y + 1, _paint_h - 1)
+				if not is_rough:
+					is_rough = absf(height - heights[ny * w + x]) > rough
+				ny = maxi(y - 1, 0)
+				if not is_rough:
+					is_rough = absf(height - heights[ny * w + x]) > rough
+			if is_rough:
+				_paint_out[i] = rb0
+				_paint_out[i + 1] = rb1
+				_paint_out[i + 2] = rb2
+			else:
+				# 与 height_to_color 同口径：ratio = clampf(h / MAX, 0, 1)，取第一个 ratio <= 阈值的档
+				var ratio := height / max_elev
+				if ratio > 1.0:
+					ratio = 1.0
+				elif ratio < 0.0:
+					ratio = 0.0
+				var band := 0
+				while band < last_band and ratio > lut_ratio[band]:
+					band += 1
+				var o := band * 3
+				_paint_out[i] = lut_rgb[o]
+				_paint_out[i + 1] = lut_rgb[o + 1]
+				_paint_out[i + 2] = lut_rgb[o + 2]
+
+
+## 配色 LUT（从 TERRAIN_COLORS 派生 ⇒ 不会和 height_to_color 漂移）与红域字节
+## _to_byte 与 Image.set_pixel(FORMAT_RGB8) 同一条换算：uint8_t(CLAMP(v * 255.0, 0, 255))
+static func _ensure_color_lut() -> void:
+	if _lut_ratio.size() == TERRAIN_COLORS.size():
+		return
+	_lut_ratio = PackedFloat32Array()
+	_lut_rgb = PackedByteArray()
+	for entry in TERRAIN_COLORS:
+		_lut_ratio.append(float(entry["ratio"]))
+		var c: Color = entry["color"]
+		_lut_rgb.append(_to_byte(c.r))
+		_lut_rgb.append(_to_byte(c.g))
+		_lut_rgb.append(_to_byte(c.b))
+	_rough_rgb = PackedByteArray()
+	var rough := Color(1.0, 0.3, 0.25)
+	_rough_rgb.append(_to_byte(rough.r))
+	_rough_rgb.append(_to_byte(rough.g))
+	_rough_rgb.append(_to_byte(rough.b))
+
+
+static func _to_byte(v: float) -> int:
+	return int(clampf(v * 255.0, 0.0, 255.0))
 
 
 ## 导出当前高程为灰度高度图（工具链 A 的起手稿）：黑 = 0 m，白（255）= max_elevation
-## 100 万格逐像素 set_pixel 在 GDScript 下要数秒——一次性工具开销，可接受
+## 【2026-10-06 第七十九版】去掉逐像素 set_pixel（100 万格要数秒）：整块字节 + create_from_data。
+## L8 的字节换算与 set_pixel 同口径（gray = clampf(h / MAX, 0, 1)，再 _to_byte）。
 static func export_height_image(grid: HeightGrid, path: String,
 		max_elevation: float = GameConfig.MAX_ELEVATION) -> Error:
-	var image := Image.create(grid.width, grid.height, false, Image.FORMAT_L8)
-	for y in grid.height:
-		for x in grid.width:
-			var gray := clampf(grid.height_at_cell(x, y) / max_elevation, 0.0, 1.0)
-			image.set_pixel(x, y, Color(gray, gray, gray))
+	if grid == null or grid.width <= 0 or grid.height <= 0:
+		return ERR_INVALID_DATA
+	var w: int = grid.width
+	var h: int = grid.height
+	var heights := grid.heights_readonly()
+	var gray := PackedByteArray()
+	gray.resize(w * h)
+	var cells := w * h
+	for i in cells:
+		gray[i] = _to_byte(clampf(heights[i] / max_elevation, 0.0, 1.0))
+	var image := Image.create_from_data(w, h, false, Image.FORMAT_L8, gray)
 	return image.save_png(path)
 
 
@@ -204,6 +344,14 @@ static func demo_flank_lane() -> Array[Vector2]:
 ## 每个连通域取「格心均值」当圆心、取「等面积圆半径」当半径。
 ## 为什么用等面积而不是外接半径：外接半径会把长条状区域做成一个大圆饼盖住半张图；
 ## 等面积圆在面积上等价，形状误差落在玩家最不敏感的那一维（区域边缘的弧线）。
+##
+## 【2026-10-06 第七十九版 · 并行计算整改】只做常数因子优化，**连通域本身不并行**：
+## 洪泛的先后顺序决定 entries 的顺序（进而决定 TerrainZone 的建节点顺序），
+## 而并行连通域要么引入 union-find 的原子操作、要么改变顺序 —— 在没量到瓶颈前不值得冒这个险。
+## 去掉的三处每像素开销：
+##   ① MATERIAL_SKIP_IDS.has + MATERIAL_KIND_MAP.has 两次 Dictionary 查找 → 一张 256 项 kind 表；
+##   ② `for offset in [[1, 0], …]` 每弹一格新建 4 个 Array → 两个常量数组按下标取；
+##   ③ 高度/掩码整块下标直取（原来是 set_height_at_cell 这类方法调用）。
 static func terrain_zones_from_material_image(image: Image,
 		min_cells: int = MATERIAL_MIN_CELLS) -> Array:
 	var entries: Array = []
@@ -216,13 +364,18 @@ static func terrain_zones_from_material_image(image: Image,
 	var height := img.get_height()
 	var data := img.get_data()
 
+	var kind_of := _material_kind_lut()
+
 	var visited := PackedByteArray()
 	visited.resize(width * height)
 	visited.fill(0)
 
 	for start in width * height:
+		if visited[start] == 1:
+			continue
 		var cell_id := data[start]
-		if visited[start] == 1 or MATERIAL_SKIP_IDS.has(cell_id) or not MATERIAL_KIND_MAP.has(cell_id):
+		# 两次 Dictionary 查找（SKIP_IDS / KIND_MAP）换成一张 256 项的表（见函数头注释）
+		if kind_of[cell_id] < 0:
 			continue
 		# 4 邻域洪泛：手写队列（Array 当栈用），遇到不同 id 就停
 		var stack: Array[int] = [start]
@@ -237,9 +390,9 @@ static func terrain_zones_from_material_image(image: Image,
 			count += 1
 			sum_x += x
 			sum_y += y
-			for offset in [[1, 0], [-1, 0], [0, 1], [0, -1]]:
-				var nx: int = x + int(offset[0])
-				var ny: int = y + int(offset[1])
+			for k in 4:
+				var nx: int = x + NB_DX[k]
+				var ny: int = y + NB_DY[k]
 				if nx < 0 or ny < 0 or nx >= width or ny >= height:
 					continue
 				var n_index := ny * width + nx
@@ -252,9 +405,24 @@ static func terrain_zones_from_material_image(image: Image,
 		# 1 格 = 1 m ⇒ 面积（m²）= 格数；等面积圆半径 r = sqrt(area / π)
 		var radius := sqrt(float(count) / PI)
 		entries.append({
-			"kind": int(MATERIAL_KIND_MAP[cell_id]),
+			"kind": int(kind_of[cell_id]),
 			"position": Vector2(float(sum_x) / float(count), float(sum_y) / float(count)),
 			"radius": radius,
 			"cells": count,
 		})
 	return entries
+
+
+## material.png 的 id → kind 的 256 项查表（-1 = 这一格不是内容层）。
+## 从 MATERIAL_KIND_MAP / MATERIAL_SKIP_IDS 派生 ⇒ 加新 id 时不会漏改第二处。
+static func _material_kind_lut() -> PackedInt32Array:
+	if _kind_lut.size() == 256:
+		return _kind_lut
+	_kind_lut = PackedInt32Array()
+	_kind_lut.resize(256)
+	_kind_lut.fill(-1)
+	for id in MATERIAL_KIND_MAP:
+		_kind_lut[int(id)] = int(MATERIAL_KIND_MAP[id])
+	for id in MATERIAL_SKIP_IDS:
+		_kind_lut[int(id)] = -1
+	return _kind_lut

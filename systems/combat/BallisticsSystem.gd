@@ -167,6 +167,20 @@ static func trajectory(muzzle_velocity: float, elevation: float,
 		drag_duration: float = GameConfig.DEFAULT_DRAG_DURATION,
 		gravity: float = GameConfig.GRAVITY_EFFECTIVE) -> Array[Dictionary]:
 	var points: Array[Dictionary] = [{"x": 0.0, "height": 0.0, "time": 0.0}]
+	_integrate(muzzle_velocity, elevation, max_distance, drag_decel, drag_duration, gravity, points)
+	return points
+
+
+## 积分内核（2026-10-06 第七十九版）：trajectory() 与 trajectory_range() 共用同一段积分，
+## 免得"两份实现慢慢漂移"。collect 传数组就逐点收集，传 null 就只算落点。
+##
+## 为什么要单独给"只算落点"留一条：solve_elevation_dragged() 一次发射要跑 13 次弹道
+## （1 次 45° 射程预判 + 12 次二分），每次 200~500 步、每步一个 Dictionary +
+## Array[Dictionary] 追加 —— 旧实现实测每次发射要造 ~3000~6500 个 Dictionary。
+## 不收集时一步都不分配，数值与收集版**逐位相同**（同一段代码、同一顺序）。
+static func _integrate(muzzle_velocity: float, elevation: float, max_distance: float,
+		drag_decel: float, drag_duration: float, gravity: float,
+		collect) -> float:
 	var velocity_x := muzzle_velocity * cos(elevation)
 	var velocity_z := muzzle_velocity * sin(elevation)
 	var x := 0.0
@@ -184,19 +198,20 @@ static func trajectory(muzzle_velocity: float, elevation: float,
 		x += velocity_x * dt
 		z += velocity_z * dt
 		t += dt
-		points.append({"x": x, "height": z, "time": t})
+		if collect != null:
+			collect.append({"x": x, "height": z, "time": t})
 		step += 1
-	return points
+	return x
 
 
 ## 某仰角下的落点水平距离（打不到就很小）
+## 【2026-10-06 第七十九版】不再建 points 数组：直接走 _integrate 的"只算落点"路径。
+## 与旧实现（trajectory() 取最后一个点）数值逐位相同，等价性由 test/indirect_test.gd 钉住。
 static func trajectory_range(muzzle_velocity: float, elevation: float,
 		max_distance: float = 600.0) -> float:
-	var points := trajectory(muzzle_velocity, elevation, max_distance)
-	if points.size() <= 1:
-		return 0.0
-	var last: Dictionary = points[points.size() - 1]
-	return float(last["x"])
+	return _integrate(muzzle_velocity, elevation, max_distance,
+			GameConfig.DEFAULT_DRAG_DECEL, GameConfig.DEFAULT_DRAG_DURATION,
+			GameConfig.GRAVITY_EFFECTIVE, null)
 
 
 ## 带阻力反解仰角：0~45° 内二分（低伸解，射程在 45° 以下随仰角单调增）。

@@ -14,6 +14,50 @@ const WEIGHT_FLATNESS := 3.0
 const WEIGHT_ROAD := 1.5
 const WEIGHT_ELEV_PENALTY := 2.0
 
+## ────────────── 并行分块（2026-10-06 第七十九版 · 并行计算整改）──────────────
+## 与工程侧 HeightGrid / MapGenerator 同一口径：低于阈值走单线程，小图并行只赔不赚。
+const PARALLEL_MIN_CELLS := 262144
+const PARALLEL_MAX_BANDS := 12
+## 噪声分块脚手架
+static var _gen_out := PackedByteArray()
+static var _gen_layers: Array = []
+static var _gen_seed := 0
+static var _gen_total_amp := 0.0
+static var _gen_ratio := 0.0
+static var _gen_max_elev := 0.0
+static var _gen_octaves := 4
+static var _gen_lacunarity := 2.0
+static var _gen_gain := 0.5
+static var _gen_w := 0
+static var _gen_h := 0
+static var _gen_bands := 1
+## 内容层分块脚手架
+static var _content_doc = null
+static var _content_recipe: Dictionary = {}
+static var _content_max_elev := 0.0
+static var _content_slope_limit := 0.0
+static var _content_w := 0
+static var _content_h := 0
+static var _content_bands := 1
+static var _content_rgb := PackedByteArray()
+static var _content_l8 := PackedByteArray()
+static var _rows_image_bytes := PackedByteArray()
+static var _material_bytes := PackedByteArray()
+static var _content_counts := PackedInt32Array()
+
+
+## 分块数：chunks <= 0 = 自动（小图 1 块）
+static func _bands(chunks: int, cells: int, rows: int) -> int:
+	var bands := chunks
+	if bands <= 0:
+		bands = 1 if cells < PARALLEL_MIN_CELLS else clampi(OS.get_processor_count() - 1, 2, PARALLEL_MAX_BANDS)
+	return clampi(bands, 1, maxi(rows, 1))
+
+
+## 与 Image.set_pixel 同一条字节换算：uint8_t(CLAMP(v * 255.0, 0, 255))
+static func _to_byte(v: float) -> int:
+	return int(clampf(v * 255.0, 0.0, 255.0))
+
 
 ## ────────────── 1. 噪声基底（12.8.3）──────────────
 
@@ -22,47 +66,80 @@ const WEIGHT_ELEV_PENALTY := 2.0
 ##   water_level_m（河谷水位）/ river_axis（"y"|"x"|""）/ river_center_ratio / river_half_width_m
 static func generate_heights(recipe: Dictionary,
 		grid_w: int = GameConfig.GRID_WIDTH,
-		grid_h: int = GameConfig.GRID_HEIGHT) -> PackedByteArray:
+		grid_h: int = GameConfig.GRID_HEIGHT,
+		chunks: int = 0) -> PackedByteArray:
 	var max_elev := float(recipe.get("max_elevation_m", GameConfig.MAX_ELEVATION))
 	var seed_value := int(recipe.get("seed", GameConfig.DEFAULT_MAP_SEED))
 	var noise_layers: Array = recipe.get("layers", JieyuMapSpec.NOISE_LAYERS)
 
-	var noises: Array[FastNoiseLite] = []
 	var total_amp := 0.0
 	for layer_v in noise_layers:
-		var layer: Dictionary = layer_v
-		var noise := FastNoiseLite.new()
-		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-		noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-		noise.fractal_octaves = int(recipe.get("octaves", JieyuMapSpec.NOISE_OCTAVES))
-		noise.fractal_lacunarity = float(recipe.get("lacunarity", JieyuMapSpec.NOISE_LACUNARITY))
-		noise.fractal_gain = float(recipe.get("gain", JieyuMapSpec.NOISE_GAIN))
-		noise.frequency = 1.0 / maxf(float(layer.get("feature_m", 100.0)), 1.0)
-		noise.seed = seed_value
-		noises.append(noise)
-		total_amp += float(layer.get("amp_m", 0.0))
-	if noises.is_empty() or is_zero_approx(total_amp):
+		total_amp += float((layer_v as Dictionary).get("amp_m", 0.0))
+	if noise_layers.is_empty() or is_zero_approx(total_amp):
 		push_error("[JieyuMapGen] 噪声层为空，拒绝生成")
 		var flat := PackedByteArray()
 		flat.resize(grid_w * grid_h)
 		flat.fill(0)
 		return flat
 
-	var elevation_ratio := max_elev / total_amp
-	var data := PackedByteArray()
-	data.resize(grid_w * grid_h)
-	for y in grid_h:
-		for x in grid_w:
+	# 【2026-10-06 第七十九版 · 并行计算整改】400 万次采样按行分块并行；
+	# 每个块各自 new 一套 FastNoiseLite（同一实例跨线程共用不是文档承诺的用法），参数与 seed 一致
+	# ⇒ 逐格结果与串行相同。chunks <= 0 = 自动，显式 1 = 串行（等价性测试用）。
+	_gen_layers = noise_layers
+	_gen_seed = seed_value
+	_gen_total_amp = total_amp
+	_gen_ratio = max_elev / total_amp
+	_gen_max_elev = max_elev
+	_gen_octaves = int(recipe.get("octaves", JieyuMapSpec.NOISE_OCTAVES))
+	_gen_lacunarity = float(recipe.get("lacunarity", JieyuMapSpec.NOISE_LACUNARITY))
+	_gen_gain = float(recipe.get("gain", JieyuMapSpec.NOISE_GAIN))
+	_gen_w = grid_w
+	_gen_h = grid_h
+	_gen_bands = _bands(chunks, grid_w * grid_h, grid_h)
+	_gen_out = PackedByteArray()
+	_gen_out.resize(grid_w * grid_h)
+	if _gen_bands <= 1:
+		_noise_band(0)
+	else:
+		var id := WorkerThreadPool.add_group_task(
+				func(band: int) -> void: _noise_band(band),
+				_gen_bands, _gen_bands, true, "map_noise")
+		WorkerThreadPool.wait_for_group_task_completion(id)
+	var data := _gen_out
+	_gen_out = PackedByteArray()
+	_carve_river(data, grid_w, grid_h, recipe, max_elev)
+	return data
+
+
+## 一个噪声分块（顺序与并行共用这一份实现 ⇒ 两条路径逐字节一致）
+static func _noise_band(band: int) -> void:
+	var rows := int(ceil(float(_gen_h) / float(_gen_bands)))
+	var y0 := band * rows
+	var y1 := mini(y0 + rows, _gen_h)
+	if y0 >= y1:
+		return
+	var noises: Array[FastNoiseLite] = []
+	for layer_v in _gen_layers:
+		var layer: Dictionary = layer_v
+		var noise := FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+		noise.fractal_octaves = _gen_octaves
+		noise.fractal_lacunarity = _gen_lacunarity
+		noise.fractal_gain = _gen_gain
+		noise.frequency = 1.0 / maxf(float(layer.get("feature_m", 100.0)), 1.0)
+		noise.seed = _gen_seed
+		noises.append(noise)
+	for y in range(y0, y1):
+		var row := y * _gen_w
+		for x in _gen_w:
 			var accumulated := 0.0
 			for i in noises.size():
 				accumulated += noises[i].get_noise_2d(float(x), float(y)) \
-						* float((noise_layers[i] as Dictionary).get("amp_m", 0.0))
+						* float((_gen_layers[i] as Dictionary).get("amp_m", 0.0))
 			# 与 HeightGrid.fill_from_noise 同一条公式，保证「插件生成的基底 = 工程噪声地形」
-			var value := clampf((accumulated + total_amp) * 0.5 * elevation_ratio, 0.0, max_elev)
-			data[y * grid_w + x] = JieyuMapSpec.height_to_gray(value, max_elev)
-
-	_carve_river(data, grid_w, grid_h, recipe, max_elev)
-	return data
+			var value := clampf((accumulated + _gen_total_amp) * 0.5 * _gen_ratio, 0.0, _gen_max_elev)
+			_gen_out[row + x] = JieyuMapSpec.height_to_gray(value, _gen_max_elev)
 
 
 static func _carve_river(data: PackedByteArray, grid_w: int, grid_h: int,
@@ -572,6 +649,10 @@ static func _far_enough(occluders: Array, center: Vector2) -> bool:
 ## 三条硬约束都在这里：① 不越图边 15 m；② 不落进任何节点核心区（core + 5 m，4.2 / 六章）；
 ## ③ 矩形中心先取整再用（rect_polygon 的口径，开口才不会漂到墙外）。
 ## spread_m 是撒点半径上限；自动锚点用「建筑数 × 15 m × 0.8」，显式锚点由配方给。
+## 【2026-10-06 第七十九版】**本函数保持单线程**（并行计算整改里唯一"明知可并行但不做"的一处）：
+## 每个候选点的取舍依赖前面已经放下的 occluders（_far_enough 扫累积列表）与共享 rng 的推进顺序，
+## 并行会同时改变「放哪些」与「放在哪」⇒ 生成结果不可复现、与已有的地图资产对不上。
+## 要提速得先换算法（空间索引 + 派生式 RNG），那是另一件事，不在本轮。
 static func _place_buildings(occluders: Array, doc: JieyuMapDoc, nodes: Array,
 		anchor: Vector2, count: int, spread_m: float, rng: RandomNumberGenerator) -> int:
 	var placed := 0
@@ -796,20 +877,69 @@ const CONTENT_MATERIAL_IDS := [1, 2, 3]
 ## 生成 content.png（按行序排 N 片区域）与 material.png（单通道 id 图）。
 ## 判据：低洼 → 泥泞；高海拔 → 雪地；中低海拔 → 草丛；超过坡度阈值的坡面上不生成。
 ## 返回 {"rows": Image, "material": Image, "counts": [三种各多少格]}
-static func build_content_images(doc: JieyuMapDoc, recipe: Dictionary = {}) -> Dictionary:
-	var max_elev := doc.max_elevation()
+## 返回 {"rows": Image, "material": Image, "counts": [三种各多少格]}；chunks <= 0 = 自动
+static func build_content_images(doc: JieyuMapDoc, recipe: Dictionary = {},
+		chunks: int = 0) -> Dictionary:
+	var w: int = doc.width
+	var hp: int = doc.height_px
+	# 【2026-10-06 第七十九版 · 并行计算整改】100 万像素按行分块并行；
+	# 先写字节、主线程一次 create_from_data（旧实现是逐像素 set_pixel）。
+	# ⚠ 每一块的计数写进 _content_counts 自己的槽位（band*8 + kind），主线程最后求和 ——
+	#   共享同一个累加器会因为 Packed 数组的 copy-on-write 而丢数（见 docs/性能预算.md 第二十八节）。
+	_content_doc = doc
+	_content_recipe = recipe
+	_content_max_elev = doc.max_elevation()
+	_content_slope_limit = JieyuMapSpec.vehicle_slope_limit()
+	_content_w = w
+	_content_h = hp
+	_content_bands = _bands(chunks, w * hp, hp)
+	_content_rgb = _content_rgb_lut()
+	_content_l8 = _content_l8_lut()
+	_rows_image_bytes = PackedByteArray()
+	_rows_image_bytes.resize(w * hp * 3)
+	_material_bytes = PackedByteArray()
+	_material_bytes.resize(w * hp)
+	_content_counts = PackedInt32Array()
+	_content_counts.resize(_content_bands * 8)
+	if _content_bands <= 1:
+		_content_rows(0)
+	else:
+		var id := WorkerThreadPool.add_group_task(
+				func(band: int) -> void: _content_rows(band),
+				_content_bands, _content_bands, true, "map_content")
+		WorkerThreadPool.wait_for_group_task_completion(id)
+	var counts := [0, 0, 0]
+	for band in _content_bands:
+		for k in 3:
+			counts[k] += _content_counts[band * 8 + k]
+	var rows_image := Image.create_from_data(w, hp, false, Image.FORMAT_RGB8, _rows_image_bytes)
+	var material := Image.create_from_data(w, hp, false, Image.FORMAT_L8, _material_bytes)
+	_rows_image_bytes = PackedByteArray()
+	_material_bytes = PackedByteArray()
+	return {"rows": rows_image, "material": material, "counts": counts}
+
+
+## 内容层的一个分块（顺序与并行共用 ⇒ 逐字节一致）；y0/y1 由 _content_bands 决定
+static func _content_rows(band: int) -> void:
+	var w := _content_w
+	var rows := int(ceil(float(_content_h) / float(_content_bands)))
+	var y0 := band * rows
+	var y1 := mini(y0 + rows, _content_h)
+	if y0 >= y1:
+		return
+	var doc = _content_doc
+	var recipe := _content_recipe
+	var max_elev := _content_max_elev
 	var mud_max_ratio := float(recipe.get("mud_max_ratio", 0.10))
 	var snow_min_ratio := float(recipe.get("snow_min_ratio", 0.62))
 	var grass_max_ratio := float(recipe.get("grass_max_ratio", 0.55))
-	var slope_limit := JieyuMapSpec.vehicle_slope_limit()
-	var rows_image := Image.create(doc.width, doc.height_px, false, Image.FORMAT_RGB8)
-	rows_image.fill(Color(0, 0, 0))
-	var material := Image.create(doc.width, doc.height_px, false, Image.FORMAT_L8)
-	material.fill(0)
-	var counts := [0, 0, 0]
-	for y in doc.height_px:
-		for x in doc.width:
-			var ratio := doc.height_at(x, y) / maxf(max_elev, 0.001)
+	var slope_limit := _content_slope_limit
+	var rgb := _content_rgb
+	var l8 := _content_l8
+	var count_base := band * 8
+	for y in range(y0, y1):
+		for x in w:
+			var ratio: float = doc.height_at(x, y) / maxf(max_elev, 0.001)
 			if slope_deg_at(doc.height, doc.width, doc.height_px, max_elev, x, y, 4) > slope_limit:
 				continue
 			# 确定性打点，避免大片纯色看起来像贴图错误（同一张图每次生成结果一致）
@@ -826,11 +956,34 @@ static func build_content_images(doc: JieyuMapDoc, recipe: Dictionary = {}) -> D
 				keep_chance = 0.55
 			if kind < 0 or noise01 > keep_chance:
 				continue
-			counts[kind] += 1
-			material.set_pixel(x, y, Color8(CONTENT_MATERIAL_IDS[kind], CONTENT_MATERIAL_IDS[kind],
-					CONTENT_MATERIAL_IDS[kind]))
-			rows_image.set_pixel(x, y, CONTENT_COLORS[kind])
-	return {"rows": rows_image, "material": material, "counts": counts}
+			_content_counts[count_base + kind] += 1
+			var index := y * w + x
+			_material_bytes[index] = l8[kind]
+			var o := index * 3
+			_rows_image_bytes[o] = rgb[kind * 3]
+			_rows_image_bytes[o + 1] = rgb[kind * 3 + 1]
+			_rows_image_bytes[o + 2] = rgb[kind * 3 + 2]
+
+
+## 内容层配色 / id 的字节 LUT（从 CONTENT_COLORS / CONTENT_MATERIAL_IDS 派生，避免漂移）
+static func _content_rgb_lut() -> PackedByteArray:
+	if _content_rgb.size() == CONTENT_COLORS.size() * 3 and _content_rgb.size() > 0:
+		return _content_rgb
+	_content_rgb = PackedByteArray()
+	for c in CONTENT_COLORS:
+		_content_rgb.append(_to_byte(c.r))
+		_content_rgb.append(_to_byte(c.g))
+		_content_rgb.append(_to_byte(c.b))
+	return _content_rgb
+
+
+static func _content_l8_lut() -> PackedByteArray:
+	if _content_l8.size() == CONTENT_MATERIAL_IDS.size() and _content_l8.size() > 0:
+		return _content_l8
+	_content_l8 = PackedByteArray()
+	for id in CONTENT_MATERIAL_IDS:
+		_content_l8.append(_to_byte(Color8(id, id, id).r))
+	return _content_l8
 
 
 ## meta.json 的 content_layers 声明（12.8.7 之外的扩展字段，工程侧没有就静默跳过）

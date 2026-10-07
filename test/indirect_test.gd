@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_blast_falloff()
 	_test_dragged_range_shorter()
 	_test_dragged_solve_accuracy()
+	_test_range_matches_trajectory_exactly()
 	_test_trajectory_shape()
 	print("—— 通过 %d 项 / 失败 %d 项 ——" % [_passed, _failed])
 	if _failed > 0:
@@ -137,6 +138,29 @@ func _test_dragged_solve_accuracy() -> void:
 		_check_true("带阻力解算：%.0f m 落点误差 < 1.5 m（实得 %.2f m）"
 				% [distance, absf(landed - distance)], absf(landed - distance) < 1.5)
 		_check_true("带阻力解算：低伸解不超过 45°", elevation <= deg_to_rad(45.0) + 0.001)
+
+
+## 【2026-10-06 第七十九版】trajectory_range 改成"不建点数组"的实现后，必须与
+## trajectory() 取最后一点**逐位相同**（同一段积分内核，但这条断言是防止哪天有人各改一边）。
+func _test_range_matches_trajectory_exactly() -> void:
+	var v0 := GameConfig.INDIRECT_MUZZLE_VELOCITY
+	var cases := [
+		[0.0, 100.0], [0.1, 250.0], [deg_to_rad(20.0), 300.0],
+		[deg_to_rad(45.0), 600.0], [deg_to_rad(60.0), 400.0],
+	]
+	var mismatch := 0
+	for c in cases:
+		var elevation: float = c[0]
+		var distance: float = c[1]
+		var points := BallisticsSystem.trajectory(v0, elevation, distance)
+		var last: Dictionary = points[points.size() - 1]
+		var expect := float(last["x"])
+		var actual := BallisticsSystem.trajectory_range(v0, elevation, distance)
+		if actual != expect:
+			mismatch += 1
+	_check("落点快路径与 points 版逐位相同（%d 组，不一致 %d 组）" % [cases.size(), mismatch], mismatch, 0)
+	_check("落点快路径：水平发射（0°）落点很短但仍 > 0",
+			BallisticsSystem.trajectory_range(v0, 0.0, 600.0) > 0.0, true)
 
 
 ## 弹道形状：先升后降、终点回到地面。

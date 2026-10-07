@@ -11,6 +11,24 @@ extends RefCounted
 
 var grid: HeightGrid = null
 
+## 【2026-10-06 第七十九版 · 并行计算整改：本类**不可并行查询**，已实测】
+## 结论（取证工具：tools/probe_sight_parallel.gd，真实 Main.tscn，400 条查询）：
+##   ① 完整 has_sight：顺序 154.7 µs/条；改成"每个 worker 一个实例 + 11 块并行"后
+##      **14258 µs/条（0.01×）**，引擎打 **62980 行**
+##      「The function `get_global_position()` on this node can only be accessed from either
+##      the main thread or a thread group」—— 掩体层要读 Node2D 的 global_position，
+##      而 Godot 的线程安全检查禁止主线程之外访问 Node。
+##      （逃生门 Thread.set_thread_safety_checks_enabled(false) 是"后果自负"，不采用。）
+##   ② 只并行**地形层**（纯网格、不碰 Node）：44.6 → 14.5 µs/条（3.08×，400/400 逐条一致）。
+##      但它只占 has_sight 的 29%，而并行化要引入"每个 worker 一个实例 + 跨线程回传"的复杂度。
+## ⇒ 本轮结论：**通视层不并行**。要真并行必须先做架构改造：把掩体几何/开口在装配期烘成
+##   只读数组（查询走数组、不碰节点）—— 那也正是 docs/性能预算.md 第十六节登记的欠账。
+##
+## 另一条硬约束（与线程无关）：本类有实例级共享寄存器，**同一实例不可重入** ——
+##   · _dda_cells（DDA 复用缓冲）
+##   · _occluder_cache / _occluder_frame（掩体组帧级缓存）
+## 所以任何多线程形态都必须"一个查询者一个实例"，不能共用 WorldSetup 建的那一个。
+
 ## DDA 复用缓冲（见 HeightGrid.cells_on_segment_into）：只在本文件的热路径用
 var _dda_cells: Array[Vector2i] = []
 ## 掩体组的帧级缓存：get_nodes_in_group 每次都新分配一个 Array，

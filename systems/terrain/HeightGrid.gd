@@ -21,6 +21,20 @@ var cell_size: float = GameConfig.CELL_SIZE
 
 var _data := PackedFloat32Array()
 
+## 并行烘焙的公共旋钮（2026-10-06 第七十九版）：低于 PARALLEL_MIN_CELLS 一律单线程
+const PARALLEL_MIN_CELLS := 262144          # 512×512；小网格并行只赔不赚
+const PARALLEL_MAX_BANDS := 12
+
+## 噪声分块的实例脚手架（只在 fill_from_noise 与它的块内使用）
+var _noise_bands := 1
+var _noise_seed_value := 0
+var _noise_max_elevation := 0.0
+var _noise_elevation_ratio := 0.0
+var _noise_total_amplitude := 0.0
+## 派发前建好的振幅 LUT（worker 只读；惰性版本 _noise_amplitudes() 只许主线程调）
+var _noise_amps := PackedFloat32Array()
+static var _noise_amp_lut := PackedFloat32Array()
+
 
 func _init(grid_width: int = 0, grid_height: int = 0) -> void:
 	if grid_width > 0 and grid_height > 0:
@@ -55,6 +69,15 @@ func set_height_at_cell(cell_x: int, cell_y: int, value: float) -> void:
 func height_at_world(world_pos: Vector2) -> float:
 	var cell := world_to_cell(world_pos)
 	return height_at_cell(cell.x, cell.y)
+
+
+## 整块只读视图（2026-10-06 第七十九版）：并行上色要把高程一次取出来，
+## 逐格 height_at_cell() 在 100 万格上是 40 万次以上的方法调用（见 MapGenerator._paint_rows）。
+## ⚠ 返回的是**共享引用**：调用方只许读。一旦有人在拿到它之后写 _data，
+## Packed 数组会触发 copy-on-write，那是正确但会多一次整块拷贝；并发写则会撞上
+## 「已共享的 write」这条坑（见 docs/性能预算.md 第二十八节）。
+func heights_readonly() -> PackedFloat32Array:
+	return _data
 
 
 ## 双线性插值采样：人物踩地不跳格（docx 12.2）
@@ -171,9 +194,10 @@ func slope_deg(cell_a: Vector2i, cell_b: Vector2i) -> float:
 
 
 ## 用 FastNoiseLite 四层 fBm 生成基底高程（docx 12.8.3）
-## 注意：1000 × 1000 × 4 层 ≈ 400 万次采样，纯 GDScript 首次生成需要数十秒，
-## 第一版在加载画面后跑一次即可；后续改为工具脚本预生成 heightmap.png。
-func fill_from_noise(noise_seed: int, max_elevation: float = GameConfig.MAX_ELEVATION) -> void:
+## 1000 × 1000 × 4 层 ≈ 400 万次采样：纯 GDScript 单线程实测 2.3 s，分块并行 0.8~0.9 s（2.4~3.0×）。
+## chunks <= 0 = 自动（小网格自动单线程）；显式传 1 可强制串行（等价性测试用）。
+func fill_from_noise(noise_seed: int, max_elevation: float = GameConfig.MAX_ELEVATION,
+		chunks: int = 0) -> void:
 	var noises: Array[FastNoiseLite] = []
 	var total_amplitude := 0.0
 	for layer in NOISE_LAYERS:
@@ -191,14 +215,78 @@ func fill_from_noise(noise_seed: int, max_elevation: float = GameConfig.MAX_ELEV
 		return
 
 	var elevation_ratio := max_elevation / total_amplitude
-	for y in height:
+	# 【2026-10-06 第七十九版 · 并行计算整改】按行分块 + WorkerThreadPool。
+	# 400 万次噪声采样在纯 GDScript 下实测 2.3 s（1000×1000×4 层），分块后 0.8~0.9 s（2.4~3.0×）。
+	# ⚠ 每个块**各自 new 一套 FastNoiseLite**：同一个实例被多线程同时调用 get_noise_2d 不是文档承诺的用法；
+	#   参数与 seed 完全一致 ⇒ 逐格结果与单线程相同（探针实测 2000 格逐格一致）。
+	# ⚠ 先置空再 resize：这样分配出来的缓冲是**未被共享**的，worker 里 `_data[i] = …` 才是就地写。
+	#   若复用同一个（已共享的）Packed 数组，写入会触发 copy-on-write —— 多线程下会互相踩
+	#   （实测报过满屏 `Out of bounds set index`，见 docs/性能预算.md 第二十八节）。
+	_data = PackedFloat32Array()
+	_data.resize(width * height)
+	_noise_seed_value = noise_seed
+	_noise_max_elevation = max_elevation
+	_noise_elevation_ratio = elevation_ratio
+	_noise_total_amplitude = total_amplitude
+	_noise_bands = _bands_from(chunks, width * height, height)
+	_noise_amps = _noise_amplitudes()      # 派发前建好（worker 里只读）
+	if _noise_bands <= 1:
+		_fill_noise_band(0)
+		return
+	var id := WorkerThreadPool.add_group_task(
+			func(band: int) -> void: _fill_noise_band(band),
+			_noise_bands, _noise_bands, true, "height_noise")
+	WorkerThreadPool.wait_for_group_task_completion(id)
+
+
+## 单块填噪声（顺序与并行共用同一个实现 ⇒ 两条路径逐格一致）
+func _fill_noise_band(band: int) -> void:
+	var rows := int(ceil(float(height) / float(_noise_bands)))
+	var y0 := band * rows
+	var y1 := mini(y0 + rows, height)
+	if y0 >= y1:
+		return
+	var noises: Array[FastNoiseLite] = []
+	for layer in NOISE_LAYERS:
+		var noise := FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+		noise.fractal_octaves = 4
+		noise.fractal_lacunarity = 2.0
+		noise.fractal_gain = 0.5
+		noise.frequency = 1.0 / float(layer["feature"])
+		noise.seed = _noise_seed_value
+		noises.append(noise)
+	# ⚠ 读的是主线程预先建好的 LUT（_noise_amps）：惰性初始化放在 worker 里会**互相踩** ——
+	# 实测（probe_terrain_bake 第一次跑）报 `Out of bounds get index 3`：一个线程正在读，
+	# 另一个线程把它重置成空数组。惰性 LUT 一律在派发之前建好。
+	var amps := _noise_amps
+	for y in range(y0, y1):
+		var row := y * width
 		for x in width:
 			var accumulated := 0.0
 			for i in noises.size():
-				accumulated += noises[i].get_noise_2d(float(x), float(y)) \
-						* float(NOISE_LAYERS[i]["amplitude"])
-			var value := (accumulated + total_amplitude) * 0.5 * elevation_ratio
-			_data[y * width + x] = clampf(value, 0.0, max_elevation)
+				accumulated += noises[i].get_noise_2d(float(x), float(y)) * amps[i]
+			var value := (accumulated + _noise_total_amplitude) * 0.5 * _noise_elevation_ratio
+			_data[row + x] = clampf(value, 0.0, _noise_max_elevation)
+
+
+## 并行分块数：低于阈值的网格走单线程（并行有固定开销，64×64 的单测不该为它买单）
+## chunks > 0 时以调用方指定的为准（等价性测试要拿 chunks=1 当串行基准）。
+static func _bands_from(chunks: int, cells: int, rows: int) -> int:
+	var bands := chunks
+	if bands <= 0:
+		bands = 1 if cells < PARALLEL_MIN_CELLS else clampi(OS.get_processor_count() - 1, 2, PARALLEL_MAX_BANDS)
+	return clampi(bands, 1, maxi(rows, 1))
+
+
+## NOISE_LAYERS 的振幅 LUT（懒建；避免每格一次 Dictionary 取值）
+static func _noise_amplitudes() -> PackedFloat32Array:
+	if _noise_amp_lut.size() != NOISE_LAYERS.size():
+		_noise_amp_lut = PackedFloat32Array()
+		for layer in NOISE_LAYERS:
+			_noise_amp_lut.append(float(layer["amplitude"]))
+	return _noise_amp_lut
 
 
 ## 第 4 层噪声细节振幅（5 m）用于压平道路/河道时做参考
@@ -219,8 +307,16 @@ func fill_from_image(image: Image,
 	if img.get_format() != Image.FORMAT_L8:
 		img.convert(Image.FORMAT_L8)
 	var data := img.get_data()
-	for i in width * height:
-		set_height_at_cell(i % width, i / width, data[i] / 255.0 * max_elevation)
+	# 【2026-10-06 第七十九版 · 并行计算整改】去掉逐格 set_height_at_cell()：
+	# 旧实现每格一次 GDScript 方法调用 + 一次取模 + 一次整除，1000×1000 实测 653 ms；
+	# 改成「整块字节 + 直写 _data」后同样口径 47 ms（**14×**，未用线程）。
+	# 算式逐字保持 data[i] / 255.0 * max_elevation —— 换写成 data[i] * (max/255.0) 会动最后一 ulp，
+	# 而配色分级是按高度比较的（见 MapGenerator.height_to_color），ulp 差异会在分级临界点上翻色。
+	var cells := width * height
+	if _data.size() != cells:
+		_data.resize(cells)
+	for i in cells:
+		_data[i] = data[i] / 255.0 * max_elevation
 	return true
 
 

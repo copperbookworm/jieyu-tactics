@@ -2,6 +2,10 @@
 .godot/
 /android/
 
+# Python 工具的字节码缓存（tools/*.py 是给 agent / 出表脚本用的，不入库缓存）
+__pycache__/
+*.pyc
+
 # 本机自带工具目录（只有 4.5.0/parser_with_metadata.pickle，gdlint 命令不可用）
 gdtoolkit/
 

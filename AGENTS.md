@@ -69,6 +69,22 @@
 ## 工具/环境
 - Godot 操作走 godot-ai MCP（`mcp__godot-ai__*`，47 工具）；**仅在编辑器打开时可用**，`--headless` 下插件停用
 - 端口 8000 / 9500 一次只能被一个 Godot 编辑器占用；同时开两个项目，后开的连不上
+- ⚠ **`no_proxy` 里的方括号 `[::1]` 会打死 godot-ai 后端**（2026-10-08 实证；来源是 DSH 自己的
+  `LOOPBACK_NO_PROXY` 常量 `localhost,127.0.0.1,::1,[::1]`，它给每个子进程都注入）：
+  httpx2 把该条目拼成匹配模式 `all://*[::1]`，端口被解析成 `':1]'` 抛 `InvalidURL`；这发生在 FastMCP
+  启动 banner 的 `check_for_newer_version()` 里、且 `InvalidURL` 不是 `httpx2.HTTPError`，逃出它的
+  `except` ⇒ 整个 `godot-ai serve` **在 bind 8000 之前**就崩（证据：`%LOCALAPPDATA%\godot-ai\runtime\backend-8000.log`）。
+  它**只在 FastMCP 的 12h 版本缓存冷的时候才炸**，所以表现成「用了几周突然坏」。升级插件**不能**修它
+  （4.3.0 冷缓存 + 坏 env 实测照样 `exit 1`）。
+  · 处置（三处，缺一路就还剩条件风险）：① 用户级环境变量 `FASTMCP_CHECK_FOR_UPDATES=off`
+    ——FastMCP 官方开关（`Literal["stable","prerelease","off"]`），关掉后启动路径上**不再有**
+    `trust_env=True` 的 httpx 客户端（`godot_ai` 自己的 httpx 全是 `trust_env=False`）；
+    ② `D:\dsh-data\.env` 同名一条，覆盖 DSH 自己派生的子进程（含从 DSH shell 启动的 Godot）；
+    ③ `D:\dsh-data\cordis.patch.yml` 的 godot-ai 条目 `env`，覆盖 `attach` 链路（另附 `no_proxy` 去方括号）。
+  · 改 ①② 要**重开 DSH / 重开编辑器**才生效；③ 建新 MCP 连接即生效。
+  · 复原＝删掉用户环境变量与那两处配置项（退回「冷缓存即崩」）。
+  · 独立复现/验收：拿坏 env 冷缓存跑 `python -m godot_ai --transport streamable-http --port 8017 --ws-port 9517`
+    —— 不带开关会 `httpx2.InvalidURL: Invalid port: ':1]'` exit 1，带开关会打印 `Uvicorn running`。
 - 语法校验优先用真 Godot，不用正则扫描
 - 本机坑：PATH 里裸 `node` 是坏的 v22，脚本一律用 `C:\Program Files\nodejs\node.exe`；
   `DSH_HOME` 必须保持 `D:\dsh-data`，绝不可覆盖

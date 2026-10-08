@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>《解域》隐私政策</title>
+<style>
+  :root { --bg:#10141a; --fg:#e8ecf0; --dim:#96a0ac; --accent:#7bd88f; --panel:#1a1f27; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.75 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:48px 20px 96px; }
+  h1 { font-size:30px; margin:0 0 8px; }
+  h2 { font-size:19px; margin:40px 0 12px; padding-top:16px; border-top:1px solid #262c36; }
+  .meta { color:var(--dim); font-size:14px; margin-bottom:8px; }
+  .note { background:var(--panel); border-left:3px solid var(--accent);
+          padding:12px 16px; border-radius:0 6px 6px 0; color:var(--dim); font-size:14px; margin:16px 0 0; }
+  code { background:#000; padding:1px 6px; border-radius:4px; font-size:14px; }
+  table { border-collapse:collapse; width:100%; margin:12px 0; }
+  th,td { border:1px solid #262c36; padding:8px 12px; text-align:left; font-size:15px; }
+  th { background:var(--panel); }
+  ul { padding-left:22px; }
+  strong { color:#fff; }
+  footer { margin-top:64px; color:var(--dim); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+<h1>《解域》隐私政策</h1>
+<p class="meta">生效日期：2026-10-07　·　最后更新：2026-10-07</p>
+<p class="meta">开发者（主体）：copperbookworm（个人开发者）　·　联系邮箱：【填你的邮箱】</p>
+<p class="note">主体写成 <code>copperbookworm</code> 是因为它与包名 <code>io.github.copperbookworm.jieyu</code> 一致。
+若要改为真实姓名或公司名，只需修改本页这一行。</p>
+
+<h2>一句话</h2>
+<p>《解域》默认<strong>完全离线</strong>运行，不收集你的个人信息；只有你<strong>主动开启「AI 参谋」并填入自己的大模型 API 密钥</strong>时，
+才会在你选定的一局结束后，把该局的<strong>战报统计文本</strong>发送给你选择的那家模型服务商。</p>
+
+<h2>一、我们收集什么</h2>
+<p><strong>我们不收集</strong>：姓名、手机号、通讯录、位置、相册、相机、麦克风、设备标识符（IMEI/IDFA/AAID 等）、
+任何用于广告画像的数据。应用<strong>没有自建服务器</strong>，也不接入任何统计或崩溃上报 SDK。</p>
+<p><strong>唯一涉及数据外发的功能是「AI 参谋」</strong>（默认关闭，可在设置里开关）：</p>
+<ul>
+<li>你需要在应用内<strong>自行填入</strong>某家模型服务商的 API 密钥；</li>
+<li>开启后，一局结束时会生成一段<strong>战报摘要</strong>（击杀数、占领情况、时长等统计文本）；</li>
+<li>该摘要会通过 HTTPS 发送给<strong>你选择的那家服务商</strong>，用于生成一段复盘文字；</li>
+<li>摘要<strong>不含</strong>姓名、账号、设备标识或任何可识别到你个人的信息。</li>
+</ul>
+<p>如果你不填 API 密钥、或不开启该功能，应用<strong>不会发起任何网络请求</strong>。</p>
+
+<h2>二、数据存在哪里</h2>
+<ul>
+<li>你的 API 密钥与战报摘要保存在<strong>你的设备本地</strong>（Android 应用私有目录），不上传到我们这里；</li>
+<li>卸载应用即删除这些本地数据；应用内也提供清空入口。</li>
+</ul>
+
+<h2>三、第三方</h2>
+<p>AI 参谋会把战报摘要发送给<strong>你自行选择的</strong>模型服务商（例如 DeepSeek、OpenAI 等）。
+这些数据在该服务商侧的处理方式，受<strong>该服务商自己的隐私政策</strong>约束，与我们无关。</p>
+<p>我们不与任何广告、统计、数据分析第三方共享数据。</p>
+
+<h2>四、权限</h2>
+<p>本应用只申请两个 Android 权限，都只服务于上面第一节的 AI 参谋功能：</p>
+<table><tr><th>权限</th><th>用途</th></tr>
+<tr><td><code>android.permission.INTERNET</code></td><td>调用你配置的模型 API</td></tr>
+<tr><td><code>android.permission.ACCESS_NETWORK_STATE</code></td><td>发请求前判断当前有没有网络</td></tr></table>
+<p>应用<strong>不申请</strong>位置、相机、麦克风、通讯录、相册、电话、短信、存储等任何其他权限。</p>
+
+<h2>五、费用</h2>
+<p>AI 参谋产生的接口费用由你在模型服务商处的账户<strong>直接结算</strong>，我们不参与计费、不经手支付。</p>
+
+<h2>六、儿童</h2>
+<p>本应用不面向 13 岁以下儿童设计，也不会有意收集儿童的个人信息。若你是监护人并认为孩子向我们提供了信息，
+请联系上面的邮箱，我们会删除。</p>
+
+<h2>七、数据安全</h2>
+<ul>
+<li>与模型服务商的通信走 <strong>HTTPS</strong>；</li>
+<li>本地保存的 API 密钥做了混淆处理；</li>
+<li>由于我们不运营服务器，<strong>没有可供泄露的服务端数据库</strong>。</li>
+</ul>
+
+<h2>八、你的权利与数据删除</h2>
+<p>你可以随时：① 在应用内关闭 AI 参谋；② 清空本机保存的密钥与战报；③ 直接卸载应用（即删除全部本地数据）。
+我们需要说明的是：<strong>我们这边没有你的数据可删</strong> —— 应用没有服务端。</p>
+
+<h2>九、政策变更</h2>
+<p>若本政策有实质性变更（例如将来接入联网统计、内购或账号系统），我们会在本页更新「最后更新」日期，
+并在应用内以显著方式提示。继续使用即表示你接受更新后的政策。</p>
+
+<h2>十、联系我们</h2>
+<p>任何疑问、投诉或数据相关请求，请联系：<strong>【填你的邮箱】</strong>。</p>
+
+<footer>《解域》· JIEYU　|　本页可整体复制到任意静态托管（GitHub Pages / 对象存储均可）。</footer>
+</main>
+</body>
+</html>

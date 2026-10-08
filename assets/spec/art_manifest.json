@@ -321,8 +321,11 @@
       "design_spec": "按8.2炮塔",
       "design_status": "待制作",
       "faction": "泛亚",
-      "size": null,
-      "size_source": "unresolved(按 8.2 炮塔 → 需从 vehicles_data 长宽比导出)",
+      "size": [
+        159,
+        97
+      ],
+      "size_source": "engineering(车长×0.60 × 车宽×0.80；主战坦克包络 8.30×3.78 m)",
       "batch": 2,
       "path": "res://assets/vehicles/veh_mbt_turret.png",
       "format": "PNG",
@@ -336,8 +339,11 @@
       "design_spec": "按8.2几何",
       "design_status": "待制作",
       "faction": "蓝方",
-      "size": null,
-      "size_source": "unresolved(按 8.2 几何)",
+      "size": [
+        230,
+        115
+      ],
+      "size_source": "engineering(步兵战车包络 7.20×3.60 m × PPU32)",
       "batch": 2,
       "path": "res://assets/vehicles/veh_ifv_hull.png",
       "format": "PNG",
@@ -351,8 +357,11 @@
       "design_spec": "按8.2炮塔",
       "design_status": "待制作",
       "faction": "蓝方",
-      "size": null,
-      "size_source": "unresolved(按 8.2 炮塔)",
+      "size": [
+        138,
+        92
+      ],
+      "size_source": "engineering(车长×0.60 × 车宽×0.80；步兵战车包络 7.20×3.60 m)",
       "batch": 2,
       "path": "res://assets/vehicles/veh_ifv_turret.png",
       "format": "PNG",
@@ -366,8 +375,11 @@
       "design_spec": "按8.2几何",
       "design_status": "待制作",
       "faction": "红方",
-      "size": null,
-      "size_source": "unresolved(按 8.2 几何)",
+      "size": [
+        222,
+        87
+      ],
+      "size_source": "engineering(装甲输送车包络 6.95×2.72 m × PPU32)",
       "batch": 3,
       "path": "res://assets/vehicles/veh_apc.png",
       "format": "PNG",
@@ -381,8 +393,11 @@
       "design_spec": "按8.2几何",
       "design_status": "待制作",
       "faction": "独立",
-      "size": null,
-      "size_source": "unresolved(按 8.2 几何)",
+      "size": [
+        222,
+        87
+      ],
+      "size_source": "engineering(轮式突击炮包络 6.95×2.72 m × PPU32)",
       "batch": 3,
       "path": "res://assets/vehicles/veh_wheeled_assault.png",
       "format": "PNG",
@@ -396,8 +411,11 @@
       "design_spec": "按8.2几何",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(按 8.2 几何)",
+      "size": [
+        368,
+        115
+      ],
+      "size_source": "engineering(自行火炮包络 11.50×3.60 m × PPU32)",
       "batch": 3,
       "path": "res://assets/vehicles/veh_spg.png",
       "format": "PNG",
@@ -411,8 +429,11 @@
       "design_spec": "按8.2几何",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(按 8.2 几何)",
+      "size": [
+        544,
+        544
+      ],
+      "size_source": "engineering(顶视旋翼盘直径 17.00 m × PPU32；数据里 length_m 是旋翼直径、机身宽度缺失，按盘径给正方形)",
       "batch": 3,
       "path": "res://assets/vehicles/veh_heli.png",
       "format": "PNG",
@@ -426,8 +447,11 @@
       "design_spec": "按8.2几何",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(按 8.2 几何)",
+      "size": [
+        266,
+        11
+      ],
+      "size_source": "engineering(车长 × 履带宽 0.34 m(VEHICLE_TRACK_WIDTH) × PPU32)",
       "batch": 2,
       "path": "res://assets/vehicles/veh_track.png",
       "format": "PNG",
@@ -495,8 +519,11 @@
       "design_spec": "按需",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(按需)",
+      "size": [
+        320,
+        224
+      ],
+      "size_source": "engineering(取最大工事 10×7 m(FOB) × PPU32)",
       "batch": 2,
       "path": "res://assets/maps/map_building.png",
       "format": "PNG",
@@ -636,8 +663,11 @@
       "design_spec": "按需",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(按需)",
+      "size": [
+        24,
+        24
+      ],
+      "size_source": "engineering(屏幕空间战术地图图标，与 MARK_ITEM 同量级)",
       "batch": 2,
       "path": "res://assets/ui/ui_map_icon.png",
       "format": "PNG",
@@ -669,8 +699,11 @@
       "design_spec": "半径10m",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(序列帧；尺寸见动画表 fx_smoke 128×128)",
+      "size": [
+        256,
+        256
+      ],
+      "size_source": "engineering(软边圆斑，绘制时缩放到半径 10 m；贴图本身 256²)",
       "batch": 2,
       "path": "res://assets/fx/fx_smoke.png",
       "format": "PNG",
@@ -684,8 +717,11 @@
       "design_spec": "按需",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(序列帧；见动画表 fx_muzzle_flash 32×32)",
+      "size": [
+        29,
+        16
+      ],
+      "size_source": "engineering(枪口焰 0.90×0.50 m(MUZZLE_FLASH_LENGTH/WIDTH) × PPU32)",
       "batch": 2,
       "path": "res://assets/fx/fx_muzzle.png",
       "format": "PNG",
@@ -699,8 +735,11 @@
       "design_spec": "按需",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(序列帧；见动画表 fx_tracer 8×32)",
+      "size": [
+        64,
+        8
+      ],
+      "size_source": "engineering(曳光弹 2.0×0.25 m 细长条，绘制时按弹道角度旋转)",
       "batch": 2,
       "path": "res://assets/fx/fx_tracer.png",
       "format": "PNG",
@@ -714,8 +753,11 @@
       "design_spec": "按需",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(序列帧；见动画表 fx_impact 32×32)",
+      "size": [
+        64,
+        64
+      ],
+      "size_source": "engineering(弹着 2×2 m × PPU32)",
       "batch": 2,
       "path": "res://assets/fx/fx_impact.png",
       "format": "PNG",
@@ -729,8 +771,11 @@
       "design_spec": "椭圆",
       "design_status": "待制作",
       "faction": "通用",
-      "size": null,
-      "size_source": "unresolved(椭圆)",
+      "size": [
+        64,
+        32
+      ],
+      "size_source": "engineering(椭圆阴影 2×1 m × PPU32，绘制时按单位缩放)",
       "batch": 2,
       "path": "res://assets/fx/fx_blob_shadow.png",
       "format": "PNG",
@@ -766,7 +811,7 @@
         324,
         164
       ],
-      "size_source": "unresolved(工程把血量/弹药拆成两个 Label：HP 63×24 / Ammo 147×24)",
+      "size_source": "engineering(设计稿 324x164 @1920x1080；游戏逻辑 960x540 ⇒ 贴图 1:1、绘制缩到 162x82 更清晰)",
       "batch": 2,
       "path": "res://assets/ui/ui_status_panel.png",
       "format": "PNG",
@@ -784,7 +829,7 @@
         304,
         500
       ],
-      "size_source": "unresolved(设计表 304×500，旧基准)",
+      "size_source": "engineering(设计稿 304x500 @1920x1080；游戏逻辑 960x540 ⇒ 贴图 1:1、绘制缩到 152x250 更清晰)",
       "batch": 3,
       "path": "res://assets/ui/ui_squad_list.png",
       "format": "PNG",
@@ -802,7 +847,7 @@
         64,
         64
       ],
-      "size_source": "unresolved(设计表 64×64 ×5)",
+      "size_source": "engineering(设计稿 64x64 @1920x1080；游戏逻辑 960x540 ⇒ 贴图 1:1、绘制缩到 32x32 更清晰)",
       "batch": 3,
       "path": "res://assets/ui/ui_squad_portrait.png",
       "format": "PNG",
@@ -820,7 +865,7 @@
         400,
         400
       ],
-      "size_source": "unresolved(工程收起态 CommandWheel 80×40；展开轮盘未定)",
+      "size_source": "engineering(设计稿 400x400 @1920x1080；游戏逻辑 960x540 ⇒ 贴图 1:1、绘制缩到 200x200 更清晰)",
       "batch": 2,
       "path": "res://assets/ui/ui_command_wheel.png",
       "format": "PNG",
@@ -928,7 +973,7 @@
         324,
         164
       ],
-      "size_source": "unresolved(设计表 324×164，旧基准)",
+      "size_source": "engineering(设计稿 324x164 @1920x1080；游戏逻辑 960x540 ⇒ 贴图 1:1、绘制缩到 162x82 更清晰)",
       "batch": 2,
       "path": "res://assets/ui/ui_vehicle_panel.png",
       "format": "PNG",

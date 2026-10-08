@@ -6,7 +6,8 @@
 - 物理：project.godot 里 3D 物理引擎设为 Jolt Physics（本项目是纯 2D，实际走 Godot 内置 2D 物理）
 - Autoload：`EventBus`、`Audio`（`*res://systems/audio/AudioSystem.gd`，单例名 `Audio`）、
   `_mcp_game_helper`（`addons/godot_ai/runtime/game_helper.gd`）
-- 编辑器插件：`addons/godot_ai`（godot-ai v4.2.3）
+- 编辑器插件：`addons/godot_ai`（godot-ai v4.3.0，2026-10-08 由 4.2.3 验签升级；
+  旧树备份在 `addons/.godot_ai_update/backup/4.2.3/`）
 - 引擎：`E:\Godot_v4.7.1-stable_win64.exe\`（console 版跑脚本 / headless 自检）
 - 工作副本：`D:\Godot4.7_Proj\jieyu-1`
 - ✅ **本机工作区有 git**（2026-10-02 核实，旧说明「没有 .git」已作废）：分支 `main`、

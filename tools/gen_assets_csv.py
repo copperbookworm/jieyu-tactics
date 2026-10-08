@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import io, sys, os, json, csv
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import asset_prompts as AP      # AI 生成提示词库（第一〇〇版新增）
 ROOT = r"D:\Godot4.7_Proj\jieyu-1"
 OUT  = r"D:\Godot4.7_Proj\squad-2d\解域游戏正式版_游戏资产表.csv"
 
@@ -25,6 +27,7 @@ def fps_of(an):
 
 rows = []
 for a in assets:
+    _p, _n, _t = AP.for_image(a)
     rows.append({
         "资产类别": "图片",
         "id": a["id"], "名称": a.get("design_name", ""),
@@ -35,6 +38,7 @@ for a in assets:
         "路径": a["path"],
         "状态": a.get("design_status", ""),
         "备注": a.get("note", ""),
+        "AI生成提示词": _p, "负面提示词": _n, "推荐工具/参数": _t,
     })
 
 for an in anims:
@@ -48,6 +52,7 @@ for an in anims:
             fs = "%d 帧" % int(float(frames))
         except (TypeError, ValueError):
             fs = str(frames)
+    _ap, _an, _at = AP.for_anim(an)
     rows.append({
         "资产类别": "动画",
         "id": an["id"], "名称": an.get("design_name", ""),
@@ -59,6 +64,7 @@ for an in anims:
         "路径": an.get("path_template", ""),
         "状态": an.get("design_status", ""),
         "备注": an.get("note", ""),
+        "AI生成提示词": _ap, "负面提示词": _an, "推荐工具/参数": _at,
     })
 
 SFX = [
@@ -76,6 +82,7 @@ SFX = [
     ("match","对局结束",0.90,"260Hz 纯音"),
 ]
 for sid, name, dur, spec in SFX:
+    _sp, _sn, _st = AP.for_sfx(sid, dur)
     rows.append({
         "资产类别": "音效", "id": "sfx_" + sid, "名称": name,
         "用途类别": "战斗音效",
@@ -85,8 +92,10 @@ for sid, name, dur, spec in SFX:
         "路径": "res://assets/audio/sfx_" + sid + ".wav(建议)",
         "状态": "程序合成(ProceduralAudio)",
         "备注": spec + "；正式录制/采购后同名替换",
+        "AI生成提示词": _sp, "负面提示词": _sn, "推荐工具/参数": _st,
     })
 
+_bp, _bn, _bt = AP.for_bgm("bgm_menu")
 rows.append({
     "资产类别": "音乐", "id": "bgm_menu", "名称": "大厅/菜单主题",
     "用途类别": "BGM",
@@ -96,7 +105,9 @@ rows.append({
     "路径": "res://assets/audio/bgm_menu.ogg(建议)",
     "状态": "暂无(工程无音乐)",
     "备注": "需要使用者提供或授权；循环点要干净",
+    "AI生成提示词": _bp, "负面提示词": _bn, "推荐工具/参数": _bt,
 })
+_bp2, _bn2, _bt2 = AP.for_bgm("bgm_battle")
 rows.append({
     "资产类别": "音乐", "id": "bgm_battle", "名称": "对局战斗主题",
     "用途类别": "BGM",
@@ -106,9 +117,11 @@ rows.append({
     "路径": "res://assets/audio/bgm_battle.ogg(建议)",
     "状态": "暂无(工程无音乐)",
     "备注": "战斗情绪；与 bgm_menu 音量分层",
+    "AI生成提示词": _bp2, "负面提示词": _bn2, "推荐工具/参数": _bt2,
 })
 
-cols = ["资产类别","id","名称","用途类别","规格","规格依据","阵营","格式","批次","路径","状态","备注"]
+cols = ["资产类别","id","名称","用途类别","规格","规格依据","阵营","格式","批次","路径","状态","备注",
+        "AI生成提示词","负面提示词","推荐工具/参数"]
 with open(OUT, "w", newline="", encoding="utf-8-sig") as f:
     w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
     w.writeheader()

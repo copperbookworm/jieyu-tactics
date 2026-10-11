@@ -18,7 +18,10 @@
 |---|---|
 | ![大厅](store/screenshots/01_大厅.png) | ![报点轮盘](store/screenshots/05_报点轮盘.png) |
 
-更多画面见 [`store/screenshots/`](store/screenshots)（8 张商店用截图）；架构图见 [architecture.html](architecture.html)。
+更多画面见 [`store/screenshots/`](store/screenshots)（8 张商店用截图）。
+
+**架构图（在线）**：<https://copperbookworm.github.io/jieyu-tactics/> —— 站点根是索引页，架构页在
+<https://copperbookworm.github.io/jieyu-tactics/architecture.html>；源文件是仓库里的 [architecture.html](architecture.html)。
 
 ## 工程规模（本机实测）
 

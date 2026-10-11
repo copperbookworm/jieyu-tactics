@@ -100,5 +100,11 @@ godot --headless --path . --script res://tools/run_integration_headless.gd
 
 ## 许可
 
-代码与美术资产版权归作者所有（**All rights reserved**）。本仓库公开用于作品展示与技术评审，
-未授予复制、分发或商用许可。`addons/` 下的第三方插件遵循其各自许可。
+本项目采用 **MIT 许可证** —— 全文见 [LICENSE](LICENSE)，Copyright (c) 2026 copperbookworm。
+你可以自由使用、修改、分发本项目的代码与美术资产（含商业用途），只需保留版权声明与许可全文。
+
+以下第三方内容**不受**本项目 MIT 覆盖，各自遵循原许可：
+
+- [`addons/godot_ai/`](addons/godot_ai) —— Godot AI 插件，MIT，Copyright (c) 2025 Godot AI contributors（自带 `LICENSE`）
+- [`assets/fonts/JieyuCJK-Subset.otf`](assets/fonts/JieyuCJK-Subset.otf) —— Noto Sans SC 子集，
+  SIL Open Font License 1.1（全文见 [assets/fonts/LICENSE-NotoSansSC.txt](assets/fonts/LICENSE-NotoSansSC.txt)）

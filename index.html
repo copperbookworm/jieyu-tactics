@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>解域 · JIEYU</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; background: #10141a; color: #e8edf2;
+    font: 16px/1.7 -apple-system, "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    display: flex; min-height: 100vh; align-items: center; justify-content: center;
+  }
+  main { max-width: 660px; padding: 48px 24px; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: .02em; }
+  .sub { color: #7bd88f; font-weight: 600; margin: 0 0 22px; }
+  p.lead { color: #aeb9c6; margin: 0 0 18px; }
+  a.card {
+    display: block; text-decoration: none; color: inherit;
+    border: 1px solid #2a333f; border-radius: 10px; padding: 14px 16px;
+    margin: 10px 0; background: #161c24; transition: border-color .15s ease;
+  }
+  a.card:hover { border-color: #7bd88f; }
+  a.card b { color: #e8edf2; }
+  a.card span { display: block; color: #8b97a5; font-size: 14px; margin-top: 2px; }
+  footer { color: #5a6878; font-size: 13px; margin-top: 26px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>解域 · JIEYU</h1>
+  <p class="sub">2D 垂直俯视 20v20 小队战术射击 ｜ Godot 4.7.1</p>
+  <p class="lead">这个站点只放工程的结构资料；代码与文档都在仓库里。</p>
+
+  <a class="card" href="architecture.html">
+    <b>架构图</b>
+    <span>节点、系统与数据流的整体结构</span>
+  </a>
+  <a class="card" href="https://github.com/copperbookworm/jieyu-tactics">
+    <b>源码仓库 →</b>
+    <span>jieyu-tactics：规模数据、玩法说明、测试口径与文档索引</span>
+  </a>
+
+  <footer>配色沿用工程 <code>STYLE_UI</code> 的 #10141a / #7bd88f。</footer>
+</main>
+</body>
+</html>
